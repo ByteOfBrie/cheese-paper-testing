@@ -1,0 +1,28 @@
+[package]
+name = "cheese-paper"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# file components
+serde = "1.0"
+toml = "0.8"
+
+# ui
+egui = "0.31"
+eframe = { version = "0.31", default-features = false, features = [
+    "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
+    "default_fonts", # Embed the default egui fonts.
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+    "persistence",   # Enable restoring app state when restarting the app.
+    "wayland",       # To support Linux (and CI)
+    "x11",           # To support older Linux distributions (restores one of the default features)
+] }
+
+# For image support:
+egui_extras = { version = "0.31", features = ["default", "image"] }
+
+env_logger = { version = "0.10", default-features = false, features = [
+    "auto-color",
+    "humantime",
+] }

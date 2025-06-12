@@ -10,6 +10,7 @@ use egui::{
 
 use std::collections::BTreeMap;
 mod default_text;
+mod tiny_markdown;
 use crate::default_text::DEFAULT_TEXT;
 
 pub struct BaseTextEditor {

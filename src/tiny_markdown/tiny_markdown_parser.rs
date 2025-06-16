@@ -16,6 +16,7 @@ pub struct Parser<'a> {
     style: Style,
 }
 
+#[cfg(test)]
 impl<'a> Parser<'a> {
     pub fn new(s: &'a str) -> Self {
         Self {

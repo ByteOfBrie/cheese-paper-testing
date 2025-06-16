@@ -15,12 +15,15 @@ use crate::default_text::DEFAULT_TEXT;
 
 pub struct BaseTextEditor {
     text: String,
+
+    highlighter: crate::tiny_markdown::MemoizedMarkdownHighlighter,
 }
 
 impl Default for BaseTextEditor {
     fn default() -> Self {
         Self {
             text: DEFAULT_TEXT.trim().to_owned(),
+            highlighter: Default::default(),
         }
     }
 }
@@ -39,8 +42,19 @@ impl BaseTextEditor {
     }
 
     fn editor_ui(&mut self, ui: &mut egui::Ui) {
-        let BaseTextEditor { text } = self;
-        ui.add(egui::TextEdit::multiline(text).desired_width(f32::INFINITY));
+        let BaseTextEditor { text, highlighter } = self;
+
+        let mut layouter = |ui: &egui::Ui, tinymark: &str, wrap_width: f32| {
+            let mut layout_job = highlighter.highlight(ui.style(), tinymark);
+            layout_job.wrap.max_width = wrap_width;
+            ui.fonts(|f| f.layout_job(layout_job))
+        };
+
+        ui.add(
+            egui::TextEdit::multiline(text)
+                .desired_width(f32::INFINITY)
+                .layouter(&mut layouter),
+        );
     }
 }
 

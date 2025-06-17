@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 mod default_text;
 mod tiny_markdown;
 use crate::default_text::DEFAULT_TEXT;
+mod components;
 
 pub struct BaseTextEditor {
     text: String,

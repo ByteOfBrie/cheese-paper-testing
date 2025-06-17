@@ -83,7 +83,6 @@ pub fn add_index_to_name(name: &str, index: u32) -> String {
 /// Default way to get the path of a file object
 /// name: name that the file object has within the editor
 pub fn calculate_filename_for_object(name: &str, extension: &str, index: u32) -> String {
-    // TODO: implement
     let name = truncate_name(name, FILENAME_MAX_LENGTH);
     let name = process_name_for_filename(name);
     let name = add_index_to_name(&name, index);
@@ -150,11 +149,18 @@ pub struct FileObjectBase {
 }
 
 impl FileObjectBase {
+    fn calculate_filename(&self) -> String {
+        calculate_filename_for_object(
+            &self.metadata.name,
+            file_type_extension(&self.file.file_type),
+            self.index,
+        )
+    }
+
     pub fn set_index(&mut self, new_index: u32) -> std::io::Result<()> {
         self.index = new_index;
 
-        // TODO: broken, doesn't actually calculate the extensions
-        let new_filename: PathBuf = self.get_path();
+        let new_filename: PathBuf = PathBuf::from(self.calculate_filename());
         self.set_filename(&new_filename)
     }
 

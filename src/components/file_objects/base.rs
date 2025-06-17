@@ -104,6 +104,8 @@ fn test_calculate_filename_for_object() {
 // pub fn get_object_path_from_parent(name: &str, index: u32, parent: Box<dyn FileObject>) -> PathBuf {
 // }
 
+// Should use some underlying structure to keep track of when these are changed and any values that
+// we don't understand to write back to disk
 pub struct FileObjectMetadata {
     version: u32,
     name: String,

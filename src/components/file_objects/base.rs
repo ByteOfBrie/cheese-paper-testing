@@ -190,6 +190,4 @@ impl FileObjectBase {
     }
 }
 
-pub trait FileObject {
-    fn set_path(&mut self, new_path: &str);
-}
+pub trait FileObject {}

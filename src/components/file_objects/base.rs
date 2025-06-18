@@ -160,20 +160,32 @@ pub struct FileObjectBase {
 }
 
 impl FileObjectBase {
-    fn calculate_filename(&self) -> String {
-        calculate_filename_for_object(
+    /// Change the filename in the base object and on disk, processing any required updates
+    fn set_filename(&mut self, new_filename: &Path) -> std::io::Result<()> {
+        let old_path = self.get_path();
+        let new_path = Path::join(&self.file.dirname, new_filename);
+
+        if new_path != old_path {
+            std::fs::rename(old_path, new_path)?;
+            self.file.basename = new_filename.to_path_buf();
+        }
+        Ok(())
+    }
+
+    /// Calculates the filename for a particular object
+    fn calculate_filename(&self) -> PathBuf {
+        PathBuf::from(calculate_filename_for_object(
             &self.metadata.name,
             file_type_extension(&self.file.file_type),
             self.index,
-        )
+        ))
     }
 
     /// Sets the index to this file, doing the move if necessary
     pub fn set_index(&mut self, new_index: u32) -> std::io::Result<()> {
         self.index = new_index;
 
-        let new_filename: PathBuf = PathBuf::from(self.calculate_filename());
-        self.set_filename(&new_filename)
+        self.set_filename(&self.calculate_filename())
     }
 
     /// Recalculates the filename from the object property

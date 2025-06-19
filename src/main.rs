@@ -51,11 +51,15 @@ impl BaseTextEditor {
             ui.fonts(|f| f.layout_job(layout_job))
         };
 
-        ui.add(
+        let response = ui.add(
             egui::TextEdit::multiline(text)
                 .desired_width(f32::INFINITY)
                 .layouter(&mut layouter),
         );
+
+        if response.changed() {
+            println!("Changed lines: {text}")
+        }
     }
 }
 

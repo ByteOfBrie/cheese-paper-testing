@@ -42,6 +42,7 @@ impl Default for FileObjectMetadata {
 
 /// List of known file types in this version of the editor. File types that aren't known will not
 /// be read in
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileType {
     Scene,
     Folder,
@@ -49,21 +50,34 @@ pub enum FileType {
     Place,
 }
 
-fn file_type_extension(file_type: &FileType) -> &'static str {
-    match file_type {
-        FileType::Scene => ".md",
-        FileType::Folder => ".toml",
-        FileType::Character => ".toml",
-        FileType::Place => ".toml",
+impl Into<&str> for FileType {
+    fn into(self) -> &'static str {
+        match self {
+            FileType::Scene => "scene",
+            FileType::Folder => "folder",
+            FileType::Character => "character",
+            FileType::Place => "worldbuilding",
+        }
     }
 }
 
-fn file_type_is_folder(file_type: &FileType) -> bool {
-    match file_type {
-        FileType::Scene => false,
-        FileType::Folder => true,
-        FileType::Character => false,
-        FileType::Place => true,
+impl FileType {
+    fn file_type_extension(self) -> &'static str {
+        match self {
+            FileType::Scene => ".md",
+            FileType::Folder => ".toml",
+            FileType::Character => ".toml",
+            FileType::Place => ".toml",
+        }
+    }
+
+    fn file_type_is_folder(self) -> bool {
+        match self {
+            FileType::Scene => false,
+            FileType::Folder => true,
+            FileType::Character => false,
+            FileType::Place => true,
+        }
     }
 }
 
@@ -103,7 +117,7 @@ impl FileObject {
     fn calculate_filename(&self) -> PathBuf {
         PathBuf::from(calculate_filename_for_object(
             &self.metadata.name,
-            file_type_extension(&self.file.file_type),
+            &self.file.file_type.file_type_extension(),
             self.index,
         ))
     }
@@ -136,9 +150,9 @@ impl FileObject {
     /// operations on this object
     fn get_file(&self) -> PathBuf {
         let base_path = self.get_path();
-        let path = match file_type_is_folder(&self.file.file_type) {
+        let path = match &self.file.file_type.file_type_is_folder() {
             true => {
-                let extension = file_type_extension(&self.file.file_type);
+                let extension = &self.file.file_type.file_type_extension();
                 let underlying_file_name = format!("{FOLDER_METADATA_FILE_NAME}{extension}");
                 Path::join(&base_path, underlying_file_name)
             }

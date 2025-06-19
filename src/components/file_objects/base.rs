@@ -67,8 +67,10 @@ pub struct FileInfo {
 
 pub struct FileObjectBase {
     metadata: FileObjectMetadata,
+    /// Index (ordering within parent)
     index: u32,
-    parent: Option<Box<dyn FileObject>>,
+    /// Object ID of the parent
+    parent_id: String,
     file: FileInfo,
 }
 

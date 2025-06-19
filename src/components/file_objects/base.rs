@@ -3,16 +3,37 @@ use crate::components::file_objects::utils::{
 };
 use std::fs::File;
 use std::path::{Path, PathBuf};
+
 pub struct StringProperty {
     name: String,
     value: String,
     is_assigned: bool,
 }
 
+impl StringProperty {
+    fn new(name: String) -> Self {
+        Self {
+            name,
+            value: Default::default(),
+            is_assigned: false,
+        }
+    }
+}
+
 pub struct BoolProperty {
     name: String,
     value: bool,
     is_assigned: bool,
+}
+
+impl BoolProperty {
+    fn new(name: String) -> Self {
+        Self {
+            name,
+            value: false,
+            is_assigned: false,
+        }
+    }
 }
 
 /// filename of the object within a folder containing its metadata (without extension)
@@ -27,7 +48,7 @@ pub struct FileObjectMetadata {
     /// Version of the object, can eventually be used to detect compatibility changes
     version: u32,
     /// Name of the object (e.g., title of a scene, character name)
-    name: String,
+    name: StringProperty,
     /// ID unique across all objects, probably UUIDv4 (but any string is acceptable)
     id: String,
 }
@@ -92,7 +113,7 @@ impl FileObjectBase {
     /// Calculates the filename for a particular object
     fn calculate_filename(&self) -> PathBuf {
         PathBuf::from(calculate_filename_for_object(
-            &self.metadata.name,
+            &self.metadata.name.value,
             file_type_extension(&self.file.file_type),
             self.index,
         ))

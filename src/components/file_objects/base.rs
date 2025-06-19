@@ -65,7 +65,7 @@ impl Into<&str> for FileType {
 }
 
 impl FileType {
-    fn file_type_extension(self) -> &'static str {
+    fn extension(self) -> &'static str {
         match self {
             FileType::Scene => ".md",
             FileType::Folder => ".toml",
@@ -74,7 +74,7 @@ impl FileType {
         }
     }
 
-    fn file_type_is_folder(self) -> bool {
+    fn is_folder(self) -> bool {
         match self {
             FileType::Scene => false,
             FileType::Folder => true,
@@ -147,8 +147,8 @@ impl FileObject {
 
         let mut base_path = PathBuf::from(name);
 
-        if !self.file_type.file_type_is_folder() {
-            base_path.push(self.file_type.file_type_extension());
+        if !self.file_type.is_folder() {
+            base_path.push(self.file_type.extension());
         }
 
         base_path
@@ -182,9 +182,9 @@ impl FileObject {
     /// operations on this object
     fn get_file(&self) -> PathBuf {
         let base_path = self.get_path();
-        let path = match &self.file_type.file_type_is_folder() {
+        let path = match &self.file_type.is_folder() {
             true => {
-                let extension = &self.file_type.file_type_extension();
+                let extension = &self.file_type.extension();
                 let underlying_file_name = format!("{FOLDER_METADATA_FILE_NAME}{extension}");
                 Path::join(&base_path, underlying_file_name)
             }

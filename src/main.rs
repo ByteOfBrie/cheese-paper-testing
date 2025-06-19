@@ -1,5 +1,8 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-use clap::{Parser, Subcommand};
+// hide console window on Windows in release
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use clap::Parser;
+use std::path::PathBuf;
 
 mod components;
 mod tiny_markdown;
@@ -10,33 +13,26 @@ use crate::ui::CheesePaperApp;
 #[derive(Parser)]
 #[command(version, about)]
 struct Args {
-    #[command(subcommand)]
-    cli: Option<Commands>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Command line interface to inspect editor files
-    Cli {},
+    /// File to show information about
+    #[arg(long)]
+    show: Option<PathBuf>,
 }
 
 fn main() {
     let args = Args::parse();
 
-    match &args.cli {
-        Some(cli) => {
-            println!("Using CLI interface")
-        }
-        None => {
-            env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
-            let options = eframe::NativeOptions::default();
+    if let Some(show_path) = args.show.as_deref() {
+        println!("Using CLI interface");
+        println!("{show_path:?}");
+    } else {
+        env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+        let options = eframe::NativeOptions::default();
 
-            eframe::run_native(
-                "Cheese Paper Rust",
-                options,
-                Box::new(|cc| Ok(Box::new(CheesePaperApp::new(cc)))),
-            )
-            .unwrap()
-        }
+        eframe::run_native(
+            "Cheese Paper Rust",
+            options,
+            Box::new(|cc| Ok(Box::new(CheesePaperApp::new(cc)))),
+        )
+        .unwrap()
     }
 }

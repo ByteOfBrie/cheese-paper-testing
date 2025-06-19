@@ -19,14 +19,14 @@ const FOLDER_METADATA_FILE_NAME: &str = "metadata";
 /// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
 ///
 
-// Should use some underlying structure to keep track of when these are changed and any values that
-// we don't understand to write back to disk
+/// Baseline metadata for all file objects
 pub struct FileObjectMetadata {
     /// Version of the object, can eventually be used to detect compatibility changes
     version: u32,
     /// Name of the object (e.g., title of a scene, character name)
     name: String,
-    /// ID unique across all objects, probably UUIDv4 (but any string is acceptable)
+    /// ID unique across all objects. The reference implementations use UUIDv4, but any string
+    /// is acceptable
     id: String,
 }
 

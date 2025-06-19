@@ -101,6 +101,24 @@ pub struct FileObject {
 }
 
 impl FileObject {
+    // TODO: figure out what this actually does (creation vs loading)
+    /// create new file object at path
+    fn new(
+        file_type: FileType,
+        dirname: PathBuf,
+        basename: PathBuf,
+        index: u32,
+        parent: Option<String>,
+    ) -> Self {
+        Self {
+            file_type,
+            metadata: FileObjectMetadata::default(),
+            index,
+            parent_id: parent,
+            file: FileInfo { dirname, basename },
+        }
+    }
+
     /// Change the filename in the base object and on disk, processing any required updates
     fn set_filename(&mut self, new_filename: &Path) -> std::io::Result<()> {
         let old_path = self.get_path();

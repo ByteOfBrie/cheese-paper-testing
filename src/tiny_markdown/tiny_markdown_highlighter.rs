@@ -1,4 +1,5 @@
 use crate::tiny_markdown::tiny_markdown_parser;
+use egui::{FontFamily, FontId};
 
 #[derive(Default)]
 pub struct MemoizedMarkdownHighlighter {
@@ -89,6 +90,10 @@ fn format_from_style(
     egui::text::TextFormat {
         color,
         italics: tinymark_style.italic,
+        font_id: FontId {
+            size: 24.0,
+            family: FontFamily::Proportional,
+        },
         ..Default::default()
     }
 }

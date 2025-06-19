@@ -1,10 +1,13 @@
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
-    calculate_filename_for_object, process_name_for_filename, truncate_name,
+    add_index_to_name, process_name_for_filename, truncate_name,
 };
 use std::fs::File;
 use std::path::{Path, PathBuf};
+
+/// the maximum length of a name before we start trying to truncate it
+const FILENAME_MAX_LENGTH: usize = 30;
 
 /// filename of the object within a folder containing its metadata (without extension)
 const FOLDER_METADATA_FILE_NAME: &str = "metadata";
@@ -138,7 +141,11 @@ impl FileObject {
             true => &format!("new {}", Into::<&str>::into(self.file_type)),
         };
 
-        let mut base_path = PathBuf::from(calculate_filename_for_object(name, self.index));
+        let name = truncate_name(name, FILENAME_MAX_LENGTH);
+        let name = process_name_for_filename(name);
+        let name = add_index_to_name(&name, self.index);
+
+        let mut base_path = PathBuf::from(name);
 
         if !self.file_type.file_type_is_folder() {
             base_path.push(self.file_type.file_type_extension());

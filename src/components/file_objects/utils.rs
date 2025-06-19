@@ -1,9 +1,6 @@
 /// Generic file utilities
 use regex::Regex;
 
-/// the maximum length of a name before we start trying to truncate it
-const FILENAME_MAX_LENGTH: usize = 30;
-
 /// make sure the name fits within a specified length, trying to split on word boundaries
 pub fn truncate_name(name: &str, max_length: usize) -> &str {
     let name = name.trim();
@@ -60,25 +57,4 @@ fn test_process_name_for_filename() {
 /// Just adds an index to a name, no real logic
 pub fn add_index_to_name(name: &str, index: u32) -> String {
     format!("{index:03}-{name}")
-}
-
-/// Default way to get the path of a file object
-/// name: name that the file object has within the editor
-pub fn calculate_filename_for_object(name: &str, index: u32) -> String {
-    let name = truncate_name(name, FILENAME_MAX_LENGTH);
-    let name = process_name_for_filename(name);
-    let name = add_index_to_name(&name, index);
-    name
-}
-
-#[test]
-fn test_calculate_filename_for_object() {
-    assert_eq!(
-        calculate_filename_for_object("New Scene", 0),
-        "000-New_Scene"
-    );
-    assert_eq!(
-        calculate_filename_for_object("New Scene", 10),
-        "010-New_Scene"
-    );
 }

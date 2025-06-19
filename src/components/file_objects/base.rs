@@ -77,16 +77,16 @@ pub struct FileInfo {
     file_type: FileType,
 }
 
-pub struct FileObjectBase {
+pub struct FileObject {
     metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     index: u32,
     /// Object ID of the parent
-    parent_id: String,
+    parent_id: Option<String>,
     file: FileInfo,
 }
 
-impl FileObjectBase {
+impl FileObject {
     /// Change the filename in the base object and on disk, processing any required updates
     fn set_filename(&mut self, new_filename: &Path) -> std::io::Result<()> {
         let old_path = self.get_path();
@@ -147,8 +147,6 @@ impl FileObjectBase {
         path
     }
 }
-
-pub trait FileObject {}
 
 pub trait FileObjectType {
     fn save(&mut self, dest_path: &Path);

@@ -10,6 +10,13 @@ const FOLDER_METADATA_FILE_NAME: &str = "metadata";
 // pub fn get_object_path_from_parent(name: &str, index: u32, parent: Box<dyn FileObject>) -> PathBuf {
 // }
 
+/// Loading a file:
+/// 1. Parse filename as a name -> metadata.name
+/// 2. Load file, storing the metadata in some intermediate place
+/// 3. Store the rest of the file into the metadata automatically (as present)
+/// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
+///
+
 // Should use some underlying structure to keep track of when these are changed and any values that
 // we don't understand to write back to disk
 pub struct FileObjectMetadata {

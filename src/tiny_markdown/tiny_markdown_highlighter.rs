@@ -77,15 +77,11 @@ fn format_from_style(
     egui_style: &egui::Style,
     tinymark_style: &tiny_markdown_parser::Style,
 ) -> egui::text::TextFormat {
-    use egui::{Align, Color32, Stroke, TextStyle};
-
     let color = if tinymark_style.strong {
         egui_style.visuals.strong_text_color()
     } else {
         egui_style.visuals.text_color()
     };
-
-    // TextStyle::Body.
 
     egui::text::TextFormat {
         color,

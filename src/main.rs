@@ -1,18 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-#![allow(rustdoc::missing_crate_level_docs)] // it's an example
-#![allow(unused_imports)]
 
 use eframe::egui;
-use egui::{FontFamily, FontId, RichText, TextStyle};
-use egui::{
-    Key, KeyboardShortcut, Modifiers, ScrollArea, TextBuffer, TextEdit, Ui, text::CCursorRange,
-};
+use egui::ScrollArea;
+use egui::{FontFamily, FontId, TextStyle};
 
-use std::collections::BTreeMap;
-mod default_text;
-mod tiny_markdown;
-use crate::default_text::DEFAULT_TEXT;
 mod components;
+mod tiny_markdown;
+
+mod default_text;
+use crate::default_text::DEFAULT_TEXT;
 
 pub struct BaseTextEditor {
     text: String,

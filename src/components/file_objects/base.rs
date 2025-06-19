@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use crate::components::file_objects::utils::{
     calculate_filename_for_object, process_name_for_filename, truncate_name,
 };
@@ -26,6 +28,16 @@ pub struct FileObjectMetadata {
     name: String,
     /// ID unique across all objects, probably UUIDv4 (but any string is acceptable)
     id: String,
+}
+
+impl Default for FileObjectMetadata {
+    fn default() -> Self {
+        Self {
+            version: 1u32,
+            name: String::new(),
+            id: Uuid::new_v4().as_hyphenated().to_string(),
+        }
+    }
 }
 
 /// List of known file types in this version of the editor. File types that aren't known will not

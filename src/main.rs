@@ -1,63 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use eframe::egui;
-use egui::ScrollArea;
 use egui::{FontFamily, FontId, TextStyle};
 
 mod components;
 mod tiny_markdown;
+mod ui;
 
-mod default_text;
-use crate::default_text::DEFAULT_TEXT;
-
-pub struct BaseTextEditor {
-    text: String,
-
-    highlighter: crate::tiny_markdown::MemoizedMarkdownHighlighter,
-}
-
-impl Default for BaseTextEditor {
-    fn default() -> Self {
-        Self {
-            text: DEFAULT_TEXT.trim().to_owned(),
-            highlighter: Default::default(),
-        }
-    }
-}
-
-impl BaseTextEditor {
-    pub fn panels(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.ui(ui);
-        });
-    }
-
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        ScrollArea::vertical()
-            .id_salt("text")
-            .show(ui, |ui| self.editor_ui(ui));
-    }
-
-    fn editor_ui(&mut self, ui: &mut egui::Ui) {
-        let BaseTextEditor { text, highlighter } = self;
-
-        let mut layouter = |ui: &egui::Ui, tinymark: &str, wrap_width: f32| {
-            let mut layout_job = highlighter.highlight(ui.style(), tinymark);
-            layout_job.wrap.max_width = wrap_width;
-            ui.fonts(|f| f.layout_job(layout_job))
-        };
-
-        let response = ui.add(
-            egui::TextEdit::multiline(text)
-                .desired_width(f32::INFINITY)
-                .layouter(&mut layouter),
-        );
-
-        if response.changed() {
-            println!("Changed lines: {text}")
-        }
-    }
-}
+use crate::ui::BaseTextEditor;
 
 struct CheesePaperApp {
     editor: BaseTextEditor,
@@ -66,9 +16,7 @@ struct CheesePaperApp {
 impl Default for CheesePaperApp {
     fn default() -> Self {
         Self {
-            editor: BaseTextEditor {
-                ..Default::default()
-            },
+            editor: BaseTextEditor::default(),
         }
     }
 }

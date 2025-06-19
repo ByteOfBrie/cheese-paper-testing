@@ -88,10 +88,10 @@ pub struct FileInfo {
     /// Path of the file within the dirname
     /// `/foo/bar/` -> `bar`
     basename: PathBuf,
-    file_type: FileType,
 }
 
 pub struct FileObject {
+    file_type: FileType,
     metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     index: u32,
@@ -115,9 +115,14 @@ impl FileObject {
 
     /// Calculates the filename for a particular object
     fn calculate_filename(&self) -> PathBuf {
+        let name: &str = match self.metadata.name.is_empty() {
+            false => &self.metadata.name,
+            true => &format!("new {}", Into::<&str>::into(self.file_type)),
+        };
+
         PathBuf::from(calculate_filename_for_object(
-            &self.metadata.name,
-            &self.file.file_type.file_type_extension(),
+            name,
+            &self.file_type.file_type_extension(),
             self.index,
         ))
     }
@@ -150,9 +155,9 @@ impl FileObject {
     /// operations on this object
     fn get_file(&self) -> PathBuf {
         let base_path = self.get_path();
-        let path = match &self.file.file_type.file_type_is_folder() {
+        let path = match &self.file_type.file_type_is_folder() {
             true => {
-                let extension = &self.file.file_type.file_type_extension();
+                let extension = &self.file_type.file_type_extension();
                 let underlying_file_name = format!("{FOLDER_METADATA_FILE_NAME}{extension}");
                 Path::join(&base_path, underlying_file_name)
             }

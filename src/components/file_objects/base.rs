@@ -138,11 +138,13 @@ impl FileObject {
             true => &format!("new {}", Into::<&str>::into(self.file_type)),
         };
 
-        PathBuf::from(calculate_filename_for_object(
-            name,
-            &self.file_type.file_type_extension(),
-            self.index,
-        ))
+        let mut base_path = PathBuf::from(calculate_filename_for_object(name, self.index));
+
+        if !self.file_type.file_type_is_folder() {
+            base_path.push(self.file_type.file_type_extension());
+        }
+
+        base_path
     }
 
     /// Sets the index to this file, doing the move if necessary

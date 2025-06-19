@@ -64,21 +64,21 @@ pub fn add_index_to_name(name: &str, index: u32) -> String {
 
 /// Default way to get the path of a file object
 /// name: name that the file object has within the editor
-pub fn calculate_filename_for_object(name: &str, extension: &str, index: u32) -> String {
+pub fn calculate_filename_for_object(name: &str, index: u32) -> String {
     let name = truncate_name(name, FILENAME_MAX_LENGTH);
     let name = process_name_for_filename(name);
     let name = add_index_to_name(&name, index);
-    format!("{name}{extension}")
+    name
 }
 
 #[test]
 fn test_calculate_filename_for_object() {
     assert_eq!(
-        calculate_filename_for_object("New Scene", ".md", 0),
-        "000-New_Scene.md"
+        calculate_filename_for_object("New Scene", 0),
+        "000-New_Scene"
     );
     assert_eq!(
-        calculate_filename_for_object("New Scene", ".md", 10),
-        "010-New_Scene.md"
+        calculate_filename_for_object("New Scene", 10),
+        "010-New_Scene"
     );
 }

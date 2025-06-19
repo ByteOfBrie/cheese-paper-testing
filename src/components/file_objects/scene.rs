@@ -1,6 +1,4 @@
-use crate::components::file_objects::base::{
-    BoolProperty, FileObjectBase, FileObjectType, StringProperty,
-};
+use crate::components::file_objects::base::{FileObjectBase, FileObjectType};
 use std::path::Path;
 
 // TODO: set defaults

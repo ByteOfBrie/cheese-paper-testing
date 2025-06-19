@@ -3,6 +3,17 @@ use crate::components::file_objects::utils::{
 };
 use std::fs::File;
 use std::path::{Path, PathBuf};
+pub struct StringProperty {
+    name: String,
+    value: String,
+    is_assigned: bool,
+}
+
+pub struct BoolProperty {
+    name: String,
+    value: bool,
+    is_assigned: bool,
+}
 
 /// filename of the object within a folder containing its metadata (without extension)
 const FOLDER_METADATA_FILE_NAME: &str = "metadata";

@@ -1,1 +1,1 @@
-mod file_objects;
+pub mod file_objects;

@@ -3,13 +3,14 @@
 
 use clap::Parser;
 use std::error::Error;
-use std::fs;
 use std::path::PathBuf;
 
 mod components;
 mod tiny_markdown;
 mod ui;
 
+use crate::components::file_objects::FileObject;
+use crate::components::file_objects::FileType;
 use crate::ui::CheesePaperApp;
 
 #[derive(Parser)]
@@ -26,18 +27,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     if let Some(show_path) = args.show.as_deref() {
         println!("Using CLI interface");
         println!("{show_path:?}");
-        let file: String = fs::read_to_string(show_path)?;
-        println!("{file}");
+        let basename = show_path.file_name().unwrap();
+        let dirname = show_path.parent().unwrap();
 
-        let metadata = fs::metadata(show_path)?;
-        println!("{:?}", metadata.modified());
-        match metadata
-            .modified()?
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        {
-            Ok(n) => println!("{:?}", n),
-            Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-        }
+        let mut file = FileObject::new(
+            FileType::Scene,
+            dirname.to_owned(),
+            basename.to_owned(),
+            0,
+            None,
+        );
+
+        println!("{file:?}");
+
+        file.load_file()?;
     } else {
         env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
         let options = eframe::NativeOptions::default();

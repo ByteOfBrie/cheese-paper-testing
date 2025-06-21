@@ -5,8 +5,10 @@ use crate::components::file_objects::utils::{
 };
 use std::ffi::OsString;
 use std::fs;
+use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use toml::Table;
 
 /// the maximum length of a name before we start trying to truncate it
 const FILENAME_MAX_LENGTH: usize = 30;
@@ -104,6 +106,42 @@ pub struct FileInfo {
     basename: OsString,
     modtime: Option<SystemTime>,
     modified: bool,
+}
+
+fn metadata_extract_u32(table: &mut Table, field_name: &str) -> std::io::Result<Option<u32>> {
+    Ok(match table.remove(field_name) {
+        Some(value) => Some(
+            value
+                .as_integer()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "value was non-integer"))?
+                .try_into()
+                .map_err(|_| Error::new(ErrorKind::InvalidData, "failed to convert to u32"))?,
+        ),
+        None => None,
+    })
+}
+
+fn metadata_extract_string(table: &mut Table, field_name: &str) -> std::io::Result<Option<String>> {
+    Ok(match table.remove(field_name) {
+        Some(value) => Some(
+            value
+                .as_str()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "value was not string"))?
+                .to_owned(),
+        ),
+        None => None,
+    })
+}
+
+fn metadata_extract_bool(table: &mut Table, field_name: &str) -> std::io::Result<Option<bool>> {
+    Ok(match table.remove(field_name) {
+        Some(value) => Some(
+            value
+                .as_bool()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "value was not string"))?,
+        ),
+        None => None,
+    })
 }
 
 #[derive(Debug)]

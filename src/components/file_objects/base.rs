@@ -108,7 +108,7 @@ pub struct FileInfo {
     modified: bool,
 }
 
-fn metadata_extract_u32(table: &mut Table, field_name: &str) -> std::io::Result<Option<u32>> {
+pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> std::io::Result<Option<u32>> {
     Ok(match table.remove(field_name) {
         Some(value) => Some(
             value
@@ -121,7 +121,10 @@ fn metadata_extract_u32(table: &mut Table, field_name: &str) -> std::io::Result<
     })
 }
 
-fn metadata_extract_string(table: &mut Table, field_name: &str) -> std::io::Result<Option<String>> {
+pub fn metadata_extract_string(
+    table: &mut Table,
+    field_name: &str,
+) -> std::io::Result<Option<String>> {
     Ok(match table.remove(field_name) {
         Some(value) => Some(
             value
@@ -133,7 +136,7 @@ fn metadata_extract_string(table: &mut Table, field_name: &str) -> std::io::Resu
     })
 }
 
-fn metadata_extract_bool(table: &mut Table, field_name: &str) -> std::io::Result<Option<bool>> {
+pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> std::io::Result<Option<bool>> {
     Ok(match table.remove(field_name) {
         Some(value) => Some(
             value
@@ -309,6 +312,6 @@ impl FileObject {
 }
 
 pub trait FileObjectType {
-    fn save(&mut self, dest_path: &Path);
-    fn load_from_disk(&mut self, source_path: &Path);
+    fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool>;
+    fn load_extra_data(&mut self, data: String);
 }

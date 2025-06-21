@@ -279,7 +279,26 @@ impl FileObject {
             },
         };
 
-        println!("metadata: {metadata_str}");
+        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+
+        // Read the metadata into the dictionary
+
+        match metadata_extract_u32(&mut file_metadata_contents, "version")? {
+            Some(version) => self.metadata.version = version,
+            None => self.file.modified = true,
+        }
+
+        match metadata_extract_string(&mut file_metadata_contents, "name")? {
+            Some(name) => self.metadata.name = name,
+            None => self.file.modified = true,
+        }
+
+        match metadata_extract_string(&mut file_metadata_contents, "id")? {
+            Some(id) => self.metadata.id = id,
+            None => self.file.modified = true,
+        }
+
+        println!("metadata: {file_metadata_contents:?}");
         println!("contents: {file_content}");
 
         // TODO: Parse metadata

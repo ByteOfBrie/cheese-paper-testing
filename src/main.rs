@@ -38,9 +38,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             None,
         );
 
-        println!("{file:?}");
-
         file.load_file()?;
+
+        println!("{file:#?}");
     } else {
         env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
         let options = eframe::NativeOptions::default();

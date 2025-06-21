@@ -1,9 +1,11 @@
 use uuid::Uuid;
 
+use crate::components::file_objects::scene::Scene;
 use crate::components::file_objects::utils::{
     add_index_to_name, process_name_for_filename, truncate_name,
 };
 use std::ffi::OsString;
+use std::fmt::Debug;
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -156,6 +158,8 @@ pub struct FileObject {
     /// Object ID of the parent
     parent_id: Option<String>,
     file: FileInfo,
+    child: Box<dyn FileObjectType>,
+    extra_metadata: Table,
 }
 
 impl FileObject {
@@ -179,6 +183,13 @@ impl FileObject {
                 modtime: None,
                 modified: false,
             },
+            child: match file_type {
+                FileType::Scene => Box::new(Scene::default()),
+                FileType::Character => panic!(),
+                FileType::Folder => panic!(),
+                FileType::Place => panic!(),
+            },
+            extra_metadata: Table::new(),
         }
     }
 
@@ -301,17 +312,16 @@ impl FileObject {
             None => self.file.modified = true,
         }
 
-        println!("metadata: {file_metadata_contents:?}");
-        println!("contents: {file_content}");
+        self.child.load_metadata(&mut file_metadata_contents)?;
+        self.child.load_extra_data(file_content.to_owned());
 
-        // TODO: Parse metadata
-        // TODO: Store file_content if necessary
+        self.extra_metadata = file_metadata_contents;
 
         Ok(())
     }
 }
 
-pub trait FileObjectType {
+pub trait FileObjectType: Debug {
     fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool>;
     fn load_extra_data(&mut self, data: String);
 }

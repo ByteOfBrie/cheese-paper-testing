@@ -1,9 +1,10 @@
 use crate::components::file_objects::base::{
-    FileObject, FileObjectType, metadata_extract_bool, metadata_extract_string,
+    FileObjectType, metadata_extract_bool, metadata_extract_string,
 };
 use toml::Table;
 
 // TODO: set defaults
+#[derive(Debug)]
 struct SceneMetadata {
     summary: String,
     notes: String,
@@ -11,9 +12,30 @@ struct SceneMetadata {
     compile_status: bool,
 }
 
+impl Default for SceneMetadata {
+    fn default() -> Self {
+        Self {
+            summary: String::new(),
+            notes: String::new(),
+            pov: String::new(),
+            compile_status: true,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Scene {
     metadata: SceneMetadata,
     text: String,
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self {
+            metadata: Default::default(),
+            text: String::new(),
+        }
+    }
 }
 
 impl FileObjectType for Scene {

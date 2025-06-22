@@ -7,7 +7,7 @@ use crate::components::file_objects::utils::{
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::fs;
-use std::io::{Error, ErrorKind};
+use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use toml::Table;
@@ -106,6 +106,7 @@ pub struct FileInfo {
     /// Path of the file within the dirname
     /// `/foo/bar/` -> `bar`
     basename: OsString,
+    /// Modified time if the file exists
     modtime: Option<SystemTime>,
     modified: bool,
 }
@@ -264,12 +265,33 @@ impl FileObject {
         path
     }
 
-    /// Load a file from disk. Will eventually become private, but useful for testing now
-    pub fn load_file(&mut self) -> std::io::Result<()> {
+    pub fn reload_file(&mut self) -> Result<()> {
         let file_to_read = self.get_file();
 
+        if !self.should_load(&file_to_read)? {
+            return Ok(());
+        }
+
+        let (metadata_str, file_body) =
+            FileObject::read_file_contents(&file_to_read, self.file_type.extension())?;
+        // TODO: maybe split up function around here into parts that can be called by ``::from_file`?
+        // or maybe just make this be fully able to call that?
+        // maybe logical split is: read, parse/load
+        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+
+        self.load_metadata(&mut file_metadata_contents)?;
+
+        self.child.load_metadata(&mut file_metadata_contents)?;
+        self.child.load_extra_data(file_body);
+
+        self.extra_metadata = file_metadata_contents;
+
+        Ok(())
+    }
+
+    fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
         // Determine if we want to read this file
-        let current_modtime = fs::metadata(&file_to_read)
+        let current_modtime = fs::metadata(file_to_read)
             .expect("attempted to load file that does not exist")
             .modified()
             .expect("Modtime not available");
@@ -278,14 +300,18 @@ impl FileObject {
             let old_modtime = self.file.modtime.unwrap();
             if old_modtime == current_modtime {
                 // We've already loaded the latest revision, nothing to do
-                return Ok(());
+                return Ok(false);
             }
         }
 
-        // We want to read the file
-        let file_data = fs::read_to_string(&file_to_read).expect("could not read file");
+        Ok(true)
+    }
 
-        let (metadata_str, file_content): (&str, &str) = match self.file_type.extension() == ".md" {
+    fn read_file_contents(file_to_read: &Path, extension: &str) -> Result<(String, String)> {
+        // We want to read the file
+        let file_data = fs::read_to_string(file_to_read).expect("could not read file");
+
+        let (metadata_str, file_content): (&str, &str) = match extension == ".md" {
             false => (&file_data, ""),
             true => match file_data.split_once(HEADER_SPLIT) {
                 None => ("", &file_data),
@@ -293,29 +319,28 @@ impl FileObject {
             },
         };
 
-        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+        Ok((metadata_str.to_owned(), file_content.to_owned()))
+    }
 
-        // Read the metadata into the dictionary
-
-        match metadata_extract_u32(&mut file_metadata_contents, "version")? {
+    // Read the metadata into the dictionary
+    fn load_metadata(
+        &mut self,
+        metadata_table: &mut toml::map::Map<String, toml::Value>,
+    ) -> Result<()> {
+        match metadata_extract_u32(metadata_table, "version")? {
             Some(version) => self.metadata.version = version,
             None => self.file.modified = true,
         }
 
-        match metadata_extract_string(&mut file_metadata_contents, "name")? {
+        match metadata_extract_string(metadata_table, "name")? {
             Some(name) => self.metadata.name = name,
             None => self.file.modified = true,
         }
 
-        match metadata_extract_string(&mut file_metadata_contents, "id")? {
+        match metadata_extract_string(metadata_table, "id")? {
             Some(id) => self.metadata.id = id,
             None => self.file.modified = true,
         }
-
-        self.child.load_metadata(&mut file_metadata_contents)?;
-        self.child.load_extra_data(file_content.to_owned());
-
-        self.extra_metadata = file_metadata_contents;
 
         Ok(())
     }

@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             None,
         );
 
-        file.load_file()?;
+        file.reload_file()?;
 
         println!("{file:#?}");
     } else {

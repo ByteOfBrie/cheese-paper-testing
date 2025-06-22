@@ -111,7 +111,7 @@ pub struct FileInfo {
     modified: bool,
 }
 
-pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> std::io::Result<Option<u32>> {
+pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> Result<Option<u32>> {
     Ok(match table.remove(field_name) {
         Some(value) => Some(
             value
@@ -124,10 +124,7 @@ pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> std::io::Res
     })
 }
 
-pub fn metadata_extract_string(
-    table: &mut Table,
-    field_name: &str,
-) -> std::io::Result<Option<String>> {
+pub fn metadata_extract_string(table: &mut Table, field_name: &str) -> Result<Option<String>> {
     Ok(match table.remove(field_name) {
         Some(value) => Some(
             value
@@ -139,7 +136,7 @@ pub fn metadata_extract_string(
     })
 }
 
-pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> std::io::Result<Option<bool>> {
+pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> Result<Option<bool>> {
     Ok(match table.remove(field_name) {
         Some(value) => Some(
             value
@@ -235,7 +232,7 @@ impl FileObject {
     }
 
     /// Change the filename in the base object and on disk, processing any required updates
-    fn set_filename(&mut self, new_filename: OsString) -> std::io::Result<()> {
+    fn set_filename(&mut self, new_filename: OsString) -> Result<()> {
         let old_path = self.get_path();
         let new_path = Path::join(&self.file.dirname, &new_filename);
 
@@ -267,7 +264,7 @@ impl FileObject {
     }
 
     /// Sets the index to this file, doing the move if necessary
-    pub fn set_index(&mut self, new_index: u32) -> std::io::Result<()> {
+    pub fn set_index(&mut self, new_index: u32) -> Result<()> {
         self.index = new_index;
 
         self.set_filename(self.calculate_filename())
@@ -277,7 +274,7 @@ impl FileObject {
     ///
     /// Unlike with `set_index`, we expect the underlying values to be borrowed directly,
     /// rather than having a callback with our updated value.
-    pub fn set_filename_from_name(&mut self) -> std::io::Result<()> {
+    pub fn set_filename_from_name(&mut self) -> Result<()> {
         self.set_filename(self.calculate_filename())
     }
 
@@ -352,6 +349,6 @@ impl FileObject {
 }
 
 pub trait FileObjectType: Debug {
-    fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool>;
+    fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
     fn load_extra_data(&mut self, data: String);
 }

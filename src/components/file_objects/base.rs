@@ -150,6 +150,46 @@ pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> std::io::Re
     })
 }
 
+/// Reads the contents of a file from disk
+fn read_file_contents(file_to_read: &Path, extension: &str) -> Result<(String, String)> {
+    let file_data = fs::read_to_string(file_to_read).expect("could not read file");
+
+    let (metadata_str, file_content): (&str, &str) = match extension == ".md" {
+        false => (&file_data, ""),
+        true => match file_data.split_once(HEADER_SPLIT) {
+            None => ("", &file_data),
+            Some((start, end)) => (start, end),
+        },
+    };
+
+    Ok((metadata_str.to_owned(), file_content.to_owned()))
+}
+
+/// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
+/// appropriate
+fn load_metadata(
+    metadata_table: &mut toml::map::Map<String, toml::Value>,
+    metadata_object: &mut FileObjectMetadata,
+    file_info: &mut FileInfo,
+) -> Result<()> {
+    match metadata_extract_u32(metadata_table, "version")? {
+        Some(version) => metadata_object.version = version,
+        None => file_info.modified = true,
+    }
+
+    match metadata_extract_string(metadata_table, "name")? {
+        Some(name) => metadata_object.name = name,
+        None => file_info.modified = true,
+    }
+
+    match metadata_extract_string(metadata_table, "id")? {
+        Some(id) => metadata_object.id = id,
+        None => file_info.modified = true,
+    }
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct FileObject {
     file_type: FileType,
@@ -256,7 +296,7 @@ impl FileObject {
         let base_path = self.get_path();
         let path = match &self.file_type.is_folder() {
             true => {
-                let extension = &self.file_type.extension();
+                let extension = self.file_type.extension();
                 let underlying_file_name = format!("{FOLDER_METADATA_FILE_NAME}{extension}");
                 Path::join(&base_path, underlying_file_name)
             }
@@ -265,6 +305,8 @@ impl FileObject {
         path
     }
 
+    /// Reloads the contents of this file object from disk. Assumes that the file has been properly
+    /// initialized already
     pub fn reload_file(&mut self) -> Result<()> {
         let file_to_read = self.get_file();
 
@@ -273,13 +315,15 @@ impl FileObject {
         }
 
         let (metadata_str, file_body) =
-            FileObject::read_file_contents(&file_to_read, self.file_type.extension())?;
-        // TODO: maybe split up function around here into parts that can be called by ``::from_file`?
-        // or maybe just make this be fully able to call that?
-        // maybe logical split is: read, parse/load
+            read_file_contents(&file_to_read, self.file_type.extension())?;
+
         let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
 
-        self.load_metadata(&mut file_metadata_contents)?;
+        load_metadata(
+            &mut file_metadata_contents,
+            &mut self.metadata,
+            &mut self.file,
+        )?;
 
         self.child.load_metadata(&mut file_metadata_contents)?;
         self.child.load_extra_data(file_body);
@@ -289,15 +333,14 @@ impl FileObject {
         Ok(())
     }
 
+    /// Determine if the file should be loaded
     fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
-        // Determine if we want to read this file
         let current_modtime = fs::metadata(file_to_read)
             .expect("attempted to load file that does not exist")
             .modified()
             .expect("Modtime not available");
 
-        if self.file.modtime.is_some() {
-            let old_modtime = self.file.modtime.unwrap();
+        if let Some(old_modtime) = self.file.modtime {
             if old_modtime == current_modtime {
                 // We've already loaded the latest revision, nothing to do
                 return Ok(false);
@@ -305,44 +348,6 @@ impl FileObject {
         }
 
         Ok(true)
-    }
-
-    fn read_file_contents(file_to_read: &Path, extension: &str) -> Result<(String, String)> {
-        // We want to read the file
-        let file_data = fs::read_to_string(file_to_read).expect("could not read file");
-
-        let (metadata_str, file_content): (&str, &str) = match extension == ".md" {
-            false => (&file_data, ""),
-            true => match file_data.split_once(HEADER_SPLIT) {
-                None => ("", &file_data),
-                Some((start, end)) => (start, end),
-            },
-        };
-
-        Ok((metadata_str.to_owned(), file_content.to_owned()))
-    }
-
-    // Read the metadata into the dictionary
-    fn load_metadata(
-        &mut self,
-        metadata_table: &mut toml::map::Map<String, toml::Value>,
-    ) -> Result<()> {
-        match metadata_extract_u32(metadata_table, "version")? {
-            Some(version) => self.metadata.version = version,
-            None => self.file.modified = true,
-        }
-
-        match metadata_extract_string(metadata_table, "name")? {
-            Some(name) => self.metadata.name = name,
-            None => self.file.modified = true,
-        }
-
-        match metadata_extract_string(metadata_table, "id")? {
-            Some(id) => self.metadata.id = id,
-            None => self.file.modified = true,
-        }
-
-        Ok(())
     }
 }
 

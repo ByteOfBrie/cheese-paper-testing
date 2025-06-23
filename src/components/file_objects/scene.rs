@@ -3,7 +3,6 @@ use crate::components::file_objects::base::{
 };
 use toml::Table;
 
-// TODO: set defaults
 #[derive(Debug)]
 struct SceneMetadata {
     summary: String,

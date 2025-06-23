@@ -1,12 +1,11 @@
 use uuid::Uuid;
 
-use crate::components::file_objects::scene::Scene;
 use crate::components::file_objects::utils::{
     add_index_to_name, process_name_for_filename, truncate_name,
 };
+use crate::components::file_objects::{Character, Scene};
 use std::ffi::OsString;
 use std::fmt::Debug;
-use std::fs::{self, File};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -168,7 +167,7 @@ fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
         None => return Err(Error::new(ErrorKind::InvalidData, "value was not string")),
     };
 
-    let file_data = fs::read_to_string(file_to_read).expect("could not read file");
+    let file_data = std::fs::read_to_string(file_to_read).expect("could not read file");
 
     let (metadata_str, file_content): (&str, &str) = match extension == "md" {
         false => (&file_data, ""),
@@ -242,7 +241,7 @@ impl FileObject {
             },
             child: match file_type {
                 FileType::Scene => Box::new(Scene::default()),
-                FileType::Character => panic!(),
+                FileType::Character => Box::new(Character::default()),
                 FileType::Folder => panic!(),
                 FileType::Place => panic!(),
             },
@@ -298,9 +297,9 @@ impl FileObject {
             Err(_) => return None,
         };
 
-        let mut child = match file_type {
+        let mut child: Box<dyn FileObjectType> = match file_type {
             FileType::Scene => Box::new(Scene::default()),
-            FileType::Character => panic!(),
+            FileType::Character => Box::new(Character::default()),
             FileType::Folder => panic!(),
             FileType::Place => panic!(),
         };
@@ -421,7 +420,7 @@ impl FileObject {
 
     /// Determine if the file should be loaded
     fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
-        let current_modtime = fs::metadata(file_to_read)
+        let current_modtime = std::fs::metadata(file_to_read)
             .expect("attempted to load file that does not exist")
             .modified()
             .expect("Modtime not available");

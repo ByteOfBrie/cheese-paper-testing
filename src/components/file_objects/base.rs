@@ -6,7 +6,7 @@ use crate::components::file_objects::utils::{
 };
 use std::ffi::OsString;
 use std::fmt::Debug;
-use std::fs;
+use std::fs::{self, File};
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -70,6 +70,20 @@ impl Into<&str> for FileType {
             FileType::Folder => "folder",
             FileType::Character => "character",
             FileType::Place => "worldbuilding",
+        }
+    }
+}
+
+impl TryFrom<&str> for FileType {
+    type Error = &'static str;
+
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+        match value {
+            "scene" => Ok(FileType::Scene),
+            "folder" => Ok(FileType::Folder),
+            "character" => Ok(FileType::Character),
+            "worldbuilding" => Ok(FileType::Place),
+            _ => Err("Unknown error type"),
         }
     }
 }
@@ -148,10 +162,15 @@ pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> Result<Opti
 }
 
 /// Reads the contents of a file from disk
-fn read_file_contents(file_to_read: &Path, extension: &str) -> Result<(String, String)> {
+fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
+    let extension = match file_to_read.extension() {
+        Some(val) => val,
+        None => return Err(Error::new(ErrorKind::InvalidData, "value was not string")),
+    };
+
     let file_data = fs::read_to_string(file_to_read).expect("could not read file");
 
-    let (metadata_str, file_content): (&str, &str) = match extension == ".md" {
+    let (metadata_str, file_content): (&str, &str) = match extension == "md" {
         false => (&file_data, ""),
         true => match file_data.split_once(HEADER_SPLIT) {
             None => ("", &file_data),
@@ -194,7 +213,7 @@ pub struct FileObject {
     /// Index (ordering within parent)
     index: u32,
     /// Object ID of the parent
-    parent_id: Option<String>,
+    parent: Option<String>,
     file: FileInfo,
     child: Box<dyn FileObjectType>,
     extra_metadata: Table,
@@ -214,7 +233,7 @@ impl FileObject {
             file_type,
             metadata: FileObjectMetadata::default(),
             index,
-            parent_id: parent,
+            parent,
             file: FileInfo {
                 dirname,
                 basename,
@@ -229,6 +248,77 @@ impl FileObject {
             },
             extra_metadata: Table::new(),
         }
+    }
+
+    /// Load an arbitrary file object from a file on disk
+    pub fn from_file(mut filename: PathBuf, index: u32, parent: Option<String>) -> Option<Self> {
+        // Create the file info right at the start
+        let mut file_info = FileInfo {
+            dirname: match filename.parent() {
+                Some(dirname) => dirname,
+                None => return None,
+            }
+            .to_path_buf(),
+            basename: match filename.file_name() {
+                Some(basename) => basename,
+                None => return None,
+            }
+            .to_owned(),
+            modtime: None,
+            modified: false,
+        };
+
+        // If the filename is a directory, we need to look for the underlying file, otherwise
+        // we already have it
+        if filename.is_dir() {
+            filename.push(FOLDER_METADATA_FILE_NAME);
+            filename.set_extension(FileType::Folder.extension());
+        }
+
+        let (metadata_str, file_body) = match read_file_contents(&filename) {
+            Ok((metadata_str, file_body)) => (metadata_str, file_body),
+            Err(_) => return None,
+        };
+
+        let mut metadata = FileObjectMetadata::default();
+
+        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+
+        if load_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info).is_err() {
+            return None;
+        }
+
+        let file_type_str = match file_metadata_contents.remove("file_type") {
+            Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
+            None => "unknown".to_string(),
+        };
+
+        let file_type: FileType = match file_type_str.as_str().try_into() {
+            Ok(file_type) => file_type,
+            Err(_) => return None,
+        };
+
+        let mut child = match file_type {
+            FileType::Scene => Box::new(Scene::default()),
+            FileType::Character => panic!(),
+            FileType::Folder => panic!(),
+            FileType::Place => panic!(),
+        };
+
+        if child.load_metadata(&mut file_metadata_contents).is_err() {
+            return None;
+        }
+        child.load_extra_data(file_body);
+
+        Some(Self {
+            file_type,
+            metadata,
+            index,
+            parent,
+            file: file_info,
+            child,
+            extra_metadata: file_metadata_contents,
+        })
     }
 
     /// Change the filename in the base object and on disk, processing any required updates
@@ -311,8 +401,7 @@ impl FileObject {
             return Ok(());
         }
 
-        let (metadata_str, file_body) =
-            read_file_contents(&file_to_read, self.file_type.extension())?;
+        let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
 
         let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
 

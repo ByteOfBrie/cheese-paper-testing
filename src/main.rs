@@ -27,18 +27,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     if let Some(show_path) = args.show.as_deref() {
         println!("Using CLI interface");
         println!("{show_path:?}");
-        let basename = show_path.file_name().unwrap();
-        let dirname = show_path.parent().unwrap();
 
-        let mut file = FileObject::new(
-            FileType::Scene,
-            dirname.to_owned(),
-            basename.to_owned(),
-            0,
-            None,
-        );
-
-        file.reload_file()?;
+        let file = FileObject::from_file(show_path.to_path_buf(), 0, None);
 
         println!("{file:#?}");
     } else {

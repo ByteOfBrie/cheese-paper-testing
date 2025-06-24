@@ -3,7 +3,7 @@ use uuid::Uuid;
 use crate::components::file_objects::utils::{
     add_index_to_name, process_name_for_filename, truncate_name,
 };
-use crate::components::file_objects::{Character, Scene};
+use crate::components::file_objects::{Character, Folder, Place, Scene};
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result};
@@ -90,10 +90,10 @@ impl TryFrom<&str> for FileType {
 impl FileType {
     fn extension(self) -> &'static str {
         match self {
-            FileType::Scene => ".md",
-            FileType::Folder => ".toml",
-            FileType::Character => ".toml",
-            FileType::Place => ".toml",
+            FileType::Scene => "md",
+            FileType::Folder => "toml",
+            FileType::Character => "toml",
+            FileType::Place => "toml",
         }
     }
 
@@ -242,8 +242,8 @@ impl FileObject {
             child: match file_type {
                 FileType::Scene => Box::new(Scene::default()),
                 FileType::Character => Box::new(Character::default()),
-                FileType::Folder => panic!(),
-                FileType::Place => panic!(),
+                FileType::Folder => Box::new(Folder::default()),
+                FileType::Place => Box::new(Place::default()),
             },
             extra_metadata: Table::new(),
         }
@@ -276,7 +276,10 @@ impl FileObject {
 
         let (metadata_str, file_body) = match read_file_contents(&filename) {
             Ok((metadata_str, file_body)) => (metadata_str, file_body),
-            Err(_) => return None,
+            Err(_) => {
+                println!("File read failed");
+                return None;
+            }
         };
 
         let mut metadata = FileObjectMetadata::default();
@@ -300,8 +303,8 @@ impl FileObject {
         let mut child: Box<dyn FileObjectType> = match file_type {
             FileType::Scene => Box::new(Scene::default()),
             FileType::Character => Box::new(Character::default()),
-            FileType::Folder => panic!(),
-            FileType::Place => panic!(),
+            FileType::Folder => Box::new(Folder::default()),
+            FileType::Place => Box::new(Place::default()),
         };
 
         if child.load_metadata(&mut file_metadata_contents).is_err() {
@@ -346,6 +349,7 @@ impl FileObject {
         let mut base_path = OsString::from(name);
 
         if !self.file_type.is_folder() {
+            base_path.push(".");
             base_path.push(self.file_type.extension());
         }
 

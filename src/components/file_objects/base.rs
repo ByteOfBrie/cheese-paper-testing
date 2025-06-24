@@ -222,19 +222,24 @@ fn load_metadata(
 
 /// For ease of calling, `objects`` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(objects: &mut HashMap<String, FileObject>, children: &mut Vec<String>) -> u32 {
+fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileObject>) -> u32 {
     for (count, child_id) in children.iter().enumerate() {
-        let child = objects
-            .get_mut(child_id)
-            .expect("fix_indexing should be called with a map containing the children");
+        let (child_id, mut child) = objects
+            .remove_entry(child_id.as_str())
+            .expect("fix_indexing needs to borrow a map with the children");
 
         if child.index
             != count
                 .try_into()
                 .expect("u32 should be massive overkill for indexes")
         {
-            child.set_index(count.try_into().expect("should be able to convert u32")); // TODO: handle error
+            child.set_index(
+                count.try_into().expect("should be able to convert u32"),
+                objects,
+            ); // TODO: handle error
         }
+
+        objects.insert(child_id, child);
     }
 
     children
@@ -459,14 +464,48 @@ impl FileObject {
         Some(objects)
     }
 
+    /// When the parent changes path, updates this dirname and any other children
+    fn process_path_update(
+        &mut self,
+        new_directory: PathBuf,
+        objects: &mut HashMap<String, FileObject>,
+    ) {
+        self.file.dirname = new_directory;
+
+        // Propogate this to any children
+        for child_id in self.children.iter() {
+            let (child_id, mut child) = objects
+                .remove_entry(child_id.as_str())
+                .expect("process_path_update needs to borrow a map with the children");
+
+            child.process_path_update(self.get_path(), objects);
+
+            objects.insert(child_id, child);
+        }
+    }
+
     /// Change the filename in the base object and on disk, processing any required updates
-    fn set_filename(&mut self, new_filename: OsString) -> Result<()> {
+    fn set_filename(
+        &mut self,
+        new_filename: OsString,
+        objects: &mut HashMap<String, FileObject>,
+    ) -> Result<()> {
         let old_path = self.get_path();
         let new_path = Path::join(&self.file.dirname, &new_filename);
 
         if new_path != old_path {
             std::fs::rename(old_path, new_path)?;
             self.file.basename = new_filename;
+        }
+
+        for child_id in self.children.iter() {
+            let (child_id, mut child) = objects
+                .remove_entry(child_id.as_str())
+                .expect("set_filename needs to borrow a map with the children");
+
+            child.process_path_update(self.get_path(), objects);
+
+            objects.insert(child_id, child);
         }
         Ok(())
     }
@@ -493,18 +532,25 @@ impl FileObject {
     }
 
     /// Sets the index to this file, doing the move if necessary
-    pub fn set_index(&mut self, new_index: u32) -> Result<()> {
+    pub fn set_index(
+        &mut self,
+        new_index: u32,
+        objects: &mut HashMap<String, FileObject>,
+    ) -> Result<()> {
         self.index = new_index;
 
-        self.set_filename(self.calculate_filename())
+        self.set_filename(self.calculate_filename(), objects)
     }
 
     /// Recalculates the filename from the object property
     ///
     /// Unlike with `set_index`, we expect the underlying values to be borrowed directly,
     /// rather than having a callback with our updated value.
-    pub fn set_filename_from_name(&mut self) -> Result<()> {
-        self.set_filename(self.calculate_filename())
+    pub fn set_filename_from_name(
+        &mut self,
+        objects: &mut HashMap<String, FileObject>,
+    ) -> Result<()> {
+        self.set_filename(self.calculate_filename(), objects)
     }
 
     /// Calculates the object's current path. For objects in a single file, this is their path

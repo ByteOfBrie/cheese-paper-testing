@@ -10,7 +10,6 @@ mod tiny_markdown;
 mod ui;
 
 use crate::components::file_objects::FileObject;
-use crate::components::file_objects::FileType;
 use crate::ui::CheesePaperApp;
 
 #[derive(Parser)]

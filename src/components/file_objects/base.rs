@@ -2,7 +2,7 @@ use log::warn;
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
-    add_index_to_name, process_name_for_filename, truncate_name,
+    add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
 use std::ffi::OsString;
@@ -381,7 +381,11 @@ impl FileObject {
 
                                     // fuck, this is going to be even more complicated once indexing
                                     // is done properly, it'll require multiple passes
-                                    let index = 0;
+                                    let index = get_index_from_name(
+                                        file.path().file_name().unwrap().to_str().unwrap(),
+                                    )
+                                    .unwrap_or(0);
+
                                     if let Some(files) = FileObject::from_file(
                                         &file.path(),
                                         index,

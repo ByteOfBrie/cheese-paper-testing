@@ -30,9 +30,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Using CLI interface");
         println!("{show_path:?}");
 
-        let file = FileObject::from_file(show_path.to_path_buf(), 0, None);
+        let file = FileObject::from_file(show_path, 0, None);
 
-        println!("{file:#?}");
+        println!("file(s): {file:#?}");
     } else {
         let options = eframe::NativeOptions::default();
 

@@ -1,3 +1,4 @@
+use log::warn;
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
@@ -15,7 +16,7 @@ use toml::Table;
 const FILENAME_MAX_LENGTH: usize = 30;
 
 /// filename of the object within a folder containing its metadata (without extension)
-const FOLDER_METADATA_FILE_NAME: &str = "metadata";
+const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
 /// Value that splits the header of any file that contains non-metadata content
 const HEADER_SPLIT: &str = "++++++++";
@@ -227,8 +228,9 @@ pub struct FileObject {
     /// Object ID of the parent
     parent: Option<String>,
     file: FileInfo,
-    child: Box<dyn FileObjectType>,
+    underlying_obj: Box<dyn FileObjectType>,
     extra_metadata: Table,
+    children: Vec<String>,
 }
 
 impl FileObject {
@@ -252,18 +254,19 @@ impl FileObject {
                 modtime: None,
                 modified: false,
             },
-            child: match file_type {
+            underlying_obj: match file_type {
                 FileType::Scene => Box::new(Scene::default()),
                 FileType::Character => Box::new(Character::default()),
                 FileType::Folder => Box::new(Folder::default()),
                 FileType::Place => Box::new(Place::default()),
             },
             extra_metadata: Table::new(),
+            children: Vec::new(),
         }
     }
 
     /// Load an arbitrary file object from a file on disk
-    pub fn from_file(mut filename: PathBuf, index: u32, parent: Option<String>) -> Option<Self> {
+    pub fn from_file(filename: &Path, index: u32, parent: Option<String>) -> Option<Vec<Self>> {
         // Create the file info right at the start
         let mut file_info = FileInfo {
             dirname: match filename.parent() {
@@ -282,15 +285,16 @@ impl FileObject {
 
         // If the filename is a directory, we need to look for the underlying file, otherwise
         // we already have it
-        if filename.is_dir() {
-            filename.push(FOLDER_METADATA_FILE_NAME);
-            filename.set_extension(FileType::Folder.extension());
-        }
+        let underlying_file = match filename.is_dir() {
+            true => Path::join(&filename, FOLDER_METADATA_FILE_NAME),
+            false => filename.to_path_buf(),
+        };
 
-        let (metadata_str, file_body) = match read_file_contents(&filename) {
+        let (metadata_str, file_body) = match read_file_contents(&underlying_file) {
             Ok((metadata_str, file_body)) => (metadata_str, file_body),
             Err(_) => {
-                log::error!("Failed to read file {:?}", &filename);
+                // TODO: it's fine for this to fail for a folder, need to do more work
+                log::error!("Failed to read file {:?}", &underlying_file);
                 return None;
             }
         };
@@ -322,14 +326,14 @@ impl FileObject {
             }
         };
 
-        let mut child: Box<dyn FileObjectType> = match file_type {
+        let mut underlying_obj: Box<dyn FileObjectType> = match file_type {
             FileType::Scene => Box::new(Scene::default()),
             FileType::Character => Box::new(Character::default()),
             FileType::Folder => Box::new(Folder::default()),
             FileType::Place => Box::new(Place::default()),
         };
 
-        if let Err(err) = child.load_metadata(&mut file_metadata_contents) {
+        if let Err(err) = underlying_obj.load_metadata(&mut file_metadata_contents) {
             log::error!(
                 "Error while loading object-specific metadata for {:?}: {}",
                 &filename,
@@ -337,17 +341,84 @@ impl FileObject {
             );
             return None;
         }
-        child.load_extra_data(file_body);
+        underlying_obj.load_extra_data(file_body);
 
-        Some(Self {
+        // What will eventually be returned
+        let mut objects: Vec<FileObject> = Vec::new();
+
+        // The FileObject field
+        let mut children: Vec<String> = Vec::new();
+
+        // Load children of this file object
+        if file_type.is_folder() {
+            if filename.is_dir() {
+                match std::fs::read_dir(&filename) {
+                    Ok(files) => {
+                        // TODO: Proper logic:
+                        // 1. Read all of the files (that we can) into a list, it's fine to skip errors
+                        // 2. Store all indexes that exist
+                        // 3. Find the max of those indexes, assign (increasing) indexes to all remaining files
+                        // 4. Call fix_indexing (which might end up being a non-member function because of ownership stuff)
+                        for file in files {
+                            match file {
+                                Ok(file) => {
+                                    println!("{:?}", file.path().file_name());
+                                    if file.path().file_name()
+                                        == Some(&OsString::from(FOLDER_METADATA_FILE_NAME))
+                                    {
+                                        continue;
+                                    }
+
+                                    // fuck, this is going to be even more complicated once indexing
+                                    // is done properly, it'll require multiple passes
+                                    let index = 0;
+                                    if let Some(files) = FileObject::from_file(
+                                        &file.path(),
+                                        index,
+                                        Some(metadata.id.clone()),
+                                    ) {
+                                        for child_file in files {
+                                            children.push(child_file.metadata.id.clone());
+                                            objects.push(child_file);
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    warn!("Could not read file in folder {:?}: {}", &filename, &err)
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        log::error!(
+                            "Error while attempt to read folder {:?}: {}",
+                            &filename,
+                            &err
+                        )
+                    }
+                }
+            } else {
+                log::error!(
+                    "attempted to construct a folder-type from a non-folder filename {:?}",
+                    &filename
+                )
+            }
+        }
+
+        // TODO: ensure that this file_object has the correct indexing on disk
+
+        objects.push(Self {
             file_type,
             metadata,
             index,
             parent,
             file: file_info,
-            child,
+            underlying_obj,
             extra_metadata: file_metadata_contents,
-        })
+            children,
+        });
+
+        Some(objects)
     }
 
     /// Change the filename in the base object and on disk, processing any required updates
@@ -412,11 +483,7 @@ impl FileObject {
     fn get_file(&self) -> PathBuf {
         let base_path = self.get_path();
         let path = match &self.file_type.is_folder() {
-            true => {
-                let extension = self.file_type.extension();
-                let underlying_file_name = format!("{FOLDER_METADATA_FILE_NAME}{extension}");
-                Path::join(&base_path, underlying_file_name)
-            }
+            true => Path::join(&base_path, FOLDER_METADATA_FILE_NAME),
             false => base_path,
         };
         path
@@ -441,8 +508,9 @@ impl FileObject {
             &mut self.file,
         )?;
 
-        self.child.load_metadata(&mut file_metadata_contents)?;
-        self.child.load_extra_data(file_body);
+        self.underlying_obj
+            .load_metadata(&mut file_metadata_contents)?;
+        self.underlying_obj.load_extra_data(file_body);
 
         self.extra_metadata = file_metadata_contents;
 

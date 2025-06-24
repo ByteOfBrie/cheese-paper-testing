@@ -311,7 +311,17 @@ impl FileObject {
 
         let file_type_str = match file_metadata_contents.remove("file_type") {
             Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
-            None => "unknown".to_string(), // TODO: actually write logic here
+            None => match filename.is_dir() {
+                true => "folder".to_string(),
+                false => filename.extension().map_or_else(
+                    || "unknown".to_string(),
+                    |val| match val.to_str() {
+                        Some("md") => "scene".to_string(),
+                        Some("toml") => "unknown".to_string(),
+                        _ => "unknown".to_string(),
+                    },
+                ),
+            },
         };
 
         let file_type: FileType = match file_type_str.as_str().try_into() {

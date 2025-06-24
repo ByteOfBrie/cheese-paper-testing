@@ -1,4 +1,5 @@
 use log::warn;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
@@ -217,6 +218,29 @@ fn load_metadata(
     }
 
     Ok(())
+}
+
+/// For ease of calling, `objects`` can contain arbitrary objects, only values contained
+/// in `children` will actually be sorted.
+fn fix_indexing(objects: &mut HashMap<String, FileObject>, children: &mut Vec<String>) -> u32 {
+    for (count, child_id) in children.iter().enumerate() {
+        let child = objects
+            .get_mut(child_id)
+            .expect("fix_indexing should be called with a map containing the children");
+
+        if child.index
+            != count
+                .try_into()
+                .expect("u32 should be massive overkill for indexes")
+        {
+            child.set_index(count.try_into().expect("should be able to convert u32")); // TODO: handle error
+        }
+    }
+
+    children
+        .len()
+        .try_into()
+        .expect("should be able to convert to u32")
 }
 
 #[derive(Debug)]

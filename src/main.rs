@@ -22,6 +22,8 @@ struct Args {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+
     let args = Args::parse();
 
     if let Some(show_path) = args.show.as_deref() {
@@ -32,7 +34,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         println!("{file:#?}");
     } else {
-        env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
         let options = eframe::NativeOptions::default();
 
         eframe::run_native(

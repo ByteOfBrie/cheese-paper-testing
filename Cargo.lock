@@ -660,6 +660,7 @@ dependencies = [
  "eframe",
  "egui",
  "env_logger",
+ "log",
  "regex",
  "serde",
  "toml",

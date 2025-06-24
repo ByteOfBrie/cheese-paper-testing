@@ -36,7 +36,7 @@ impl Default for Folder {
 impl FileObjectType for Folder {
     fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
         let mut modified = false;
-        println!("loading folder metadata");
+
         match metadata_extract_string(table, "summary")? {
             Some(value) => self.metadata.summary = value,
             None => modified = true,

@@ -129,9 +129,19 @@ pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> Result<Optio
         Some(value) => Some(
             value
                 .as_integer()
-                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "value was non-integer"))?
+                .ok_or_else(|| {
+                    Error::new(
+                        ErrorKind::InvalidData,
+                        format!("{field_name} was not an integer"),
+                    )
+                })?
                 .try_into()
-                .map_err(|_| Error::new(ErrorKind::InvalidData, "failed to convert to u32"))?,
+                .map_err(|_| {
+                    Error::new(
+                        ErrorKind::InvalidData,
+                        format!("failed to convert {field_name} to u32"),
+                    )
+                })?,
         ),
         None => None,
     })
@@ -142,7 +152,12 @@ pub fn metadata_extract_string(table: &mut Table, field_name: &str) -> Result<Op
         Some(value) => Some(
             value
                 .as_str()
-                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "value was not string"))?
+                .ok_or_else(|| {
+                    Error::new(
+                        ErrorKind::InvalidData,
+                        format!("{field_name} was not string"),
+                    )
+                })?
                 .to_owned(),
         ),
         None => None,
@@ -151,11 +166,9 @@ pub fn metadata_extract_string(table: &mut Table, field_name: &str) -> Result<Op
 
 pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> Result<Option<bool>> {
     Ok(match table.remove(field_name) {
-        Some(value) => Some(
-            value
-                .as_bool()
-                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "value was not string"))?,
-        ),
+        Some(value) => Some(value.as_bool().ok_or_else(|| {
+            Error::new(ErrorKind::InvalidData, format!("{field_name} was not bool"))
+        })?),
         None => None,
     })
 }
@@ -277,7 +290,7 @@ impl FileObject {
         let (metadata_str, file_body) = match read_file_contents(&filename) {
             Ok((metadata_str, file_body)) => (metadata_str, file_body),
             Err(_) => {
-                println!("File read failed");
+                log::error!("Failed to read file {:?}", &filename);
                 return None;
             }
         };
@@ -286,18 +299,27 @@ impl FileObject {
 
         let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
 
-        if load_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info).is_err() {
+        if let Err(err) = load_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info)
+        {
+            log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
             return None;
         }
 
         let file_type_str = match file_metadata_contents.remove("file_type") {
             Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
-            None => "unknown".to_string(),
+            None => "unknown".to_string(), // TODO: actually write logic here
         };
 
         let file_type: FileType = match file_type_str.as_str().try_into() {
             Ok(file_type) => file_type,
-            Err(_) => return None,
+            Err(_) => {
+                log::error!(
+                    "Found unknown file type ({}) while attempt to read {:?}",
+                    &file_type_str,
+                    &filename
+                );
+                return None;
+            }
         };
 
         let mut child: Box<dyn FileObjectType> = match file_type {
@@ -307,7 +329,12 @@ impl FileObject {
             FileType::Place => Box::new(Place::default()),
         };
 
-        if child.load_metadata(&mut file_metadata_contents).is_err() {
+        if let Err(err) = child.load_metadata(&mut file_metadata_contents) {
+            log::error!(
+                "Error while loading object-specific metadata for {:?}: {}",
+                &filename,
+                &err
+            );
             return None;
         }
         child.load_extra_data(file_body);

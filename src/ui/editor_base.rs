@@ -6,14 +6,6 @@ pub struct CheesePaperApp<'a> {
     pub editor: BaseTextEditor<'a>,
 }
 
-// impl Default for CheesePaperApp {
-//     fn default() -> Self {
-//         Self {
-//             editor: BaseTextEditor::default(),
-//         }
-//     }
-// }
-
 impl eframe::App for CheesePaperApp<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.editor.panels(ctx);

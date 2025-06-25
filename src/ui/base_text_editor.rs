@@ -1,22 +1,10 @@
 use egui::ScrollArea;
 
-use crate::ui::default_text::DEFAULT_TEXT;
-
 pub struct BaseTextEditor<'a> {
     text: &'a mut String,
 
     highlighter: crate::tiny_markdown::MemoizedMarkdownHighlighter,
 }
-
-/*impl Default for BaseTextEditor {
-    fn default() -> Self {
-        Self {
-            text_owned: DEFAULT_TEXT.trim().to_owned(),
-            text: &text_owned,
-            highlighter: Default::default(),
-        }
-    }
-}*/
 
 impl<'a> BaseTextEditor<'a> {
     pub fn new(text: &'a mut String) -> Self {

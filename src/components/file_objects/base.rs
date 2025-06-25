@@ -273,8 +273,8 @@ pub struct FileObject {
 }
 
 impl FileObject {
-    // TODO: figure out what this actually does (creation vs loading)
-    /// create new file object at path
+    // TODO: correctly implement
+    /// Create a new file object in a folder
     pub fn new(
         file_type: FileType,
         dirname: PathBuf,

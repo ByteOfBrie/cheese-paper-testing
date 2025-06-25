@@ -67,4 +67,8 @@ impl FileObjectType for Scene {
     fn load_extra_data(&mut self, data: String) {
         self.text = data;
     }
+
+    fn get_body(&mut self) -> Option<&mut String> {
+        Some(&mut self.text)
+    }
 }

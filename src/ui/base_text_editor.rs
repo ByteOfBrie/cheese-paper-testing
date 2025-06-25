@@ -2,22 +2,30 @@ use egui::ScrollArea;
 
 use crate::ui::default_text::DEFAULT_TEXT;
 
-pub struct BaseTextEditor {
-    text: String,
+pub struct BaseTextEditor<'a> {
+    text: &'a mut String,
 
     highlighter: crate::tiny_markdown::MemoizedMarkdownHighlighter,
 }
 
-impl Default for BaseTextEditor {
+/*impl Default for BaseTextEditor {
     fn default() -> Self {
         Self {
-            text: DEFAULT_TEXT.trim().to_owned(),
+            text_owned: DEFAULT_TEXT.trim().to_owned(),
+            text: &text_owned,
             highlighter: Default::default(),
         }
     }
-}
+}*/
 
-impl BaseTextEditor {
+impl<'a> BaseTextEditor<'a> {
+    pub fn new(text: &'a mut String) -> Self {
+        Self {
+            text,
+            highlighter: Default::default(),
+        }
+    }
+
     pub fn panels(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui(ui);
@@ -40,7 +48,7 @@ impl BaseTextEditor {
         };
 
         let response = ui.add(
-            egui::TextEdit::multiline(text)
+            egui::TextEdit::multiline(*text)
                 .desired_width(f32::INFINITY)
                 .layouter(&mut layouter),
         );

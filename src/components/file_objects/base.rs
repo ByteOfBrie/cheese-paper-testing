@@ -257,7 +257,7 @@ pub struct FileObject {
     /// Object ID of the parent
     parent: Option<String>,
     file: FileInfo,
-    underlying_obj: Box<dyn FileObjectType>,
+    pub underlying_obj: Box<dyn FileObjectType>,
     extra_metadata: Table,
     children: Vec<String>,
 }
@@ -622,4 +622,8 @@ impl FileObject {
 pub trait FileObjectType: Debug {
     fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
     fn load_extra_data(&mut self, data: String);
+
+    fn get_body(&mut self) -> Option<&mut String> {
+        None
+    }
 }

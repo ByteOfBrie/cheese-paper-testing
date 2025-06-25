@@ -233,10 +233,20 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileOb
                 .try_into()
                 .expect("u32 should be massive overkill for indexes")
         {
-            child.set_index(
+            if let Err(err) = child.set_index(
                 count.try_into().expect("should be able to convert u32"),
                 objects,
-            ); // TODO: handle error
+            ) {
+                log::error!(
+                    "Error while trying to fix indexing of child {:?}: {}",
+                    child,
+                    err
+                );
+
+                // break out of the loop, returning early
+                objects.insert(child_id, child);
+                break;
+            }
         }
 
         objects.insert(child_id, child);

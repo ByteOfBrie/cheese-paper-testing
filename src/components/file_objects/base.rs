@@ -332,9 +332,12 @@ impl FileObject {
         let (metadata_str, file_body) = match read_file_contents(&underlying_file) {
             Ok((metadata_str, file_body)) => (metadata_str, file_body),
             Err(_) => {
-                // TODO: it's fine for this to fail for a folder, need to do more work
-                log::error!("Failed to read file {:?}", &underlying_file);
-                return None;
+                if filename.is_dir() {
+                    ("".to_string(), "".to_string())
+                } else {
+                    log::error!("Failed to read file {:?}", &underlying_file);
+                    return None;
+                }
             }
         };
 

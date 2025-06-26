@@ -32,6 +32,14 @@ const HEADER_SPLIT: &str = "++++++++";
 /// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
 ///
 
+#[derive(Debug)]
+pub enum UnderlyingFileObject {
+    Scene(Scene),
+    Folder(Folder),
+    Character(Character),
+    Place(Place),
+}
+
 /// Baseline metadata for all file objects
 #[derive(Debug)]
 pub struct FileObjectMetadata {
@@ -267,7 +275,7 @@ pub struct FileObject {
     /// Object ID of the parent
     parent: Option<String>,
     file: FileInfo,
-    pub underlying_obj: Box<dyn FileObjectType>,
+    pub underlying_obj: UnderlyingFileObject,
     extra_metadata: Table,
     children: Vec<String>,
 }
@@ -294,10 +302,10 @@ impl FileObject {
                 modified: false,
             },
             underlying_obj: match file_type {
-                FileType::Scene => Box::new(Scene::default()),
-                FileType::Character => Box::new(Character::default()),
-                FileType::Folder => Box::new(Folder::default()),
-                FileType::Place => Box::new(Place::default()),
+                FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
+                FileType::Character => UnderlyingFileObject::Character(Character::default()),
+                FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
+                FileType::Place => UnderlyingFileObject::Place(Place::default()),
             },
             extra_metadata: Table::new(),
             children: Vec::new(),
@@ -378,11 +386,11 @@ impl FileObject {
             }
         };
 
-        let mut underlying_obj: Box<dyn FileObjectType> = match file_type {
-            FileType::Scene => Box::new(Scene::default()),
-            FileType::Character => Box::new(Character::default()),
-            FileType::Folder => Box::new(Folder::default()),
-            FileType::Place => Box::new(Place::default()),
+        let mut underlying_obj = match file_type {
+            FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
+            FileType::Character => UnderlyingFileObject::Character(Character::default()),
+            FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
+            FileType::Place => UnderlyingFileObject::Place(Place::default()),
         };
 
         if let Err(err) = underlying_obj.load_metadata(&mut file_metadata_contents) {
@@ -393,7 +401,13 @@ impl FileObject {
             );
             return None;
         }
-        underlying_obj.load_extra_data(file_body);
+
+        match &mut underlying_obj {
+            UnderlyingFileObject::Scene(scene) => {
+                scene.load_extra_data(file_body);
+            }
+            _ => {}
+        }
 
         // What will eventually be returned
         let mut objects: Vec<FileObject> = Vec::new();
@@ -607,7 +621,11 @@ impl FileObject {
 
         self.underlying_obj
             .load_metadata(&mut file_metadata_contents)?;
-        self.underlying_obj.load_extra_data(file_body);
+
+        match &mut self.underlying_obj {
+            UnderlyingFileObject::Scene(scene) => scene.load_extra_data(file_body),
+            _ => {}
+        }
 
         self.extra_metadata = file_metadata_contents;
 
@@ -632,11 +650,19 @@ impl FileObject {
     }
 }
 
+impl UnderlyingFileObject {
+    pub fn load_metadata(&mut self, table: &mut Table) -> Result<bool> {
+        let underlying_type: &mut dyn FileObjectType = match self {
+            UnderlyingFileObject::Scene(val) => val,
+            UnderlyingFileObject::Folder(val) => val,
+            UnderlyingFileObject::Place(val) => val,
+            UnderlyingFileObject::Character(val) => val,
+        };
+
+        underlying_type.load_metadata(table)
+    }
+}
+
 pub trait FileObjectType: Debug {
     fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
-    fn load_extra_data(&mut self, data: String);
-
-    fn get_body(&mut self) -> Option<&mut String> {
-        None
-    }
 }

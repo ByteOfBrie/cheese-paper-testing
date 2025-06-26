@@ -80,6 +80,4 @@ impl FileObjectType for Character {
 
         Ok(modified)
     }
-
-    fn load_extra_data(&mut self, _data: String) {}
 }

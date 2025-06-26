@@ -66,6 +66,4 @@ impl FileObjectType for Place {
 
         Ok(modified)
     }
-
-    fn load_extra_data(&mut self, _data: String) {}
 }

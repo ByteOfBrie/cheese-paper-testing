@@ -5,8 +5,7 @@ mod place;
 mod scene;
 mod utils;
 
-pub use base::FileObject;
-pub use base::FileType;
+pub use base::{FileObject, UnderlyingFileObject};
 use character::Character;
 use folder::Folder;
 use place::Place;

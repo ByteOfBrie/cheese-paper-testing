@@ -10,6 +10,7 @@ mod tiny_markdown;
 mod ui;
 
 use crate::components::file_objects::FileObject;
+use crate::components::file_objects::UnderlyingFileObject;
 use crate::ui::CheesePaperApp;
 
 #[derive(Parser)]
@@ -40,9 +41,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let mut file = files.pop().unwrap();
 
-        let mut file_text = match file.underlying_obj.get_body() {
-            Some(val) => val,
-            None => {
+        let file_text = match &mut file.underlying_obj {
+            UnderlyingFileObject::Scene(scene) => scene.get_body(),
+            _ => {
                 println!("No underlying data to view");
                 return Ok(());
             }

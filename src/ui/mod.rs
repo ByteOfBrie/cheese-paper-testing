@@ -5,6 +5,8 @@ mod scene_text_editor;
 
 pub use base_text_editor::BaseTextEditor;
 
+pub use scene_text_editor::SceneTextEditor;
+
 pub use editor_base::CheesePaperApp;
 
 pub use default_text::DEFAULT_TEXT;

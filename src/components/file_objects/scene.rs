@@ -4,9 +4,9 @@ use crate::components::file_objects::base::{
 use toml::Table;
 
 #[derive(Debug)]
-struct SceneMetadata {
-    summary: String,
-    notes: String,
+pub struct SceneMetadata {
+    pub summary: String,
+    pub notes: String,
     pov: String, // TODO: create custom object for this
     compile_status: bool,
 }
@@ -24,7 +24,7 @@ impl Default for SceneMetadata {
 
 #[derive(Debug)]
 pub struct Scene {
-    metadata: SceneMetadata,
+    pub metadata: SceneMetadata,
     text: String,
 }
 
@@ -72,5 +72,9 @@ impl Scene {
 
     pub fn get_body(&mut self) -> &mut String {
         &mut self.text
+    }
+
+    pub fn word_count(&self) -> usize {
+        self.text.split(' ').count()
     }
 }

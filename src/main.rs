@@ -12,6 +12,7 @@ mod ui;
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::UnderlyingFileObject;
 use crate::ui::CheesePaperApp;
+use crate::ui::SceneTextEditor;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -56,20 +57,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             Default::default(),
             Box::new(|_cc| {
                 Ok(Box::new(CheesePaperApp {
-                    editor: BaseTextEditor::new(file_text),
+                    editor: SceneTextEditor { scene: file },
                 }))
             }),
-        )
-        .unwrap()
-    } else {
-        let options = eframe::NativeOptions::default();
-
-        let mut default_text = crate::ui::DEFAULT_TEXT.trim().to_owned();
-
-        eframe::run_native(
-            "Cheese Paper Rust",
-            options,
-            Box::new(|cc| Ok(Box::new(CheesePaperApp::new(cc, &mut default_text)))),
         )
         .unwrap()
     }

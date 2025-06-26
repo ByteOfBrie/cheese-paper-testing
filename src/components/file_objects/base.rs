@@ -83,6 +83,17 @@ impl Into<&str> for FileType {
     }
 }
 
+impl Into<FileType> for &UnderlyingFileObject {
+    fn into(self) -> FileType {
+        match self {
+            UnderlyingFileObject::Scene(_) => FileType::Scene,
+            UnderlyingFileObject::Folder(_) => FileType::Folder,
+            UnderlyingFileObject::Character(_) => FileType::Character,
+            UnderlyingFileObject::Place(_) => FileType::Place,
+        }
+    }
+}
+
 impl TryFrom<&str> for FileType {
     type Error = &'static str;
 
@@ -268,7 +279,6 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileOb
 
 #[derive(Debug)]
 pub struct FileObject {
-    file_type: FileType,
     metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     index: u32,
@@ -291,7 +301,6 @@ impl FileObject {
         parent: Option<String>,
     ) -> Self {
         Self {
-            file_type,
             metadata: FileObjectMetadata::default(),
             index,
             parent,
@@ -478,7 +487,6 @@ impl FileObject {
         // TODO: ensure that this file_object has the correct indexing on disk
 
         objects.push(Self {
-            file_type,
             metadata,
             index,
             parent,
@@ -541,7 +549,7 @@ impl FileObject {
     fn calculate_filename(&self) -> OsString {
         let name: &str = match self.metadata.name.is_empty() {
             false => &self.metadata.name,
-            true => &empty_string_name(self.file_type),
+            true => &empty_string_name(Into::<FileType>::into(&self.underlying_obj)),
         };
 
         let name = truncate_name(name, FILENAME_MAX_LENGTH);
@@ -550,9 +558,9 @@ impl FileObject {
 
         let mut base_path = OsString::from(name);
 
-        if !self.file_type.is_folder() {
+        if !Into::<FileType>::into(&self.underlying_obj).is_folder() {
             base_path.push(".");
-            base_path.push(self.file_type.extension());
+            base_path.push(Into::<FileType>::into(&self.underlying_obj).extension());
         }
 
         base_path
@@ -593,7 +601,7 @@ impl FileObject {
     /// operations on this object
     fn get_file(&self) -> PathBuf {
         let base_path = self.get_path();
-        let path = match &self.file_type.is_folder() {
+        let path = match Into::<FileType>::into(&self.underlying_obj).is_folder() {
             true => Path::join(&base_path, FOLDER_METADATA_FILE_NAME),
             false => base_path,
         };

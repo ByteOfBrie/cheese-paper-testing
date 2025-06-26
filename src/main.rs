@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else if let Some(show_path) = args.show_ui.as_deref() {
         let mut files = FileObject::from_file(show_path, 0, None).unwrap();
 
-        let mut file = files.pop().unwrap();
+        let mut file = files.values_mut().next().unwrap();
 
         let file_text = match &mut file.underlying_obj {
             UnderlyingFileObject::Scene(scene) => scene.get_body(),

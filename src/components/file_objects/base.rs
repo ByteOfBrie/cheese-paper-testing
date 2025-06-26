@@ -211,7 +211,7 @@ fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
         },
     };
 
-    Ok((metadata_str.to_owned(), file_content.to_owned()))
+    Ok((metadata_str.to_owned(), file_content.trim().to_owned()))
 }
 
 /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
@@ -322,7 +322,11 @@ impl FileObject {
     }
 
     /// Load an arbitrary file object from a file on disk
-    pub fn from_file(filename: &Path, index: u32, parent: Option<String>) -> Option<Vec<Self>> {
+    pub fn from_file(
+        filename: &Path,
+        index: u32,
+        parent: Option<String>,
+    ) -> Option<HashMap<String, Self>> {
         // Create the file info right at the start
         let mut file_info = FileInfo {
             dirname: match filename.parent() {
@@ -418,8 +422,10 @@ impl FileObject {
             _ => {}
         }
 
-        // What will eventually be returned
-        let mut objects: Vec<FileObject> = Vec::new();
+        // Will eventually return this and all children
+        // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
+        // of cloning it
+        let mut objects: HashMap<String, Self> = HashMap::new();
 
         // The FileObject field
         let mut children: Vec<String> = Vec::new();
@@ -456,9 +462,9 @@ impl FileObject {
                                         index,
                                         Some(metadata.id.clone()),
                                     ) {
-                                        for child_file in files {
-                                            children.push(child_file.metadata.id.clone());
-                                            objects.push(child_file);
+                                        for (child_file_id, child_file) in files {
+                                            children.push(child_file_id.clone());
+                                            objects.insert(child_file_id, child_file);
                                         }
                                     }
                                 }
@@ -484,17 +490,22 @@ impl FileObject {
             }
         }
 
-        // TODO: ensure that this file_object has the correct indexing on disk
+        // This will ensure that all children have the correct indexing. The only file objects
+        // that aren't the children of some folder are the roots, which don't have indexing anyway
+        fix_indexing(&mut children, &mut objects);
 
-        objects.push(Self {
-            metadata,
-            index,
-            parent,
-            file: file_info,
-            underlying_obj,
-            extra_metadata: file_metadata_contents,
-            children,
-        });
+        objects.insert(
+            metadata.id.clone(),
+            Self {
+                metadata,
+                index,
+                parent,
+                file: file_info,
+                underlying_obj,
+                extra_metadata: file_metadata_contents,
+                children,
+            },
+        );
 
         Some(objects)
     }

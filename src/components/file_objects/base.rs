@@ -490,9 +490,11 @@ impl FileObject {
             }
         }
 
-        // This will ensure that all children have the correct indexing. The only file objects
-        // that aren't the children of some folder are the roots, which don't have indexing anyway
-        fix_indexing(&mut children, &mut objects);
+        if Into::<FileType>::into(&underlying_obj).is_folder() {
+            // This will ensure that all children have the correct indexing. The only file objects
+            // that aren't the children of some folder are the roots, which don't have indexing anyway
+            fix_indexing(&mut children, &mut objects);
+        }
 
         objects.insert(
             metadata.id.clone(),

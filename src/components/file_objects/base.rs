@@ -291,22 +291,28 @@ pub struct FileObject {
 }
 
 impl FileObject {
-    // TODO: correctly implement
     /// Create a new file object in a folder
-    pub fn new(
-        file_type: FileType,
-        dirname: PathBuf,
-        basename: OsString,
-        index: u32,
-        parent: Option<String>,
-    ) -> Self {
+    pub fn new(file_type: FileType, dirname: PathBuf, index: u32, parent: Option<String>) -> Self {
+        let name = empty_string_name(file_type);
+
+        let name = truncate_name(&name, FILENAME_MAX_LENGTH);
+        let name = process_name_for_filename(name);
+        let name = add_index_to_name(&name, index);
+
+        let mut base_path = OsString::from(name);
+
+        if !file_type.is_folder() {
+            base_path.push(".");
+            base_path.push(file_type.extension());
+        }
+
         Self {
             metadata: FileObjectMetadata::default(),
             index,
             parent,
             file: FileInfo {
                 dirname,
-                basename,
+                basename: base_path,
                 modtime: None,
                 modified: false,
             },
@@ -319,6 +325,8 @@ impl FileObject {
             extra_metadata: Table::new(),
             children: Vec::new(),
         }
+
+        // TODO: when saving is implemented, save on creation (so that it can be used in other things)
     }
 
     /// Load an arbitrary file object from a file on disk

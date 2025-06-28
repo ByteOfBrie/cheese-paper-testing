@@ -317,7 +317,7 @@ impl FileObject {
                 dirname,
                 basename: base_path,
                 modtime: None,
-                modified: false,
+                modified: true, // Newly added files are modified (since they don't exist on disk)
             },
             underlying_obj: match file_type {
                 FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
@@ -679,6 +679,28 @@ impl FileObject {
         }
 
         Ok(true)
+    }
+
+    fn header_to_toml(&self) -> String {
+        // toml::to_string_pretty() seems like the approximate right thing to use here, but
+        // it seems like I either need to dump everything in a single data structure and
+        // serialize that, or try to get something working with toml_edit::DocumentMut
+        //
+        // toml_edit::DocumentMut is probably the better option if I can get it to work nicely
+        // probably calling a function in the underlying_object to serialize those fields too?
+        //
+        // and then since I'm keeping track of a document, I can maybe just keep the table
+        // from object creation and not deal with extra_metadata at all
+        String::new()
+    }
+
+    pub fn save(&mut self) -> Result<()> {
+        if !self.file.modified {
+            // Nothing to do
+            return Ok(());
+        }
+
+        Ok(())
     }
 }
 

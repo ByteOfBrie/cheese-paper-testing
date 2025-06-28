@@ -1,6 +1,7 @@
 use crate::components::file_objects::base::{
     FileObjectType, metadata_extract_bool, metadata_extract_string,
 };
+use regex::Regex;
 use toml::Table;
 
 #[derive(Debug)]
@@ -67,7 +68,7 @@ impl FileObjectType for Scene {
 
 impl Scene {
     pub fn load_extra_data(&mut self, data: String) {
-        self.text = data;
+        self.text = data.trim().to_string();
     }
 
     pub fn get_body(&mut self) -> &mut String {
@@ -75,6 +76,18 @@ impl Scene {
     }
 
     pub fn word_count(&self) -> usize {
-        self.text.split(' ').count()
+        let re = Regex::new(r"\s+").unwrap();
+        re.split(&self.text).count()
+    }
+
+    pub fn assemble_save_text(&self) -> String {
+        let mut full_text = String::new();
+
+        for line in self.text.split('\n') {
+            full_text.push_str(line.trim());
+            full_text.push('\n');
+        }
+
+        full_text
     }
 }

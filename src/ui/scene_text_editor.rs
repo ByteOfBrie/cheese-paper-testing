@@ -16,27 +16,35 @@ impl<'a> SceneTextEditor<'a> {
         });
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        ScrollArea::vertical()
-            .id_salt("text")
-            .show(ui, |ui| self.editor_ui(ui));
+    fn ui(&mut self, ui: &mut egui::Ui) {
+        ui.columns(2, |cols| {
+            cols[0].vertical(|ui| self.show_text_editor(ui));
+            cols[1].vertical(|ui| {
+                ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
+                    ui.label("Summary");
+                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary));
+                    ui.label("Notes");
+                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes));
+                })
+            })
+        });
     }
 
-    fn editor_ui(&mut self, ui: &mut egui::Ui) {
-        let SceneTextEditor { scene } = self;
+    fn show_text_editor(&mut self, ui: &mut egui::Ui) {
+        ScrollArea::vertical()
+            .id_salt("text")
+            .auto_shrink(egui::Vec2b { x: false, y: false })
+            .show(ui, |ui| {
+                let response = ui.add(&mut BaseTextEditor::new(&mut self.scene.text));
 
-        let response = ui.add(&mut BaseTextEditor::new(&mut scene.text));
-
-        if response.changed() {
-            println!(
-                "Changed lines in {}: {}",
-                &scene.get_base().metadata.name,
-                &scene.text
-            );
-            println!("{} words", scene.word_count());
-        }
-
-        ui.add(&mut BaseTextEditor::new(&mut scene.metadata.notes));
-        ui.add(&mut BaseTextEditor::new(&mut scene.metadata.summary));
+                if response.changed() {
+                    println!(
+                        "Changed lines in {}: {}",
+                        &self.scene.get_base().metadata.name,
+                        &self.scene.text
+                    );
+                    println!("{} words", self.scene.word_count());
+                }
+            });
     }
 }

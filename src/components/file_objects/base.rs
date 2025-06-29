@@ -63,14 +63,13 @@ pub enum FileType {
 }
 
 #[derive(Debug)]
-pub struct FileObject {
+pub struct BaseFileObject {
     pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     index: u32,
     /// Object ID of the parent
     parent: Option<String>,
     file: FileInfo,
-    pub underlying_obj: UnderlyingFileObject,
     extra_metadata: Table,
     pub children: Vec<String>,
 }
@@ -229,7 +228,7 @@ fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
 
 /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
 /// appropriate
-fn load_metadata(
+fn load_base_metadata(
     metadata_table: &mut toml::map::Map<String, toml::Value>,
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,
@@ -254,13 +253,18 @@ fn load_metadata(
 
 /// For ease of calling, `objects`` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileObject>) -> u32 {
+fn fix_indexing(
+    children: &mut Vec<String>,
+    objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+) -> u32 {
     for (count, child_id) in children.iter().enumerate() {
         let (child_id, mut child) = objects
             .remove_entry(child_id.as_str())
             .expect("fix_indexing needs to borrow a map with the children");
 
-        if child.index
+        let child_base = child.get_base();
+
+        if child_base.index
             != count
                 .try_into()
                 .expect("u32 should be massive overkill for indexes")
@@ -290,7 +294,196 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileOb
         .expect("should be able to convert to u32")
 }
 
-impl FileObject {
+/// Load an arbitrary file object from a file on disk
+pub fn from_file(
+    filename: &Path,
+    index: u32,
+    parent: Option<String>,
+) -> Option<HashMap<String, Box<dyn ActualFileObject>>> {
+    // Create the file info right at the start
+    let mut file_info = FileInfo {
+        dirname: match filename.parent() {
+            Some(dirname) => dirname,
+            None => return None,
+        }
+        .to_path_buf(),
+        basename: match filename.file_name() {
+            Some(basename) => basename,
+            None => return None,
+        }
+        .to_owned(),
+        modtime: None,
+        modified: false,
+    };
+
+    // If the filename is a directory, we need to look for the underlying file, otherwise
+    // we already have it
+    let underlying_file = match filename.is_dir() {
+        true => Path::join(&filename, FOLDER_METADATA_FILE_NAME),
+        false => filename.to_path_buf(),
+    };
+
+    let (metadata_str, file_body) = match read_file_contents(&underlying_file) {
+        Ok((metadata_str, file_body)) => (metadata_str, file_body),
+        Err(_) => {
+            if filename.is_dir() {
+                ("".to_string(), "".to_string())
+            } else {
+                log::error!("Failed to read file {:?}", &underlying_file);
+                return None;
+            }
+        }
+    };
+
+    let mut metadata = FileObjectMetadata::default();
+
+    let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+
+    if let Err(err) = load_base_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info)
+    {
+        log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
+        return None;
+    }
+
+    let file_type_str = match file_metadata_contents.remove("file_type") {
+        Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
+        None => match filename.is_dir() {
+            true => "folder".to_string(),
+            false => filename.extension().map_or_else(
+                || "unknown".to_string(),
+                |val| match val.to_str() {
+                    Some("md") => "scene".to_string(),
+                    Some("toml") => "unknown".to_string(),
+                    _ => "unknown".to_string(),
+                },
+            ),
+        },
+    };
+
+    let file_type: FileType = match file_type_str.as_str().try_into() {
+        Ok(file_type) => file_type,
+        Err(_) => {
+            log::error!(
+                "Found unknown file type ({}) while attempt to read {:?}",
+                &file_type_str,
+                &filename
+            );
+            return None;
+        }
+    };
+
+    let mut underlying_obj = match file_type {
+        FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
+        FileType::Character => UnderlyingFileObject::Character(Character::default()),
+        FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
+        FileType::Place => UnderlyingFileObject::Place(Place::default()),
+    };
+
+    if let Err(err) = underlying_obj.load_metadata(&mut file_metadata_contents) {
+        log::error!(
+            "Error while loading object-specific metadata for {:?}: {}",
+            &filename,
+            &err
+        );
+        return None;
+    }
+
+    match &mut underlying_obj {
+        UnderlyingFileObject::Scene(scene) => {
+            scene.load_extra_data(file_body);
+        }
+        _ => {}
+    }
+
+    // Will eventually return this and all children
+    // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
+    // of cloning it
+    let mut objects: HashMap<String, Box<dyn ActualFileObject>> = HashMap::new();
+
+    // The FileObject field
+    let mut children: Vec<String> = Vec::new();
+
+    // Load children of this file object
+    if file_type.is_folder() {
+        if filename.is_dir() {
+            match std::fs::read_dir(&filename) {
+                Ok(files) => {
+                    // TODO: Proper logic:
+                    // 1. Read all of the files (that we can) into a list, it's fine to skip errors
+                    // 2. Store all indexes that exist
+                    // 3. Find the max of those indexes, assign (increasing) indexes to all remaining files
+                    // 4. Call fix_indexing (which might end up being a non-member function because of ownership stuff)
+                    for file in files {
+                        match file {
+                            Ok(file) => {
+                                println!("{:?}", file.path().file_name());
+                                if file.path().file_name()
+                                    == Some(&OsString::from(FOLDER_METADATA_FILE_NAME))
+                                {
+                                    continue;
+                                }
+
+                                // fuck, this is going to be even more complicated once indexing
+                                // is done properly, it'll require multiple passes
+                                let index = get_index_from_name(
+                                    file.path().file_name().unwrap().to_str().unwrap(),
+                                )
+                                .unwrap_or(0);
+
+                                if let Some(files) =
+                                    from_file(&file.path(), index, Some(metadata.id.clone()))
+                                {
+                                    for (child_file_id, child_file) in files {
+                                        children.push(child_file_id.clone());
+                                        objects.insert(child_file_id, child_file);
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                warn!("Could not read file in folder {:?}: {}", &filename, &err)
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    log::error!(
+                        "Error while attempt to read folder {:?}: {}",
+                        &filename,
+                        &err
+                    )
+                }
+            }
+        } else {
+            log::error!(
+                "attempted to construct a folder-type from a non-folder filename {:?}",
+                &filename
+            )
+        }
+    }
+
+    if Into::<FileType>::into(&underlying_obj).is_folder() {
+        // This will ensure that all children have the correct indexing. The only file objects
+        // that aren't the children of some folder are the roots, which don't have indexing anyway
+        fix_indexing(&mut children, &mut objects);
+    }
+
+    objects.insert(
+        metadata.id.clone(),
+        Self {
+            metadata,
+            index,
+            parent,
+            file: file_info,
+            underlying_obj,
+            extra_metadata: file_metadata_contents,
+            children,
+        },
+    );
+
+    Some(objects)
+}
+
+impl BaseFileObject {
     /// Create a new file object in a folder
     pub fn new(file_type: FileType, dirname: PathBuf, index: u32, parent: Option<String>) -> Self {
         let name = empty_string_name(file_type);
@@ -316,366 +509,17 @@ impl FileObject {
                 modtime: None,
                 modified: true, // Newly added files are modified (since they don't exist on disk)
             },
-            underlying_obj: match file_type {
-                FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
-                FileType::Character => UnderlyingFileObject::Character(Character::default()),
-                FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
-                FileType::Place => UnderlyingFileObject::Place(Place::default()),
-            },
+            // underlying_obj: match file_type {
+            //     FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
+            //     FileType::Character => UnderlyingFileObject::Character(Character::default()),
+            //     FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
+            //     FileType::Place => UnderlyingFileObject::Place(Place::default()),
+            // },
             extra_metadata: Table::new(),
             children: Vec::new(),
         }
 
         // TODO: when saving is implemented, save on creation (so that it can be used in other things)
-    }
-
-    /// Load an arbitrary file object from a file on disk
-    pub fn from_file(
-        filename: &Path,
-        index: u32,
-        parent: Option<String>,
-    ) -> Option<HashMap<String, Self>> {
-        // Create the file info right at the start
-        let mut file_info = FileInfo {
-            dirname: match filename.parent() {
-                Some(dirname) => dirname,
-                None => return None,
-            }
-            .to_path_buf(),
-            basename: match filename.file_name() {
-                Some(basename) => basename,
-                None => return None,
-            }
-            .to_owned(),
-            modtime: None,
-            modified: false,
-        };
-
-        // If the filename is a directory, we need to look for the underlying file, otherwise
-        // we already have it
-        let underlying_file = match filename.is_dir() {
-            true => Path::join(&filename, FOLDER_METADATA_FILE_NAME),
-            false => filename.to_path_buf(),
-        };
-
-        let (metadata_str, file_body) = match read_file_contents(&underlying_file) {
-            Ok((metadata_str, file_body)) => (metadata_str, file_body),
-            Err(_) => {
-                if filename.is_dir() {
-                    ("".to_string(), "".to_string())
-                } else {
-                    log::error!("Failed to read file {:?}", &underlying_file);
-                    return None;
-                }
-            }
-        };
-
-        let mut metadata = FileObjectMetadata::default();
-
-        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
-
-        if let Err(err) = load_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info)
-        {
-            log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
-            return None;
-        }
-
-        let file_type_str = match file_metadata_contents.remove("file_type") {
-            Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
-            None => match filename.is_dir() {
-                true => "folder".to_string(),
-                false => filename.extension().map_or_else(
-                    || "unknown".to_string(),
-                    |val| match val.to_str() {
-                        Some("md") => "scene".to_string(),
-                        Some("toml") => "unknown".to_string(),
-                        _ => "unknown".to_string(),
-                    },
-                ),
-            },
-        };
-
-        let file_type: FileType = match file_type_str.as_str().try_into() {
-            Ok(file_type) => file_type,
-            Err(_) => {
-                log::error!(
-                    "Found unknown file type ({}) while attempt to read {:?}",
-                    &file_type_str,
-                    &filename
-                );
-                return None;
-            }
-        };
-
-        let mut underlying_obj = match file_type {
-            FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
-            FileType::Character => UnderlyingFileObject::Character(Character::default()),
-            FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
-            FileType::Place => UnderlyingFileObject::Place(Place::default()),
-        };
-
-        if let Err(err) = underlying_obj.load_metadata(&mut file_metadata_contents) {
-            log::error!(
-                "Error while loading object-specific metadata for {:?}: {}",
-                &filename,
-                &err
-            );
-            return None;
-        }
-
-        match &mut underlying_obj {
-            UnderlyingFileObject::Scene(scene) => {
-                scene.load_extra_data(file_body);
-            }
-            _ => {}
-        }
-
-        // Will eventually return this and all children
-        // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
-        // of cloning it
-        let mut objects: HashMap<String, Self> = HashMap::new();
-
-        // The FileObject field
-        let mut children: Vec<String> = Vec::new();
-
-        // Load children of this file object
-        if file_type.is_folder() {
-            if filename.is_dir() {
-                match std::fs::read_dir(&filename) {
-                    Ok(files) => {
-                        // TODO: Proper logic:
-                        // 1. Read all of the files (that we can) into a list, it's fine to skip errors
-                        // 2. Store all indexes that exist
-                        // 3. Find the max of those indexes, assign (increasing) indexes to all remaining files
-                        // 4. Call fix_indexing (which might end up being a non-member function because of ownership stuff)
-                        for file in files {
-                            match file {
-                                Ok(file) => {
-                                    println!("{:?}", file.path().file_name());
-                                    if file.path().file_name()
-                                        == Some(&OsString::from(FOLDER_METADATA_FILE_NAME))
-                                    {
-                                        continue;
-                                    }
-
-                                    // fuck, this is going to be even more complicated once indexing
-                                    // is done properly, it'll require multiple passes
-                                    let index = get_index_from_name(
-                                        file.path().file_name().unwrap().to_str().unwrap(),
-                                    )
-                                    .unwrap_or(0);
-
-                                    if let Some(files) = FileObject::from_file(
-                                        &file.path(),
-                                        index,
-                                        Some(metadata.id.clone()),
-                                    ) {
-                                        for (child_file_id, child_file) in files {
-                                            children.push(child_file_id.clone());
-                                            objects.insert(child_file_id, child_file);
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    warn!("Could not read file in folder {:?}: {}", &filename, &err)
-                                }
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        log::error!(
-                            "Error while attempt to read folder {:?}: {}",
-                            &filename,
-                            &err
-                        )
-                    }
-                }
-            } else {
-                log::error!(
-                    "attempted to construct a folder-type from a non-folder filename {:?}",
-                    &filename
-                )
-            }
-        }
-
-        if Into::<FileType>::into(&underlying_obj).is_folder() {
-            // This will ensure that all children have the correct indexing. The only file objects
-            // that aren't the children of some folder are the roots, which don't have indexing anyway
-            fix_indexing(&mut children, &mut objects);
-        }
-
-        objects.insert(
-            metadata.id.clone(),
-            Self {
-                metadata,
-                index,
-                parent,
-                file: file_info,
-                underlying_obj,
-                extra_metadata: file_metadata_contents,
-                children,
-            },
-        );
-
-        Some(objects)
-    }
-
-    /// When the parent changes path, updates this dirname and any other children
-    fn process_path_update(
-        &mut self,
-        new_directory: PathBuf,
-        objects: &mut HashMap<String, FileObject>,
-    ) {
-        self.file.dirname = new_directory;
-
-        // Propogate this to any children
-        for child_id in self.children.iter() {
-            let (child_id, mut child) = objects
-                .remove_entry(child_id.as_str())
-                .expect("process_path_update needs to borrow a map with the children");
-
-            child.process_path_update(self.get_path(), objects);
-
-            objects.insert(child_id, child);
-        }
-    }
-
-    /// Change the filename in the base object and on disk, processing any required updates
-    fn set_filename(
-        &mut self,
-        new_filename: OsString,
-        objects: &mut HashMap<String, FileObject>,
-    ) -> Result<()> {
-        let old_path = self.get_path();
-        let new_path = Path::join(&self.file.dirname, &new_filename);
-
-        if new_path != old_path {
-            std::fs::rename(old_path, new_path)?;
-            self.file.basename = new_filename;
-        }
-
-        for child_id in self.children.iter() {
-            let (child_id, mut child) = objects
-                .remove_entry(child_id.as_str())
-                .expect("set_filename needs to borrow a map with the children");
-
-            child.process_path_update(self.get_path(), objects);
-
-            objects.insert(child_id, child);
-        }
-        Ok(())
-    }
-
-    /// Calculates the filename for a particular object
-    fn calculate_filename(&self) -> OsString {
-        let base_name: &str = match self.metadata.name.is_empty() {
-            false => &self.metadata.name,
-            true => &empty_string_name(Into::<FileType>::into(&self.underlying_obj)),
-        };
-
-        let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
-        let file_safe_name = process_name_for_filename(truncated_name);
-        let final_name = add_index_to_name(&file_safe_name, self.index);
-
-        let mut filename = OsString::from(final_name);
-
-        if !Into::<FileType>::into(&self.underlying_obj).is_folder() {
-            filename.push(".");
-            filename.push(Into::<FileType>::into(&self.underlying_obj).extension());
-        }
-
-        filename
-    }
-
-    /// Sets the index to this file, doing the move if necessary
-    pub fn set_index(
-        &mut self,
-        new_index: u32,
-        objects: &mut HashMap<String, FileObject>,
-    ) -> Result<()> {
-        self.index = new_index;
-
-        self.set_filename(self.calculate_filename(), objects)
-    }
-
-    /// Recalculates the filename from the object property
-    ///
-    /// Unlike with `set_index`, we expect the underlying values to be borrowed directly,
-    /// rather than having a callback with our updated value.
-    pub fn set_filename_from_name(
-        &mut self,
-        objects: &mut HashMap<String, FileObject>,
-    ) -> Result<()> {
-        self.set_filename(self.calculate_filename(), objects)
-    }
-
-    /// Calculates the object's current path. For objects in a single file, this is their path
-    /// (including the extension), for folder-based objects (i.e., Folder, Place), this is the
-    /// path to the folder.
-    ///
-    /// Also see `get_file`
-    pub fn get_path(&self) -> PathBuf {
-        Path::join(&self.file.dirname, &self.file.basename)
-    }
-
-    /// The path to an object's underlying file, the equivalent of `get_path` when doing file
-    /// operations on this object
-    fn get_file(&self) -> PathBuf {
-        let base_path = self.get_path();
-        let path = match Into::<FileType>::into(&self.underlying_obj).is_folder() {
-            true => Path::join(&base_path, FOLDER_METADATA_FILE_NAME),
-            false => base_path,
-        };
-        path
-    }
-
-    /// Reloads the contents of this file object from disk. Assumes that the file has been properly
-    /// initialized already
-    pub fn reload_file(&mut self) -> Result<()> {
-        let file_to_read = self.get_file();
-
-        if !self.should_load(&file_to_read)? {
-            return Ok(());
-        }
-
-        let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
-
-        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
-
-        load_metadata(
-            &mut file_metadata_contents,
-            &mut self.metadata,
-            &mut self.file,
-        )?;
-
-        self.underlying_obj
-            .load_metadata(&mut file_metadata_contents)?;
-
-        match &mut self.underlying_obj {
-            UnderlyingFileObject::Scene(scene) => scene.load_extra_data(file_body),
-            _ => {}
-        }
-
-        self.extra_metadata = file_metadata_contents;
-
-        Ok(())
-    }
-
-    /// Determine if the file should be loaded
-    fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
-        let current_modtime = std::fs::metadata(file_to_read)
-            .expect("attempted to load file that does not exist")
-            .modified()
-            .expect("Modtime not available");
-
-        if let Some(old_modtime) = self.file.modtime {
-            if old_modtime == current_modtime {
-                // We've already loaded the latest revision, nothing to do
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
     }
 
     fn header_to_toml(&self) -> String {
@@ -716,4 +560,174 @@ impl UnderlyingFileObject {
 
 pub trait FileObjectType: Debug {
     fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
+}
+
+pub trait ActualFileObject: Debug {
+    fn get_base(&self) -> &BaseFileObject;
+    fn get_base_mut(&mut self) -> &mut BaseFileObject;
+
+    fn load_body(&mut self, body: String);
+
+    fn empty_string_name(&self) -> &'static str;
+    fn is_folder(&self) -> bool;
+    fn extension(&self) -> &'static str;
+    fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
+
+    /// Sets the index to this file, doing the move if necessary
+    fn set_index(
+        &mut self,
+        new_index: u32,
+        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+    ) -> Result<()> {
+        self.get_base_mut().index = new_index;
+
+        self.set_filename(self.calculate_filename(), objects)
+    }
+
+    /// Recalculates the filename from the object property
+    ///
+    /// Unlike with `set_index`, we expect the underlying values to be borrowed directly,
+    /// rather than having a callback with our updated value.
+    fn set_filename_from_name(
+        &mut self,
+        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+    ) -> Result<()> {
+        self.set_filename(self.calculate_filename(), objects)
+    }
+
+    /// Calculates the filename for a particular object
+    fn calculate_filename(&self) -> OsString {
+        let base_name: &str = match self.get_base().metadata.name.is_empty() {
+            false => &self.get_base().metadata.name,
+            true => self.empty_string_name(),
+        };
+
+        let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
+        let file_safe_name = process_name_for_filename(truncated_name);
+        let final_name = add_index_to_name(&file_safe_name, self.get_base().index);
+
+        let mut filename = OsString::from(final_name);
+
+        if self.is_folder() {
+            filename.push(".");
+            filename.push(&self.extension());
+        }
+
+        filename
+    }
+
+    /// Change the filename in the base object and on disk, processing any required updates
+    fn set_filename(
+        &mut self,
+        new_filename: OsString,
+        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+    ) -> Result<()> {
+        let old_path = self.get_path();
+        let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
+
+        if new_path != old_path {
+            std::fs::rename(old_path, &new_path)?;
+            self.get_base_mut().file.basename = new_filename;
+        }
+
+        for child_id in self.get_base().children.iter() {
+            let (child_id, mut child) = objects
+                .remove_entry(child_id.as_str())
+                .expect("set_filename needs to borrow a map with the children");
+
+            child.process_path_update(self.get_path(), objects);
+
+            objects.insert(child_id, child);
+        }
+        Ok(())
+    }
+
+    /// Calculates the object's current path. For objects in a single file, this is their path
+    /// (including the extension), for folder-based objects (i.e., Folder, Place), this is the
+    /// path to the folder.
+    ///
+    /// Also see `get_file`
+    fn get_path(&self) -> PathBuf {
+        Path::join(
+            &self.get_base().file.dirname,
+            &self.get_base().file.basename,
+        )
+    }
+
+    /// The path to an object's underlying file, the equivalent of `get_path` when doing file
+    /// operations on this object
+    fn get_file(&self) -> PathBuf {
+        let base_path = self.get_path();
+        let path = match self.is_folder() {
+            true => Path::join(&base_path, FOLDER_METADATA_FILE_NAME),
+            false => base_path,
+        };
+        path
+    }
+
+    /// When the parent changes path, updates this dirname and any other children
+    fn process_path_update(
+        &mut self,
+        new_directory: PathBuf,
+        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+    ) {
+        self.get_base_mut().file.dirname = new_directory;
+
+        // Propogate this to any children
+        for child_id in self.get_base().children.iter() {
+            let (child_id, mut child) = objects
+                .remove_entry(child_id.as_str())
+                .expect("process_path_update needs to borrow a map with the children");
+
+            child.process_path_update(self.get_path(), objects);
+
+            objects.insert(child_id, child);
+        }
+    }
+
+    /// Determine if the file should be loaded
+    fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
+        let current_modtime = std::fs::metadata(file_to_read)
+            .expect("attempted to load file that does not exist")
+            .modified()
+            .expect("Modtime not available");
+
+        if let Some(old_modtime) = self.get_base().file.modtime {
+            if old_modtime == current_modtime {
+                // We've already loaded the latest revision, nothing to do
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Reloads the contents of this file object from disk. Assumes that the file has been properly
+    /// initialized already
+    fn reload_file(&mut self) -> Result<()> {
+        let file_to_read = self.get_file();
+
+        if !self.should_load(&file_to_read)? {
+            return Ok(());
+        }
+
+        let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
+
+        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+
+        let base_file_object = self.get_base_mut();
+
+        load_base_metadata(
+            &mut file_metadata_contents,
+            &mut base_file_object.metadata,
+            &mut base_file_object.file,
+        )?;
+
+        self.load_metadata(&mut file_metadata_contents)?;
+
+        self.load_body(file_body);
+        self.get_base_mut().extra_metadata = file_metadata_contents;
+
+        Ok(())
+    }
 }

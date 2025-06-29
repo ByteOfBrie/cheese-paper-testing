@@ -32,12 +32,6 @@ const HEADER_SPLIT: &str = "++++++++";
 /// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
 ///
 
-// TODO: this still doesn't seem quite sufficient for what I need (or it's just awkward)
-//       There has to be a better way to do things (like open an editor of varying types)
-//       based on the type of file. It might be something with an enum of the larger type?
-//
-//       It almost feels like FileObject should be an enum, but then almost all of the fields are
-//       the same between them, so that doesn't quite make sense either
 #[derive(Debug)]
 pub enum UnderlyingFileObject {
     Scene(Scene),

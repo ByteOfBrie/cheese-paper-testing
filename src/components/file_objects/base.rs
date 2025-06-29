@@ -568,23 +568,23 @@ impl FileObject {
 
     /// Calculates the filename for a particular object
     fn calculate_filename(&self) -> OsString {
-        let name: &str = match self.metadata.name.is_empty() {
+        let base_name: &str = match self.metadata.name.is_empty() {
             false => &self.metadata.name,
             true => &empty_string_name(Into::<FileType>::into(&self.underlying_obj)),
         };
 
-        let name = truncate_name(name, FILENAME_MAX_LENGTH);
-        let name = process_name_for_filename(name);
-        let name = add_index_to_name(&name, self.index);
+        let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
+        let file_safe_name = process_name_for_filename(truncated_name);
+        let final_name = add_index_to_name(&file_safe_name, self.index);
 
-        let mut base_path = OsString::from(name);
+        let mut filename = OsString::from(final_name);
 
         if !Into::<FileType>::into(&self.underlying_obj).is_folder() {
-            base_path.push(".");
-            base_path.push(Into::<FileType>::into(&self.underlying_obj).extension());
+            filename.push(".");
+            filename.push(Into::<FileType>::into(&self.underlying_obj).extension());
         }
 
-        base_path
+        filename
     }
 
     /// Sets the index to this file, doing the move if necessary

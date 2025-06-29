@@ -1,5 +1,5 @@
 use crate::components::file_objects::base::{
-    ActualFileObject, BaseFileObject, metadata_extract_bool, metadata_extract_string,
+    BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
 use regex::Regex;
 
@@ -29,7 +29,7 @@ pub struct Scene {
     pub text: String,
 }
 
-impl ActualFileObject for Scene {
+impl FileObject for Scene {
     fn load_metadata(&mut self) -> std::io::Result<bool> {
         let mut modified = false;
 

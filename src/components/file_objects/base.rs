@@ -11,7 +11,6 @@ use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use toml::Table;
 use toml_edit::DocumentMut;
 
 /// the maximum length of a name before we start trying to truncate it
@@ -22,9 +21,6 @@ const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
 /// Value that splits the header of any file that contains non-metadata content
 const HEADER_SPLIT: &str = "++++++++";
-
-// pub fn get_object_path_from_parent(name: &str, index: u32, parent: Box<dyn FileObject>) -> PathBuf {
-// }
 
 /// Loading a file:
 /// 1. Parse filename as a name -> metadata.name
@@ -256,7 +252,7 @@ fn load_base_metadata(
 /// in `children` will actually be sorted.
 fn fix_indexing(
     children: &mut Vec<String>,
-    objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+    objects: &mut HashMap<String, Box<dyn FileObject>>,
 ) -> u32 {
     for (count, child_id) in children.iter().enumerate() {
         let (child_id, mut child) = objects
@@ -300,7 +296,7 @@ pub fn from_file(
     filename: &Path,
     index: u32,
     parent: Option<String>,
-) -> Option<HashMap<String, Box<dyn ActualFileObject>>> {
+) -> Option<HashMap<String, Box<dyn FileObject>>> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
@@ -338,7 +334,7 @@ pub fn from_file(
 
     let mut metadata = FileObjectMetadata::default();
 
-    let mut toml_header = metadata_str
+    let toml_header = metadata_str
         .parse::<DocumentMut>()
         .expect("invalid file metadata header");
 
@@ -374,22 +370,19 @@ pub fn from_file(
         }
     };
 
-    // The FileObject field
-    let mut children: Vec<String> = Vec::new();
-
     let mut base = BaseFileObject {
         metadata,
         index,
         parent,
         file: file_info,
         toml_header,
-        children,
+        children: Vec::new(),
     };
 
     // Will eventually return this and all children
     // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
     // of cloning it
-    let mut objects: HashMap<String, Box<dyn ActualFileObject>> = HashMap::new();
+    let mut objects: HashMap<String, Box<dyn FileObject>> = HashMap::new();
 
     // Load children of this file object
     if file_type.is_folder() {
@@ -453,7 +446,7 @@ pub fn from_file(
         fix_indexing(&mut base.children, &mut objects);
     }
 
-    let mut underlying_obj: Box<dyn ActualFileObject> = match file_type {
+    let mut underlying_obj: Box<dyn FileObject> = match file_type {
         FileType::Scene => Box::new(Scene::new(base)),
         FileType::Character => Box::new(Character::new(base)),
         FileType::Folder => Box::new(Folder::new(base)),
@@ -526,7 +519,7 @@ impl BaseFileObject {
     }
 }
 
-pub trait ActualFileObject: Debug {
+pub trait FileObject: Debug {
     fn get_base(&self) -> &BaseFileObject;
     fn get_base_mut(&mut self) -> &mut BaseFileObject;
 
@@ -545,7 +538,7 @@ pub trait ActualFileObject: Debug {
     fn set_index(
         &mut self,
         new_index: u32,
-        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+        objects: &mut HashMap<String, Box<dyn FileObject>>,
     ) -> Result<()> {
         self.get_base_mut().index = new_index;
 
@@ -558,7 +551,7 @@ pub trait ActualFileObject: Debug {
     /// rather than having a callback with our updated value.
     fn set_filename_from_name(
         &mut self,
-        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+        objects: &mut HashMap<String, Box<dyn FileObject>>,
     ) -> Result<()> {
         self.set_filename(self.calculate_filename(), objects)
     }
@@ -588,7 +581,7 @@ pub trait ActualFileObject: Debug {
     fn set_filename(
         &mut self,
         new_filename: OsString,
-        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+        objects: &mut HashMap<String, Box<dyn FileObject>>,
     ) -> Result<()> {
         let old_path = self.get_path();
         let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
@@ -637,7 +630,7 @@ pub trait ActualFileObject: Debug {
     fn process_path_update(
         &mut self,
         new_directory: PathBuf,
-        objects: &mut HashMap<String, Box<dyn ActualFileObject>>,
+        objects: &mut HashMap<String, Box<dyn FileObject>>,
     ) {
         self.get_base_mut().file.dirname = new_directory;
 

@@ -1,5 +1,5 @@
 use crate::components::file_objects::base::{
-    ActualFileObject, BaseFileObject, metadata_extract_string,
+    FileObject, BaseFileObject, metadata_extract_string,
 };
 
 #[derive(Debug)]
@@ -55,7 +55,7 @@ impl Place {
     }
 }
 
-impl ActualFileObject for Place {
+impl FileObject for Place {
     fn load_metadata(&mut self) -> std::io::Result<bool> {
         let mut modified = false;
 

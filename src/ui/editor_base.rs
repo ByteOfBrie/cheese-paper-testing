@@ -1,8 +1,8 @@
 use egui::{FontFamily, FontId, TextStyle};
 
 use crate::{
-    components::file_objects::FileObject,
-    ui::{BaseTextEditor, SceneTextEditor},
+    components::file_objects::{FileObject, UnderlyingFileObject},
+    ui::SceneTextEditor,
 };
 
 pub struct CheesePaperApp<'a> {
@@ -23,10 +23,20 @@ fn configure_text_styles(ctx: &egui::Context) {
 }
 
 impl<'a> CheesePaperApp<'a> {
-    pub fn new(cc: &eframe::CreationContext<'_>, file_object: &'a mut FileObject) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        file_object: &'a mut FileObject<UnderlyingFileObject>,
+    ) -> Self {
         configure_text_styles(&cc.egui_ctx);
-        Self {
-            editor: SceneTextEditor { scene: file_object },
+
+        match file_object {
+            FileObject {
+                underlying_obj: UnderlyingFileObject::Scene(_),
+                ..
+            } => Self {
+                editor: SceneTextEditor { scene: file_object },
+            },
+            _ => panic!(),
         }
     }
 }

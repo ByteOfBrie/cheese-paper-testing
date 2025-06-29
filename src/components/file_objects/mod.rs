@@ -9,4 +9,4 @@ pub use base::{FileObject, UnderlyingFileObject};
 use character::Character;
 use folder::Folder;
 use place::Place;
-use scene::Scene;
+pub use scene::Scene;

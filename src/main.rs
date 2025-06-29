@@ -10,6 +10,8 @@ mod tiny_markdown;
 mod ui;
 
 use crate::components::file_objects::FileObject;
+
+use crate::components::file_objects::Scene;
 use crate::components::file_objects::UnderlyingFileObject;
 use crate::ui::CheesePaperApp;
 use crate::ui::SceneTextEditor;
@@ -50,16 +52,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        use crate::ui::BaseTextEditor;
-
         eframe::run_native(
             "Cheese Paper Rust Single File",
             Default::default(),
-            Box::new(|_cc| {
-                Ok(Box::new(CheesePaperApp {
-                    editor: SceneTextEditor { scene: file },
-                }))
-            }),
+            Box::new(|cc| Ok(Box::new(CheesePaperApp::new(cc, file)))),
         )
         .unwrap()
     }

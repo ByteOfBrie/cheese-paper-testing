@@ -35,6 +35,9 @@ const HEADER_SPLIT: &str = "++++++++";
 // TODO: this still doesn't seem quite sufficient for what I need (or it's just awkward)
 //       There has to be a better way to do things (like open an editor of varying types)
 //       based on the type of file. It might be something with an enum of the larger type?
+//
+//       It almost feels like FileObject should be an enum, but then almost all of the fields are
+//       the same between them, so that doesn't quite make sense either
 #[derive(Debug)]
 pub enum UnderlyingFileObject {
     Scene(Scene),
@@ -244,7 +247,10 @@ fn load_metadata(
 
 /// For ease of calling, `objects`` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileObject>) -> u32 {
+fn fix_indexing(
+    children: &mut Vec<String>,
+    objects: &mut HashMap<String, FileObject<UnderlyingFileObject>>,
+) -> u32 {
     for (count, child_id) in children.iter().enumerate() {
         let (child_id, mut child) = objects
             .remove_entry(child_id.as_str())
@@ -281,7 +287,7 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileOb
 }
 
 #[derive(Debug)]
-pub struct FileObject {
+pub struct FileObject<UnderlyingFileObject> {
     metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     index: u32,
@@ -293,7 +299,7 @@ pub struct FileObject {
     children: Vec<String>,
 }
 
-impl FileObject {
+impl FileObject<UnderlyingFileObject> {
     /// Create a new file object in a folder
     pub fn new(file_type: FileType, dirname: PathBuf, index: u32, parent: Option<String>) -> Self {
         let name = empty_string_name(file_type);
@@ -527,7 +533,7 @@ impl FileObject {
     fn process_path_update(
         &mut self,
         new_directory: PathBuf,
-        objects: &mut HashMap<String, FileObject>,
+        objects: &mut HashMap<String, FileObject<UnderlyingFileObject>>,
     ) {
         self.file.dirname = new_directory;
 
@@ -547,7 +553,7 @@ impl FileObject {
     fn set_filename(
         &mut self,
         new_filename: OsString,
-        objects: &mut HashMap<String, FileObject>,
+        objects: &mut HashMap<String, FileObject<UnderlyingFileObject>>,
     ) -> Result<()> {
         let old_path = self.get_path();
         let new_path = Path::join(&self.file.dirname, &new_filename);
@@ -594,7 +600,7 @@ impl FileObject {
     pub fn set_index(
         &mut self,
         new_index: u32,
-        objects: &mut HashMap<String, FileObject>,
+        objects: &mut HashMap<String, FileObject<UnderlyingFileObject>>,
     ) -> Result<()> {
         self.index = new_index;
 
@@ -607,7 +613,7 @@ impl FileObject {
     /// rather than having a callback with our updated value.
     pub fn set_filename_from_name(
         &mut self,
-        objects: &mut HashMap<String, FileObject>,
+        objects: &mut HashMap<String, FileObject<UnderlyingFileObject>>,
     ) -> Result<()> {
         self.set_filename(self.calculate_filename(), objects)
     }

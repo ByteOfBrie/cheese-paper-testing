@@ -2,7 +2,6 @@ use crate::components::file_objects::base::{
     ActualFileObject, BaseFileObject, metadata_extract_bool, metadata_extract_string,
 };
 use regex::Regex;
-use toml::Table;
 
 #[derive(Debug)]
 pub struct SceneMetadata {
@@ -31,25 +30,25 @@ pub struct Scene {
 }
 
 impl ActualFileObject for Scene {
-    fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> std::io::Result<bool> {
         let mut modified = false;
 
-        match metadata_extract_string(table, "summary")? {
+        match metadata_extract_string(&self.base.toml_header, "summary")? {
             Some(summary) => self.metadata.summary = summary,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "notes")? {
+        match metadata_extract_string(&self.base.toml_header, "notes")? {
             Some(notes) => self.metadata.notes = notes,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "pov")? {
+        match metadata_extract_string(&self.base.toml_header, "pov")? {
             Some(pov) => self.metadata.pov = pov,
             None => modified = true,
         }
 
-        match metadata_extract_bool(table, "compile_status")? {
+        match metadata_extract_bool(&self.base.toml_header, "compile_status")? {
             Some(compile_status) => self.metadata.compile_status = compile_status,
             None => modified = true,
         }
@@ -84,11 +83,29 @@ impl ActualFileObject for Scene {
 
 impl Scene {
     pub fn new(base: BaseFileObject) -> Self {
-        Self {
+        let mut scene = Self {
             base,
             metadata: Default::default(),
             text: String::new(),
+        };
+
+        match scene.load_metadata() {
+            Ok(modified) => {
+                if modified {
+                    scene.base.file.modified = true;
+                }
+            }
+            Err(err) => {
+                // TODO: throw actual error
+                log::error!(
+                    "Error while loading object-specific metadata for {:?}: {}",
+                    scene.get_path(),
+                    &err
+                );
+            }
         }
+
+        scene
     }
 
     pub fn word_count(&self) -> usize {

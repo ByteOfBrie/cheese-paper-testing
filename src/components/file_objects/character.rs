@@ -1,7 +1,6 @@
 use crate::components::file_objects::base::{
     ActualFileObject, BaseFileObject, metadata_extract_string,
 };
-use toml::Table;
 
 #[derive(Debug)]
 struct CharacterMetadata {
@@ -36,48 +35,65 @@ pub struct Character {
 
 impl Character {
     pub fn new(base: BaseFileObject) -> Self {
-        Self {
+        let mut character = Self {
             base,
             metadata: Default::default(),
+        };
+
+        match character.load_metadata() {
+            Ok(modified) => {
+                if modified {
+                    character.base.file.modified = true;
+                }
+            }
+            Err(err) => {
+                log::error!(
+                    "Error while loading object-specific metadata for {:?}: {}",
+                    character.get_path(),
+                    &err
+                );
+            }
         }
+
+        character
     }
 }
 
 impl ActualFileObject for Character {
-    fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> std::io::Result<bool> {
         let mut modified = false;
 
-        match metadata_extract_string(table, "summary")? {
+        match metadata_extract_string(&self.base.toml_header, "summary")? {
             Some(summary) => self.metadata.summary = summary,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "notes")? {
+        match metadata_extract_string(&self.base.toml_header, "notes")? {
             Some(notes) => self.metadata.notes = notes,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "appearance")? {
+        match metadata_extract_string(&self.base.toml_header, "appearance")? {
             Some(appearance) => self.metadata.appearance = appearance,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "personality")? {
+        match metadata_extract_string(&self.base.toml_header, "personality")? {
             Some(personality) => self.metadata.personality = personality,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "goal")? {
+        match metadata_extract_string(&self.base.toml_header, "goal")? {
             Some(goal) => self.metadata.goal = goal,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "conflict")? {
+        match metadata_extract_string(&self.base.toml_header, "conflict")? {
             Some(conflict) => self.metadata.conflict = conflict,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "habits")? {
+        match metadata_extract_string(&self.base.toml_header, "habits")? {
             Some(habits) => self.metadata.habits = habits,
             None => modified = true,
         }

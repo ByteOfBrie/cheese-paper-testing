@@ -1,7 +1,6 @@
 use crate::components::file_objects::base::{
     ActualFileObject, BaseFileObject, metadata_extract_string,
 };
-use toml::Table;
 
 #[derive(Debug)]
 struct PlaceMetadata {
@@ -32,38 +31,55 @@ pub struct Place {
 
 impl Place {
     pub fn new(base: BaseFileObject) -> Self {
-        Self {
+        let mut place = Self {
             base,
             metadata: Default::default(),
+        };
+
+        match place.load_metadata() {
+            Ok(modified) => {
+                if modified {
+                    place.base.file.modified = true;
+                }
+            }
+            Err(err) => {
+                log::error!(
+                    "Error while loading object-specific metadata for {:?}: {}",
+                    place.get_path(),
+                    &err
+                );
+            }
         }
+
+        place
     }
 }
 
 impl ActualFileObject for Place {
-    fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> std::io::Result<bool> {
         let mut modified = false;
 
-        match metadata_extract_string(table, "connection")? {
+        match metadata_extract_string(&self.base.toml_header, "connection")? {
             Some(connection) => self.metadata.connection = connection,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "description")? {
+        match metadata_extract_string(&self.base.toml_header, "description")? {
             Some(description) => self.metadata.description = description,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "appearance")? {
+        match metadata_extract_string(&self.base.toml_header, "appearance")? {
             Some(appearance) => self.metadata.appearance = appearance,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "other_senses")? {
+        match metadata_extract_string(&self.base.toml_header, "other_senses")? {
             Some(other_senses) => self.metadata.other_senses = other_senses,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "notes")? {
+        match metadata_extract_string(&self.base.toml_header, "notes")? {
             Some(notes) => self.metadata.notes = notes,
             None => modified = true,
         }

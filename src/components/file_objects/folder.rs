@@ -1,7 +1,6 @@
 use crate::components::file_objects::base::{
     ActualFileObject, BaseFileObject, metadata_extract_bool, metadata_extract_string,
 };
-use toml::Table;
 
 #[derive(Debug)]
 struct FolderMetadata {
@@ -28,28 +27,45 @@ pub struct Folder {
 
 impl Folder {
     pub fn new(base: BaseFileObject) -> Self {
-        Self {
+        let mut folder = Self {
             base,
             metadata: Default::default(),
+        };
+
+        match folder.load_metadata() {
+            Ok(modified) => {
+                if modified {
+                    folder.base.file.modified = true;
+                }
+            }
+            Err(err) => {
+                log::error!(
+                    "Error while loading object-specific metadata for {:?}: {}",
+                    folder.get_path(),
+                    &err
+                );
+            }
         }
+
+        folder
     }
 }
 
 impl ActualFileObject for Folder {
-    fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> std::io::Result<bool> {
         let mut modified = false;
 
-        match metadata_extract_string(table, "summary")? {
+        match metadata_extract_string(&self.base.toml_header, "summary")? {
             Some(value) => self.metadata.summary = value,
             None => modified = true,
         }
 
-        match metadata_extract_string(table, "notes")? {
+        match metadata_extract_string(&self.base.toml_header, "notes")? {
             Some(notes) => self.metadata.notes = notes,
             None => modified = true,
         }
 
-        match metadata_extract_bool(table, "compile_status")? {
+        match metadata_extract_bool(&self.base.toml_header, "compile_status")? {
             Some(compile_status) => self.metadata.compile_status = compile_status,
             None => modified = true,
         }

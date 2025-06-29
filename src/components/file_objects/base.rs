@@ -12,7 +12,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use toml::Table;
-use toml_edit::{DocumentMut, value};
+use toml_edit::DocumentMut;
 
 /// the maximum length of a name before we start trying to truncate it
 const FILENAME_MAX_LENGTH: usize = 30;
@@ -67,11 +67,11 @@ pub enum FileType {
 pub struct BaseFileObject {
     pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
-    index: u32,
+    pub index: u32,
     /// Object ID of the parent
-    parent: Option<String>,
-    file: FileInfo,
-    extra_metadata: Table, // TODO: convert to be a store for the file_obj
+    pub parent: Option<String>,
+    pub file: FileInfo,
+    pub toml_header: DocumentMut,
     pub children: Vec<String>,
 }
 
@@ -155,11 +155,11 @@ pub struct FileInfo {
     basename: OsString,
     /// Modified time if the file exists
     modtime: Option<SystemTime>,
-    modified: bool,
+    pub modified: bool,
 }
 
-pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> Result<Option<u32>> {
-    Ok(match table.remove(field_name) {
+pub fn metadata_extract_u32(table: &DocumentMut, field_name: &str) -> Result<Option<u32>> {
+    Ok(match table.get(field_name) {
         Some(value) => Some(
             value
                 .as_integer()
@@ -181,8 +181,8 @@ pub fn metadata_extract_u32(table: &mut Table, field_name: &str) -> Result<Optio
     })
 }
 
-pub fn metadata_extract_string(table: &mut Table, field_name: &str) -> Result<Option<String>> {
-    Ok(match table.remove(field_name) {
+pub fn metadata_extract_string(table: &DocumentMut, field_name: &str) -> Result<Option<String>> {
+    Ok(match table.get(field_name) {
         Some(value) => Some(
             value
                 .as_str()
@@ -198,8 +198,8 @@ pub fn metadata_extract_string(table: &mut Table, field_name: &str) -> Result<Op
     })
 }
 
-pub fn metadata_extract_bool(table: &mut Table, field_name: &str) -> Result<Option<bool>> {
-    Ok(match table.remove(field_name) {
+pub fn metadata_extract_bool(table: &DocumentMut, field_name: &str) -> Result<Option<bool>> {
+    Ok(match table.get(field_name) {
         Some(value) => Some(value.as_bool().ok_or_else(|| {
             Error::new(ErrorKind::InvalidData, format!("{field_name} was not bool"))
         })?),
@@ -230,7 +230,7 @@ fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
 /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
 /// appropriate
 fn load_base_metadata(
-    metadata_table: &mut toml::map::Map<String, toml::Value>,
+    metadata_table: &DocumentMut,
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,
 ) -> Result<()> {
@@ -338,16 +338,16 @@ pub fn from_file(
 
     let mut metadata = FileObjectMetadata::default();
 
-    // TODO: Use DocumentMut instead
-    let mut file_metadata_contents = metadata_str.parse::<Table>().expect("invalid metadata");
+    let mut toml_header = metadata_str
+        .parse::<DocumentMut>()
+        .expect("invalid file metadata header");
 
-    if let Err(err) = load_base_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info)
-    {
+    if let Err(err) = load_base_metadata(&toml_header, &mut metadata, &mut file_info) {
         log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
         return None;
     }
 
-    let file_type_str = match file_metadata_contents.remove("file_type") {
+    let file_type_str = match toml_header.get("file_type") {
         Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
         None => match filename.is_dir() {
             true => "folder".to_string(),
@@ -377,32 +377,14 @@ pub fn from_file(
     // The FileObject field
     let mut children: Vec<String> = Vec::new();
 
-    let base = BaseFileObject {
+    let mut base = BaseFileObject {
         metadata,
         index,
         parent,
         file: file_info,
-        extra_metadata: file_metadata_contents,
+        toml_header,
         children,
     };
-
-    let mut underlying_obj: Box<dyn ActualFileObject> = match file_type {
-        FileType::Scene => Box::new(Scene::new(base)),
-        FileType::Character => Box::new(Character::new(base)),
-        FileType::Folder => Box::new(Folder::new(base)),
-        FileType::Place => Box::new(Place::new(base)),
-    };
-
-    if let Err(err) = underlying_obj.load_metadata(&mut file_metadata_contents) {
-        log::error!(
-            "Error while loading object-specific metadata for {:?}: {}",
-            &filename,
-            &err
-        );
-        return None;
-    }
-
-    underlying_obj.load_body(file_body);
 
     // Will eventually return this and all children
     // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
@@ -437,10 +419,10 @@ pub fn from_file(
                                 .unwrap_or(0);
 
                                 if let Some(files) =
-                                    from_file(&file.path(), index, Some(metadata.id.clone()))
+                                    from_file(&file.path(), index, Some(base.metadata.id.clone()))
                                 {
                                     for (child_file_id, child_file) in files {
-                                        children.push(child_file_id.clone());
+                                        base.children.push(child_file_id.clone());
                                         objects.insert(child_file_id, child_file);
                                     }
                                 }
@@ -468,10 +450,22 @@ pub fn from_file(
 
         // This will ensure that all children have the correct indexing. The only file objects
         // that aren't the children of some folder are the roots, which don't have indexing anyway
-        fix_indexing(&mut children, &mut objects);
+        fix_indexing(&mut base.children, &mut objects);
     }
 
-    objects.insert(metadata.id.clone(), underlying_obj);
+    let mut underlying_obj: Box<dyn ActualFileObject> = match file_type {
+        FileType::Scene => Box::new(Scene::new(base)),
+        FileType::Character => Box::new(Character::new(base)),
+        FileType::Folder => Box::new(Folder::new(base)),
+        FileType::Place => Box::new(Place::new(base)),
+    };
+
+    underlying_obj.load_body(file_body);
+
+    objects.insert(
+        underlying_obj.get_base().metadata.id.clone(),
+        underlying_obj,
+    );
 
     Some(objects)
 }
@@ -502,13 +496,7 @@ impl BaseFileObject {
                 modtime: None,
                 modified: true, // Newly added files are modified (since they don't exist on disk)
             },
-            // underlying_obj: match file_type {
-            //     FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
-            //     FileType::Character => UnderlyingFileObject::Character(Character::default()),
-            //     FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
-            //     FileType::Place => UnderlyingFileObject::Place(Place::default()),
-            // },
-            extra_metadata: Table::new(),
+            toml_header: DocumentMut::new(),
             children: Vec::new(),
         }
 
@@ -538,10 +526,6 @@ impl BaseFileObject {
     }
 }
 
-pub trait FileObjectType: Debug {
-    fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
-}
-
 pub trait ActualFileObject: Debug {
     fn get_base(&self) -> &BaseFileObject;
     fn get_base_mut(&mut self) -> &mut BaseFileObject;
@@ -551,7 +535,11 @@ pub trait ActualFileObject: Debug {
     fn empty_string_name(&self) -> &'static str;
     fn is_folder(&self) -> bool;
     fn extension(&self) -> &'static str;
-    fn load_metadata(&mut self, table: &mut Table) -> Result<bool>;
+
+    /// Loads the file-specific metadata from the toml document
+    ///
+    /// pulls from the file object instead of an argument (otherwise it's slightly tricky to do ownership)
+    fn load_metadata(&mut self) -> Result<bool>;
 
     /// Sets the index to this file, doing the move if necessary
     fn set_index(
@@ -693,20 +681,23 @@ pub trait ActualFileObject: Debug {
 
         let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
 
-        let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+        let new_toml_header = metadata_str
+            .parse::<DocumentMut>()
+            .expect("invalid file metadata header");
 
         let base_file_object = self.get_base_mut();
 
         load_base_metadata(
-            &mut file_metadata_contents,
+            &new_toml_header,
             &mut base_file_object.metadata,
             &mut base_file_object.file,
         )?;
 
-        self.load_metadata(&mut file_metadata_contents)?;
+        base_file_object.toml_header = new_toml_header;
+
+        self.load_metadata()?;
 
         self.load_body(file_body);
-        self.get_base_mut().extra_metadata = file_metadata_contents;
 
         Ok(())
     }

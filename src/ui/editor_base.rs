@@ -23,10 +23,7 @@ fn configure_text_styles(ctx: &egui::Context) {
 }
 
 impl<'a> CheesePaperApp<'a> {
-    pub fn new(
-        cc: &eframe::CreationContext<'_>,
-        file_object: &'a mut FileObject<UnderlyingFileObject>,
-    ) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, file_object: &'a mut FileObject) -> Self {
         configure_text_styles(&cc.egui_ctx);
 
         match file_object {

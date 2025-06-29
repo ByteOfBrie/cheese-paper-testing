@@ -52,16 +52,6 @@ pub struct FileObjectMetadata {
     pub id: String,
 }
 
-impl Default for FileObjectMetadata {
-    fn default() -> Self {
-        Self {
-            version: 1u32,
-            name: String::new(),
-            id: Uuid::new_v4().as_hyphenated().to_string(),
-        }
-    }
-}
-
 /// List of known file types in this version of the editor. File types that aren't known will not
 /// be read in
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +60,29 @@ pub enum FileType {
     Folder,
     Character,
     Place,
+}
+
+#[derive(Debug)]
+pub struct FileObject {
+    pub metadata: FileObjectMetadata,
+    /// Index (ordering within parent)
+    index: u32,
+    /// Object ID of the parent
+    parent: Option<String>,
+    file: FileInfo,
+    pub underlying_obj: UnderlyingFileObject,
+    extra_metadata: Table,
+    pub children: Vec<String>,
+}
+
+impl Default for FileObjectMetadata {
+    fn default() -> Self {
+        Self {
+            version: 1u32,
+            name: String::new(),
+            id: Uuid::new_v4().as_hyphenated().to_string(),
+        }
+    }
 }
 
 impl Into<&str> for FileType {
@@ -275,19 +288,6 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut HashMap<String, FileOb
         .len()
         .try_into()
         .expect("should be able to convert to u32")
-}
-
-#[derive(Debug)]
-pub struct FileObject {
-    pub metadata: FileObjectMetadata,
-    /// Index (ordering within parent)
-    index: u32,
-    /// Object ID of the parent
-    parent: Option<String>,
-    file: FileInfo,
-    pub underlying_obj: UnderlyingFileObject,
-    extra_metadata: Table,
-    pub children: Vec<String>,
 }
 
 impl FileObject {

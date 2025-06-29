@@ -1,7 +1,7 @@
 use egui::{FontFamily, FontId, TextStyle};
 
 use crate::{
-    components::file_objects::{FileObject, UnderlyingFileObject},
+    components::file_objects::FileObject, components::file_objects::MutFileObjectTypeInterface,
     ui::SceneTextEditor,
 };
 
@@ -23,16 +23,12 @@ fn configure_text_styles(ctx: &egui::Context) {
 }
 
 impl<'a> CheesePaperApp<'a> {
-    pub fn new(cc: &eframe::CreationContext<'_>, file_object: &'a mut FileObject) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, file_object: &'a mut Box<dyn FileObject>) -> Self {
         configure_text_styles(&cc.egui_ctx);
 
-        match file_object {
-            FileObject {
-                metadata,
-                underlying_obj: UnderlyingFileObject::Scene(scene),
-                ..
-            } => Self {
-                editor: SceneTextEditor { metadata, scene },
+        match file_object.get_file_type_mut() {
+            MutFileObjectTypeInterface::Scene(scene) => Self {
+                editor: SceneTextEditor { scene: scene },
             },
             _ => panic!(),
         }

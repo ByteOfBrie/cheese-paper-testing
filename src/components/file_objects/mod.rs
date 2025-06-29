@@ -5,7 +5,7 @@ mod place;
 mod scene;
 mod utils;
 
-pub use base::{FileObject, FileObjectMetadata, UnderlyingFileObject};
+pub use base::{FileObject, FileObjectTypeInterface, MutFileObjectTypeInterface, from_file};
 pub use character::Character;
 pub use folder::Folder;
 pub use place::Place;

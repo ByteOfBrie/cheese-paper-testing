@@ -1,6 +1,4 @@
-use crate::components::file_objects::base::{
-    FileObject, BaseFileObject, metadata_extract_string,
-};
+use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
 
 #[derive(Debug)]
 struct PlaceMetadata {
@@ -107,5 +105,13 @@ impl FileObject for Place {
 
     fn get_base_mut(&mut self) -> &mut BaseFileObject {
         &mut self.base
+    }
+
+    fn get_file_type(&self) -> super::FileObjectTypeInterface {
+        super::FileObjectTypeInterface::Place(self)
+    }
+
+    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
+        super::MutFileObjectTypeInterface::Place(self)
     }
 }

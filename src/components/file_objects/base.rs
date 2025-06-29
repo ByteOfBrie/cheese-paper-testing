@@ -30,13 +30,19 @@ const HEADER_SPLIT: &str = "++++++++";
 ///
 
 #[derive(Debug)]
-pub enum UnderlyingFileObject {
-    Scene(Scene),
-    Folder(Folder),
-    Character(Character),
-    Place(Place),
+pub enum FileObjectTypeInterface<'a> {
+    Scene(&'a Scene),
+    Folder(&'a Folder),
+    Character(&'a Character),
+    Place(&'a Place),
 }
 
+pub enum MutFileObjectTypeInterface<'a> {
+    Scene(&'a mut Scene),
+    Folder(&'a mut Folder),
+    Character(&'a mut Character),
+    Place(&'a mut Place),
+}
 /// Baseline metadata for all file objects
 #[derive(Debug)]
 pub struct FileObjectMetadata {
@@ -88,17 +94,6 @@ impl Into<&str> for FileType {
             FileType::Folder => "folder",
             FileType::Character => "character",
             FileType::Place => "worldbuilding",
-        }
-    }
-}
-
-impl Into<FileType> for &UnderlyingFileObject {
-    fn into(self) -> FileType {
-        match self {
-            UnderlyingFileObject::Scene(_) => FileType::Scene,
-            UnderlyingFileObject::Folder(_) => FileType::Folder,
-            UnderlyingFileObject::Character(_) => FileType::Character,
-            UnderlyingFileObject::Place(_) => FileType::Place,
         }
     }
 }
@@ -694,4 +689,7 @@ pub trait FileObject: Debug {
 
         Ok(())
     }
+
+    fn get_file_type(&self) -> FileObjectTypeInterface;
+    fn get_file_type_mut(&mut self) -> MutFileObjectTypeInterface;
 }

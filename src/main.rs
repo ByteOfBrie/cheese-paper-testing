@@ -9,12 +9,9 @@ mod components;
 mod tiny_markdown;
 mod ui;
 
-use crate::components::file_objects::FileObject;
+use crate::components::file_objects::from_file;
 
-use crate::components::file_objects::Scene;
-use crate::components::file_objects::UnderlyingFileObject;
 use crate::ui::CheesePaperApp;
-use crate::ui::SceneTextEditor;
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -36,21 +33,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Using CLI interface");
         println!("{show_path:?}");
 
-        let file = FileObject::from_file(show_path, 0, None);
+        let file = from_file(show_path, 0, None);
 
         println!("file(s): {file:#?}");
     } else if let Some(show_path) = args.show_ui.as_deref() {
-        let mut files = FileObject::from_file(show_path, 0, None).unwrap();
+        let mut files = from_file(show_path, 0, None).unwrap();
 
-        let mut file = files.values_mut().next().unwrap();
-
-        let file_text = match &mut file.underlying_obj {
-            UnderlyingFileObject::Scene(scene) => scene.get_body(),
-            _ => {
-                println!("No underlying data to view");
-                return Ok(());
-            }
-        };
+        let file = files.values_mut().next().unwrap();
 
         eframe::run_native(
             "Cheese Paper Rust Single File",

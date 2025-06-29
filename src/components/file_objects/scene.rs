@@ -79,6 +79,14 @@ impl FileObject for Scene {
     fn get_base_mut(&mut self) -> &mut BaseFileObject {
         &mut self.base
     }
+
+    fn get_file_type(&self) -> super::FileObjectTypeInterface {
+        super::FileObjectTypeInterface::Scene(self)
+    }
+
+    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
+        super::MutFileObjectTypeInterface::Scene(self)
+    }
 }
 
 impl Scene {

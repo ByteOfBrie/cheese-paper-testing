@@ -8,8 +8,8 @@ use toml::Table;
 pub struct SceneMetadata {
     pub summary: String,
     pub notes: String,
-    pov: String, // TODO: create custom object for this
-    compile_status: bool,
+    pub pov: String, // TODO: create custom object for this
+    pub compile_status: bool,
 }
 
 impl Default for SceneMetadata {
@@ -26,7 +26,7 @@ impl Default for SceneMetadata {
 #[derive(Debug)]
 pub struct Scene {
     pub metadata: SceneMetadata,
-    text: String,
+    pub text: String,
 }
 
 impl Default for Scene {

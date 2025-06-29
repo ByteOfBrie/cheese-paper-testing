@@ -52,10 +52,10 @@ pub struct FileObjectMetadata {
     /// Version of the object, can eventually be used to detect compatibility changes
     version: u32,
     /// Name of the object (e.g., title of a scene, character name)
-    name: String,
+    pub name: String,
     /// ID unique across all objects. The reference implementations use UUIDv4, but any string
     /// is acceptable
-    id: String,
+    pub id: String,
 }
 
 impl Default for FileObjectMetadata {
@@ -288,7 +288,7 @@ fn fix_indexing(
 
 #[derive(Debug)]
 pub struct FileObject<UnderlyingFileObject> {
-    metadata: FileObjectMetadata,
+    pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     index: u32,
     /// Object ID of the parent
@@ -296,7 +296,7 @@ pub struct FileObject<UnderlyingFileObject> {
     file: FileInfo,
     pub underlying_obj: UnderlyingFileObject,
     extra_metadata: Table,
-    children: Vec<String>,
+    pub children: Vec<String>,
 }
 
 impl FileObject<UnderlyingFileObject> {

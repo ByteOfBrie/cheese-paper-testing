@@ -1,12 +1,13 @@
-use crate::components::file_objects::Scene;
 /// Text editor view for an entire scene object, will be embeded in other file objects
-use crate::components::file_objects::{FileObject, UnderlyingFileObject};
+use crate::components::file_objects::FileObjectMetadata;
+use crate::components::file_objects::Scene;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
 
 pub struct SceneTextEditor<'a> {
-    pub scene: &'a mut FileObject<Scene>,
+    pub scene: &'a mut Scene,
+    pub metadata: &'a mut FileObjectMetadata,
 }
 
 impl<'a> SceneTextEditor<'a> {
@@ -23,14 +24,12 @@ impl<'a> SceneTextEditor<'a> {
     }
 
     fn editor_ui(&mut self, ui: &mut egui::Ui) {
-        let SceneTextEditor { scene: file_object } = self;
+        let SceneTextEditor { scene, metadata } = self;
 
-        let scene = &mut file_object.underlying_obj;
-
-        let response = ui.add(&mut BaseTextEditor::new(&mut scene.get_body()));
+        let response = ui.add(&mut BaseTextEditor::new(&mut scene.text));
 
         if response.changed() {
-            println!("Changed lines: {}", scene.get_body());
+            println!("Changed lines in {}: {}", &metadata.name, scene.get_body());
             println!("{} words", scene.word_count());
         }
 

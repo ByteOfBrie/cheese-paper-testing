@@ -31,10 +31,11 @@ impl<'a> CheesePaperApp<'a> {
 
         match file_object {
             FileObject {
-                underlying_obj: UnderlyingFileObject::Scene(_),
+                metadata,
+                underlying_obj: UnderlyingFileObject::Scene(scene),
                 ..
             } => Self {
-                editor: SceneTextEditor { scene: file_object },
+                editor: SceneTextEditor { metadata, scene },
             },
             _ => panic!(),
         }

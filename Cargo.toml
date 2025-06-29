@@ -7,6 +7,7 @@ edition = "2024"
 # file components
 serde = "1.0"
 toml = "0.8"
+toml_edit = "0.22.27"
 regex = "1.11.1"
 uuid = { version = "1.17.0", features = ["v4"] }
 clap = { version = "4.5.40", features = ["derive"] }

@@ -1,4 +1,6 @@
-use crate::components::file_objects::base::{FileObjectType, metadata_extract_string};
+use crate::components::file_objects::base::{
+    ActualFileObject, BaseFileObject, metadata_extract_string,
+};
 use toml::Table;
 
 #[derive(Debug)]
@@ -24,18 +26,20 @@ impl Default for PlaceMetadata {
 
 #[derive(Debug)]
 pub struct Place {
+    base: BaseFileObject,
     metadata: PlaceMetadata,
 }
 
-impl Default for Place {
-    fn default() -> Self {
+impl Place {
+    pub fn new(base: BaseFileObject) -> Self {
         Self {
+            base,
             metadata: Default::default(),
         }
     }
 }
 
-impl FileObjectType for Place {
+impl ActualFileObject for Place {
     fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
         let mut modified = false;
 
@@ -65,5 +69,27 @@ impl FileObjectType for Place {
         }
 
         Ok(modified)
+    }
+
+    fn is_folder(&self) -> bool {
+        true
+    }
+
+    fn extension(&self) -> &'static str {
+        "toml"
+    }
+
+    fn empty_string_name(&self) -> &'static str {
+        "New Place"
+    }
+
+    fn load_body(&mut self, _data: String) {}
+
+    fn get_base(&self) -> &BaseFileObject {
+        &self.base
+    }
+
+    fn get_base_mut(&mut self) -> &mut BaseFileObject {
+        &mut self.base
     }
 }

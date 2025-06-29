@@ -1,5 +1,5 @@
 use crate::components::file_objects::base::{
-    FileObjectType, metadata_extract_bool, metadata_extract_string,
+    ActualFileObject, BaseFileObject, metadata_extract_bool, metadata_extract_string,
 };
 use regex::Regex;
 use toml::Table;
@@ -25,20 +25,12 @@ impl Default for SceneMetadata {
 
 #[derive(Debug)]
 pub struct Scene {
+    base: BaseFileObject,
     pub metadata: SceneMetadata,
     pub text: String,
 }
 
-impl Default for Scene {
-    fn default() -> Self {
-        Self {
-            metadata: Default::default(),
-            text: String::new(),
-        }
-    }
-}
-
-impl FileObjectType for Scene {
+impl ActualFileObject for Scene {
     fn load_metadata(&mut self, table: &mut Table) -> std::io::Result<bool> {
         let mut modified = false;
 
@@ -64,15 +56,39 @@ impl FileObjectType for Scene {
 
         Ok(modified)
     }
-}
 
-impl Scene {
-    pub fn load_extra_data(&mut self, data: String) {
+    fn is_folder(&self) -> bool {
+        false
+    }
+
+    fn extension(&self) -> &'static str {
+        "md"
+    }
+
+    fn empty_string_name(&self) -> &'static str {
+        "New Scene"
+    }
+
+    fn load_body(&mut self, data: String) {
         self.text = data.trim().to_string();
     }
 
-    pub fn get_body(&mut self) -> &mut String {
-        &mut self.text
+    fn get_base(&self) -> &BaseFileObject {
+        &self.base
+    }
+
+    fn get_base_mut(&mut self) -> &mut BaseFileObject {
+        &mut self.base
+    }
+}
+
+impl Scene {
+    pub fn new(base: BaseFileObject) -> Self {
+        Self {
+            base,
+            metadata: Default::default(),
+            text: String::new(),
+        }
     }
 
     pub fn word_count(&self) -> usize {

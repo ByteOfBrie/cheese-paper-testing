@@ -29,7 +29,7 @@ impl<'a> SceneTextEditor<'a> {
         let response = ui.add(&mut BaseTextEditor::new(&mut scene.text));
 
         if response.changed() {
-            println!("Changed lines in {}: {}", &metadata.name, scene.get_body());
+            println!("Changed lines in {}: {}", &metadata.name, &scene.text);
             println!("{} words", scene.word_count());
         }
 

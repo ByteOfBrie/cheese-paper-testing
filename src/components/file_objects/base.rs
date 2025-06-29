@@ -12,6 +12,7 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use toml::Table;
+use toml_edit::{DocumentMut, value};
 
 /// the maximum length of a name before we start trying to truncate it
 const FILENAME_MAX_LENGTH: usize = 30;
@@ -70,7 +71,7 @@ pub struct BaseFileObject {
     /// Object ID of the parent
     parent: Option<String>,
     file: FileInfo,
-    extra_metadata: Table,
+    extra_metadata: Table, // TODO: convert to be a store for the file_obj
     pub children: Vec<String>,
 }
 
@@ -337,7 +338,8 @@ pub fn from_file(
 
     let mut metadata = FileObjectMetadata::default();
 
-    let mut file_metadata_contents = metadata_str.parse::<Table>().unwrap();
+    // TODO: Use DocumentMut instead
+    let mut file_metadata_contents = metadata_str.parse::<Table>().expect("invalid metadata");
 
     if let Err(err) = load_base_metadata(&mut file_metadata_contents, &mut metadata, &mut file_info)
     {
@@ -372,11 +374,23 @@ pub fn from_file(
         }
     };
 
-    let mut underlying_obj = match file_type {
-        FileType::Scene => UnderlyingFileObject::Scene(Scene::default()),
-        FileType::Character => UnderlyingFileObject::Character(Character::default()),
-        FileType::Folder => UnderlyingFileObject::Folder(Folder::default()),
-        FileType::Place => UnderlyingFileObject::Place(Place::default()),
+    // The FileObject field
+    let mut children: Vec<String> = Vec::new();
+
+    let base = BaseFileObject {
+        metadata,
+        index,
+        parent,
+        file: file_info,
+        extra_metadata: file_metadata_contents,
+        children,
+    };
+
+    let mut underlying_obj: Box<dyn ActualFileObject> = match file_type {
+        FileType::Scene => Box::new(Scene::new(base)),
+        FileType::Character => Box::new(Character::new(base)),
+        FileType::Folder => Box::new(Folder::new(base)),
+        FileType::Place => Box::new(Place::new(base)),
     };
 
     if let Err(err) = underlying_obj.load_metadata(&mut file_metadata_contents) {
@@ -388,20 +402,12 @@ pub fn from_file(
         return None;
     }
 
-    match &mut underlying_obj {
-        UnderlyingFileObject::Scene(scene) => {
-            scene.load_extra_data(file_body);
-        }
-        _ => {}
-    }
+    underlying_obj.load_body(file_body);
 
     // Will eventually return this and all children
     // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
     // of cloning it
     let mut objects: HashMap<String, Box<dyn ActualFileObject>> = HashMap::new();
-
-    // The FileObject field
-    let mut children: Vec<String> = Vec::new();
 
     // Load children of this file object
     if file_type.is_folder() {
@@ -459,26 +465,13 @@ pub fn from_file(
                 &filename
             )
         }
-    }
 
-    if Into::<FileType>::into(&underlying_obj).is_folder() {
         // This will ensure that all children have the correct indexing. The only file objects
         // that aren't the children of some folder are the roots, which don't have indexing anyway
         fix_indexing(&mut children, &mut objects);
     }
 
-    objects.insert(
-        metadata.id.clone(),
-        Self {
-            metadata,
-            index,
-            parent,
-            file: file_info,
-            underlying_obj,
-            extra_metadata: file_metadata_contents,
-            children,
-        },
-    );
+    objects.insert(metadata.id.clone(), underlying_obj);
 
     Some(objects)
 }
@@ -542,19 +535,6 @@ impl BaseFileObject {
         }
 
         Ok(())
-    }
-}
-
-impl UnderlyingFileObject {
-    pub fn load_metadata(&mut self, table: &mut Table) -> Result<bool> {
-        let underlying_type: &mut dyn FileObjectType = match self {
-            UnderlyingFileObject::Scene(val) => val,
-            UnderlyingFileObject::Folder(val) => val,
-            UnderlyingFileObject::Place(val) => val,
-            UnderlyingFileObject::Character(val) => val,
-        };
-
-        underlying_type.load_metadata(table)
     }
 }
 

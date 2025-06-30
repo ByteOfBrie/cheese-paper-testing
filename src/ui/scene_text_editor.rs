@@ -46,10 +46,17 @@ impl<'a> SceneTextEditor<'a> {
 
     fn show_sidebar(&mut self, ui: &mut egui::Ui) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
-            ui.label("Summary");
-            ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary));
-            ui.label("Notes");
-            ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.scene.get_base_mut().metadata.name)
+                    .char_limit(50)
+                    .id_salt("name"),
+            );
+            ui.collapsing("Summary", |ui| {
+                ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary))
+            });
+            ui.collapsing("Notes", |ui| {
+                ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes))
+            });
         });
     }
 }

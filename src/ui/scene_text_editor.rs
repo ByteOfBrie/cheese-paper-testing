@@ -19,14 +19,7 @@ impl<'a> SceneTextEditor<'a> {
     fn ui(&mut self, ui: &mut egui::Ui) {
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| self.show_text_editor(ui));
-            cols[1].vertical(|ui| {
-                ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
-                    ui.label("Summary");
-                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary));
-                    ui.label("Notes");
-                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes));
-                })
-            })
+            cols[1].vertical(|ui| self.show_sidebar(ui));
         });
     }
 
@@ -46,5 +39,14 @@ impl<'a> SceneTextEditor<'a> {
                     println!("{} words", self.scene.word_count());
                 }
             });
+    }
+
+    fn show_sidebar(&mut self, ui: &mut egui::Ui) {
+        ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
+            ui.label("Summary");
+            ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary));
+            ui.label("Notes");
+            ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes));
+        });
     }
 }

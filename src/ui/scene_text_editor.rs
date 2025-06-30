@@ -17,10 +17,13 @@ impl<'a> SceneTextEditor<'a> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {
-        ui.columns(2, |cols| {
-            cols[0].vertical(|ui| self.show_text_editor(ui));
-            cols[1].vertical(|ui| self.show_sidebar(ui));
-        });
+        egui::SidePanel::right("metadata sidebar")
+            .resizable(true)
+            .default_width(200.0)
+            .width_range(50.0..=500.0)
+            .show_inside(ui, |ui| self.show_sidebar(ui));
+
+        egui::CentralPanel::default().show_inside(ui, |ui| self.show_text_editor(ui));
     }
 
     fn show_text_editor(&mut self, ui: &mut egui::Ui) {

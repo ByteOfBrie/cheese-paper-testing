@@ -77,6 +77,10 @@ impl FileObject for Folder {
         true
     }
 
+    fn has_body(&self) -> bool {
+        false
+    }
+
     fn extension(&self) -> &'static str {
         "toml"
     }
@@ -86,6 +90,9 @@ impl FileObject for Folder {
     }
 
     fn load_body(&mut self, _data: String) {}
+    fn get_body(&self) -> String {
+        String::new()
+    }
 
     fn get_base(&self) -> &BaseFileObject {
         &self.base

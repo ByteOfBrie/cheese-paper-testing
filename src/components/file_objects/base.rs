@@ -504,7 +504,12 @@ pub trait FileObject: Debug {
     fn get_base(&self) -> &BaseFileObject;
     fn get_base_mut(&mut self) -> &mut BaseFileObject;
 
+    /// If this has a body, currently only true for `Scene`
+    fn has_body(&self) -> bool;
+    /// Load the body when loading this file object
     fn load_body(&mut self, body: String);
+    /// Gets the contents of the body to be written when saving
+    fn get_body(&self) -> String;
 
     fn empty_string_name(&self) -> &'static str;
     fn is_folder(&self) -> bool;
@@ -675,6 +680,38 @@ pub trait FileObject: Debug {
         self.load_metadata()?;
 
         self.load_body(file_body);
+
+        Ok(())
+    }
+
+    fn save(&mut self) -> Result<()> {
+        if !self.get_base().file.modified {
+            // Nothing to do
+            return Ok(());
+        }
+
+        // Save this file
+        // Pre-check: attempt to create the folder
+        if self.is_folder() {
+            if !self.get_path().exists() {
+                create_dir(self.get_path())?;
+            }
+        }
+
+        // Ensure `toml_header` has the up-to-date metadata
+        self.get_base_mut().write_metadata();
+        self.write_metadata();
+
+        let mut final_str = self.get_base().toml_header.to_string();
+
+        // Add the scene body and the split (which we want to do even if there isn't any actual body)
+        if self.has_body() {
+            final_str.push_str(HEADER_SPLIT);
+            final_str.push_str("\n\n");
+            final_str.push_str(&self.get_body());
+        }
+
+        write_with_temp_file(&self.get_file(), final_str.as_bytes())?;
 
         Ok(())
     }

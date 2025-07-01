@@ -60,6 +60,10 @@ impl FileObject for Scene {
         false
     }
 
+    fn has_body(&self) -> bool {
+        true
+    }
+
     fn extension(&self) -> &'static str {
         "md"
     }

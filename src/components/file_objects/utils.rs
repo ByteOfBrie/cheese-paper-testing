@@ -1,3 +1,8 @@
+use std::ffi::{OsStr, OsString};
+use std::io::Write;
+use std::path::Path;
+use tempfile::Builder;
+
 /// Generic file utilities
 use regex::Regex;
 
@@ -66,4 +71,43 @@ pub fn get_index_from_name(name: &str) -> Option<u32> {
         Some((prefix, _suffix)) => prefix.parse().ok(),
         None => None,
     }
+}
+
+/// Atomically write a file
+pub fn write_with_temp_file(dest_path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let dirname = dest_path.parent().expect("Must pass a path with a parent");
+    let basename = dest_path.file_name().expect("Must write to a file");
+    let mut file = Builder::new().suffix(".tmp").tempfile_in(dirname)?;
+
+    file.write_all(contents)?;
+
+    let mut dest_path = dirname.to_path_buf();
+    dest_path.push(basename);
+
+    file.persist(dest_path)?;
+
+    Ok(())
+}
+
+#[test]
+fn test_write_with_temp_file() -> std::io::Result<()> {
+    let base_dir = tempfile::TempDir::new()?;
+    let filename = OsString::from("file.md");
+    let contents = "some file contents";
+
+    let file_full_path = base_dir.path().join(&filename);
+
+    assert!(!std::fs::metadata(&file_full_path).is_ok());
+    assert_eq!(std::fs::read_dir(base_dir.path())?.count(), 0);
+
+    write_with_temp_file(&file_full_path, contents.as_bytes())?;
+
+    assert!(std::fs::metadata(&file_full_path).is_ok());
+    assert_eq!(std::fs::read_dir(base_dir.path())?.count(), 1);
+
+    let disk_contents = std::fs::read_to_string(&file_full_path)?;
+
+    assert_eq!(contents, disk_contents);
+
+    Ok(())
 }

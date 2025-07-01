@@ -1,9 +1,11 @@
 use log::warn;
 use std::collections::HashMap;
+use std::fs::create_dir;
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
     add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
+    write_with_temp_file,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
 use std::ffi::OsString;

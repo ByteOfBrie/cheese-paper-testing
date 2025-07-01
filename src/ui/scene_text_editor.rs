@@ -55,12 +55,18 @@ impl<'a> SceneTextEditor<'a> {
                     .id_salt("name")
                     .desired_width(f32::INFINITY),
             );
-            ui.collapsing("Summary", |ui| {
-                ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary))
-            });
-            ui.collapsing("Notes", |ui| {
-                ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes))
-            });
+
+            egui::CollapsingHeader::new("Summary")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary))
+                });
+
+            egui::CollapsingHeader::new("Notes")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes))
+                });
         });
     }
 }

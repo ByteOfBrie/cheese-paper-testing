@@ -684,7 +684,7 @@ pub trait FileObject: Debug {
         Ok(())
     }
 
-    fn save(&mut self) -> Result<()> {
+    fn save(&mut self, objects: &mut HashMap<String, Box<dyn FileObject>>) -> Result<()> {
         if !self.get_base().file.modified {
             // Nothing to do
             return Ok(());
@@ -713,7 +713,33 @@ pub trait FileObject: Debug {
 
         write_with_temp_file(&self.get_file(), final_str.as_bytes())?;
 
-        Ok(())
+        let new_modtime = std::fs::metadata(&self.get_file())
+            .expect("attempted to load file that does not exist")
+            .modified()
+            .expect("Modtime not available");
+
+        // Update file on disk
+        self.get_base_mut().file.modtime = Some(new_modtime);
+
+        // Also save children, intentionally trying all of them
+        let mut errors = vec![];
+        for child_id in self.get_base().children.iter() {
+            let (child_id_removed, mut child) = objects
+                .remove_entry(child_id.as_str())
+                .expect("process_path_update needs to borrow a map with the children");
+
+            if let Err(err) = child.save(objects) {
+                errors.push(err);
+            }
+
+            objects.insert(child_id_removed, child);
+        }
+
+        // If we had *any* errors, return one of them
+        match errors.pop() {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 
     fn get_file_type(&self) -> FileObjectTypeInterface;

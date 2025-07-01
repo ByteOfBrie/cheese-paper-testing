@@ -87,6 +87,24 @@ impl FileObject for Scene {
     fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
         super::MutFileObjectTypeInterface::Scene(self)
     }
+
+    fn get_body(&self) -> String {
+        let mut full_text = String::new();
+
+        for line in self.text.split('\n') {
+            full_text.push_str(line.trim());
+            full_text.push('\n');
+        }
+
+        full_text
+    }
+
+    fn write_metadata(&mut self) {
+        self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
+        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+        self.base.toml_header["pov"] = toml_edit::value(&self.metadata.pov);
+        self.base.toml_header["compile_status"] = toml_edit::value(self.metadata.compile_status);
+    }
 }
 
 impl Scene {
@@ -119,16 +137,5 @@ impl Scene {
     pub fn word_count(&self) -> usize {
         let re = Regex::new(r"\s+").unwrap();
         re.split(&self.text).count()
-    }
-
-    pub fn assemble_save_text(&self) -> String {
-        let mut full_text = String::new();
-
-        for line in self.text.split('\n') {
-            full_text.push_str(line.trim());
-            full_text.push('\n');
-        }
-
-        full_text
     }
 }

@@ -114,4 +114,12 @@ impl FileObject for Place {
     fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
         super::MutFileObjectTypeInterface::Place(self)
     }
+
+    fn write_metadata(&mut self) {
+        self.base.toml_header["connection"] = toml_edit::value(&self.metadata.connection);
+        self.base.toml_header["description"] = toml_edit::value(&self.metadata.description);
+        self.base.toml_header["appearance"] = toml_edit::value(&self.metadata.appearance);
+        self.base.toml_header["other_senses"] = toml_edit::value(&self.metadata.other_senses);
+        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+    }
 }

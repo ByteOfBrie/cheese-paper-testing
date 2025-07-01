@@ -128,4 +128,14 @@ impl FileObject for Character {
     fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
         super::MutFileObjectTypeInterface::Character(self)
     }
+
+    fn write_metadata(&mut self) {
+        self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
+        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+        self.base.toml_header["appearance"] = toml_edit::value(&self.metadata.appearance);
+        self.base.toml_header["personality"] = toml_edit::value(&self.metadata.personality);
+        self.base.toml_header["goal"] = toml_edit::value(&self.metadata.goal);
+        self.base.toml_header["conflict"] = toml_edit::value(&self.metadata.conflict);
+        self.base.toml_header["habits"] = toml_edit::value(&self.metadata.habits);
+    }
 }

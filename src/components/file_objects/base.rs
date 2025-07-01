@@ -493,26 +493,10 @@ impl BaseFileObject {
         // TODO: when saving is implemented, save on creation (so that it can be used in other things)
     }
 
-    fn header_to_toml(&self) -> String {
-        // toml::to_string_pretty() seems like the approximate right thing to use here, but
-        // it seems like I either need to dump everything in a single data structure and
-        // serialize that, or try to get something working with toml_edit::DocumentMut
-        //
-        // toml_edit::DocumentMut is probably the better option if I can get it to work nicely
-        // probably calling a function in the underlying_object to serialize those fields too?
-        //
-        // and then since I'm keeping track of a document, I can maybe just keep the table
-        // from object creation and not deal with extra_metadata at all
-        String::new()
-    }
-
-    pub fn save(&mut self) -> Result<()> {
-        if !self.file.modified {
-            // Nothing to do
-            return Ok(());
-        }
-
-        Ok(())
+    fn write_metadata(&mut self) {
+        self.toml_header["version"] = toml_edit::value(self.metadata.version as i64);
+        self.toml_header["name"] = toml_edit::value(&self.metadata.name);
+        self.toml_header["id"] = toml_edit::value(&self.metadata.id);
     }
 }
 
@@ -530,6 +514,9 @@ pub trait FileObject: Debug {
     ///
     /// pulls from the file object instead of an argument (otherwise it's slightly tricky to do ownership)
     fn load_metadata(&mut self) -> Result<bool>;
+
+    /// Writes the current type-specific metadata to the BaseFileObjects toml_header
+    fn write_metadata(&mut self);
 
     /// Sets the index to this file, doing the move if necessary
     fn set_index(

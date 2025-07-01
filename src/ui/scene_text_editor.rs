@@ -31,7 +31,10 @@ impl<'a> SceneTextEditor<'a> {
             .id_salt("text")
             .auto_shrink(egui::Vec2b { x: false, y: false })
             .show(ui, |ui| {
-                let response = ui.add(&mut BaseTextEditor::new(&mut self.scene.text));
+                let response = ui.add_sized(
+                    ui.available_size(),
+                    &mut BaseTextEditor::new(&mut self.scene.text),
+                );
 
                 if response.changed() {
                     println!(
@@ -49,7 +52,8 @@ impl<'a> SceneTextEditor<'a> {
             ui.add(
                 egui::TextEdit::singleline(&mut self.scene.get_base_mut().metadata.name)
                     .char_limit(50)
-                    .id_salt("name"),
+                    .id_salt("name")
+                    .desired_width(f32::INFINITY),
             );
             ui.collapsing("Summary", |ui| {
                 ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary))

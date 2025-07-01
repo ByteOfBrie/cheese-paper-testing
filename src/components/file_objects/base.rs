@@ -72,8 +72,6 @@ pub struct BaseFileObject {
     pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
     pub index: u32,
-    /// Object ID of the parent
-    pub parent: Option<String>,
     pub file: FileInfo,
     pub toml_header: DocumentMut,
     pub children: Vec<String>,
@@ -289,11 +287,7 @@ fn fix_indexing(
 }
 
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(
-    filename: &Path,
-    index: u32,
-    parent: Option<String>,
-) -> Option<HashMap<String, Box<dyn FileObject>>> {
+pub fn from_file(filename: &Path, index: u32) -> Option<HashMap<String, Box<dyn FileObject>>> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
@@ -370,7 +364,6 @@ pub fn from_file(
     let mut base = BaseFileObject {
         metadata,
         index,
-        parent,
         file: file_info,
         toml_header,
         children: Vec::new(),
@@ -408,9 +401,7 @@ pub fn from_file(
                                 )
                                 .unwrap_or(0);
 
-                                if let Some(files) =
-                                    from_file(&file.path(), index, Some(base.metadata.id.clone()))
-                                {
+                                if let Some(files) = from_file(&file.path(), index) {
                                     for (child_file_id, child_file) in files {
                                         base.children.push(child_file_id.clone());
                                         objects.insert(child_file_id, child_file);
@@ -462,7 +453,7 @@ pub fn from_file(
 
 impl BaseFileObject {
     /// Create a new file object in a folder
-    pub fn new(file_type: FileType, dirname: PathBuf, index: u32, parent: Option<String>) -> Self {
+    pub fn new(file_type: FileType, dirname: PathBuf, index: u32) -> Self {
         let name = empty_string_name(file_type);
 
         let name = truncate_name(&name, FILENAME_MAX_LENGTH);
@@ -479,7 +470,6 @@ impl BaseFileObject {
         Self {
             metadata: FileObjectMetadata::default(),
             index,
-            parent,
             file: FileInfo {
                 dirname,
                 basename: base_path,

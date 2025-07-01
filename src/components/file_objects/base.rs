@@ -140,10 +140,10 @@ fn empty_string_name(file_type: FileType) -> String {
 pub struct FileInfo {
     /// Path of the directory containing this file
     /// `/foo/bar/` -> `/foo`
-    dirname: PathBuf,
+    pub dirname: PathBuf,
     /// Path of the file within the dirname
     /// `/foo/bar/` -> `bar`
-    basename: OsString,
+    pub basename: OsString,
     /// Modified time if the file exists
     modtime: Option<SystemTime>,
     pub modified: bool,

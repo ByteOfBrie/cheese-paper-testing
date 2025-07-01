@@ -36,37 +36,49 @@ impl<'a> SceneTextEditor<'a> {
                     &mut BaseTextEditor::new(&mut self.scene.text),
                 );
 
-                if response.changed() {
-                    println!(
-                        "Changed lines in {}: {}",
-                        &self.scene.get_base().metadata.name,
-                        &self.scene.text
-                    );
-                    println!("{} words", self.scene.word_count());
-                }
+                self.process_response(response);
             });
     }
 
     fn show_sidebar(&mut self, ui: &mut egui::Ui) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
-            ui.add(
+            let response = ui.add(
                 egui::TextEdit::singleline(&mut self.scene.get_base_mut().metadata.name)
                     .char_limit(50)
                     .id_salt("name")
                     .desired_width(f32::INFINITY),
             );
+            self.process_response(response);
 
             egui::CollapsingHeader::new("Summary")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary))
+                    let response =
+                        ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary));
+                    self.process_response(response);
                 });
 
             egui::CollapsingHeader::new("Notes")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes))
+                    let response = ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes));
+                    self.process_response(response);
                 });
+
+            egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
+                let words = self.scene.word_count();
+                let text = format!("{words} Words");
+                ui.vertical_centered(|ui| {
+                    let response = ui.label(text);
+                    self.process_response(response);
+                });
+            })
         });
+    }
+
+    fn process_response(&mut self, response: egui::Response) {
+        if response.changed() {
+            self.scene.get_base_mut().file.modified = true;
+        }
     }
 }

@@ -1,4 +1,5 @@
 use egui::{FontFamily, FontId, TextStyle};
+use std::time::{Duration, SystemTime};
 
 use crate::{
     components::file_objects::FileObject, components::file_objects::MutFileObjectTypeInterface,
@@ -7,11 +8,22 @@ use crate::{
 
 pub struct CheesePaperApp<'a> {
     pub editor: SceneTextEditor<'a>,
+    last_write: SystemTime,
 }
 
 impl eframe::App for CheesePaperApp<'_> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.editor.panels(ctx);
+        let current_time = SystemTime::now();
+        if current_time.duration_since(self.last_write).unwrap() > Duration::from_secs(5) {
+            println!("Writing at: {:#?}", current_time);
+            println!(
+                "Currently modified: {}",
+                self.editor.scene.get_base().file.modified
+            );
+            self.editor.scene.get_base_mut().file.modified = false;
+            self.last_write = current_time;
+        }
     }
 }
 
@@ -38,6 +50,7 @@ impl<'a> CheesePaperApp<'a> {
         match file_object.get_file_type_mut() {
             MutFileObjectTypeInterface::Scene(scene) => Self {
                 editor: SceneTextEditor { scene: scene },
+                last_write: SystemTime::now(),
             },
             _ => panic!(),
         }

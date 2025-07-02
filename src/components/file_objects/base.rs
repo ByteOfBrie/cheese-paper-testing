@@ -286,11 +286,12 @@ fn fix_indexing(
         .expect("should be able to convert to u32")
 }
 
+#[derive(Debug)]
 pub struct FileObjectCreation {
     /// The object that was requested
-    object: Box<dyn FileObject>,
+    pub object: Box<dyn FileObject>,
     /// All of the descendents of that file object (including children) in a hashmap that owns them
-    descendents: HashMap<String, Box<dyn FileObject>>,
+    pub descendents: HashMap<String, Box<dyn FileObject>>,
 }
 
 /// Load an arbitrary file object from a file on disk

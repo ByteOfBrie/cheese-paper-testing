@@ -33,13 +33,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Using CLI interface");
         println!("{show_path:?}");
 
-        let file = from_file(show_path, 0);
+        let file_object_creation = from_file(show_path, 0);
 
-        println!("file(s): {file:#?}");
+        println!("file(s): {:#?}", file_object_creation.unwrap().object);
     } else if let Some(show_path) = args.show_ui.as_deref() {
         let mut files = from_file(show_path, 0).unwrap();
 
-        let file = files.values_mut().next().unwrap();
+        let file = &mut files.object;
 
         eframe::run_native(
             "Cheese Paper Rust Single File",

@@ -9,7 +9,8 @@ mod components;
 mod tiny_markdown;
 mod ui;
 
-use crate::components::file_objects::from_file;
+use crate::components::file_objects::base::FileObjectCreation;
+use crate::components::file_objects::{FileObject, from_file};
 
 use crate::ui::CheesePaperApp;
 
@@ -35,16 +36,21 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let file_object_creation = from_file(show_path, 0);
 
-        println!("file(s): {:#?}", file_object_creation.unwrap().object);
+        println!("file(s): {:#?}", file_object_creation);
     } else if let Some(show_path) = args.show_ui.as_deref() {
-        let mut files = from_file(show_path, 0).unwrap();
+        let files = from_file(show_path, 0).unwrap();
 
-        let file = &mut files.object;
+        let mut file: Box<dyn FileObject> = match files {
+            FileObjectCreation::Scene(object, _descendents) => Box::new(object),
+            FileObjectCreation::Character(object, _descendents) => Box::new(object),
+            FileObjectCreation::Folder(object, _descendents) => Box::new(object),
+            FileObjectCreation::Place(object, _descendents) => Box::new(object),
+        };
 
         eframe::run_native(
             "Cheese Paper Rust Single File",
             Default::default(),
-            Box::new(|cc| Ok(Box::new(CheesePaperApp::new(cc, file)))),
+            Box::new(|cc| Ok(Box::new(CheesePaperApp::new(cc, &mut file)))),
         )
         .unwrap()
     }

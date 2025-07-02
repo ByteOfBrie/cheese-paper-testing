@@ -12,6 +12,7 @@ regex = "1.11.1"
 uuid = { version = "1.17.0", features = ["v4"] }
 clap = { version = "4.5.40", features = ["derive"] }
 log = "0.4.27"
+tempfile = "3.20.0"
 
 # ui
 egui = "0.31"
@@ -28,4 +29,3 @@ env_logger = { version = "0.10", default-features = false, features = [
     "auto-color",
     "humantime",
 ] }
-tempfile = "3.20.0"

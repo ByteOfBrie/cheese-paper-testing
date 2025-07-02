@@ -200,6 +200,7 @@ pub fn metadata_extract_bool(table: &DocumentMut, field_name: &str) -> Result<Op
 
 /// Reads the contents of a file from disk
 fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
+    println!("file to read: {:?}", file_to_read);
     let extension = match file_to_read.extension() {
         Some(val) => val,
         None => return Err(Error::new(ErrorKind::InvalidData, "value was not string")),
@@ -324,11 +325,11 @@ pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
 
     let (metadata_str, file_body) = match read_file_contents(&underlying_file) {
         Ok((metadata_str, file_body)) => (metadata_str, file_body),
-        Err(_) => {
+        Err(err) => {
             if filename.is_dir() {
                 ("".to_string(), "".to_string())
             } else {
-                log::error!("Failed to read file {:?}", &underlying_file);
+                log::error!("Failed to read file {:?}: {:?}", &underlying_file, err);
                 return None;
             }
         }

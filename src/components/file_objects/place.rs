@@ -1,4 +1,8 @@
-use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use crate::components::file_objects::base::{
+    BaseFileObject, FileObject, FileType, metadata_extract_string,
+};
+use std::io::Result;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
 struct PlaceMetadata {
@@ -28,7 +32,18 @@ pub struct Place {
 }
 
 impl Place {
-    pub fn new(base: BaseFileObject) -> Self {
+    pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
+        let mut place = Self {
+            base: BaseFileObject::new(FileType::Place, dirname, index),
+            metadata: PlaceMetadata::default(),
+        };
+
+        place.save(&mut HashMap::new())?;
+
+        Ok(place)
+    }
+
+    pub fn from_base(base: BaseFileObject) -> Self {
         let mut place = Self {
             base,
             metadata: Default::default(),

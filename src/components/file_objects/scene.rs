@@ -1,7 +1,9 @@
 use crate::components::file_objects::base::{
-    BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
+    BaseFileObject, FileObject, FileType, metadata_extract_bool, metadata_extract_string,
 };
 use regex::Regex;
+use std::io::Result;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
 pub struct SceneMetadata {
@@ -112,7 +114,20 @@ impl FileObject for Scene {
 }
 
 impl Scene {
-    pub fn new(base: BaseFileObject) -> Self {
+    pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
+        let mut scene = Self {
+            base: BaseFileObject::new(FileType::Scene, dirname, index),
+            metadata: SceneMetadata::default(),
+            text: String::new(),
+        };
+
+        scene.save(&mut HashMap::new())?;
+
+        Ok(scene)
+    }
+
+    // TODO: this should be a result
+    pub fn from_file_object(base: BaseFileObject) -> Self {
         let mut scene = Self {
             base,
             metadata: Default::default(),

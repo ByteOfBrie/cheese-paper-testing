@@ -466,13 +466,13 @@ pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
 
     Some(match file_type {
         FileType::Scene => {
-            let mut scene = Scene::new(base);
+            let mut scene = Scene::from_file_object(base);
             scene.load_body(file_body);
             FileObjectCreation::Scene(scene, objects)
         }
-        FileType::Character => FileObjectCreation::Character(Character::new(base), objects),
-        FileType::Folder => FileObjectCreation::Folder(Folder::new(base), objects),
-        FileType::Place => FileObjectCreation::Place(Place::new(base), objects),
+        FileType::Character => FileObjectCreation::Character(Character::from_base(base), objects),
+        FileType::Folder => FileObjectCreation::Folder(Folder::from_base(base), objects),
+        FileType::Place => FileObjectCreation::Place(Place::from_base(base), objects),
     })
 }
 

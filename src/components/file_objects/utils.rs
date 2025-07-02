@@ -1,4 +1,3 @@
-use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::path::Path;
 use tempfile::Builder;
@@ -92,7 +91,7 @@ pub fn write_with_temp_file(dest_path: &Path, contents: &[u8]) -> std::io::Resul
 #[test]
 fn test_write_with_temp_file() -> std::io::Result<()> {
     let base_dir = tempfile::TempDir::new()?;
-    let filename = OsString::from("file.md");
+    let filename = std::ffi::OsString::from("file.md");
     let contents = "some file contents";
 
     let file_full_path = base_dir.path().join(&filename);

@@ -145,7 +145,7 @@ pub struct FileInfo {
     /// `/foo/bar/` -> `bar`
     pub basename: OsString,
     /// Modified time if the file exists
-    modtime: Option<SystemTime>,
+    pub modtime: Option<SystemTime>,
     pub modified: bool,
 }
 
@@ -220,7 +220,7 @@ fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
 
 /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
 /// appropriate
-fn load_base_metadata(
+pub fn load_base_metadata(
     metadata_table: &DocumentMut,
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,

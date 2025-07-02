@@ -1,4 +1,4 @@
-mod base;
+pub mod base;
 mod character;
 mod folder;
 mod place;

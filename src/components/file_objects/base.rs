@@ -286,8 +286,15 @@ fn fix_indexing(
         .expect("should be able to convert to u32")
 }
 
+pub struct FileObjectCreation {
+    /// The object that was requested
+    object: Box<dyn FileObject>,
+    /// All of the descendents of that file object (including children) in a hashmap that owns them
+    descendents: HashMap<String, Box<dyn FileObject>>,
+}
+
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path, index: u32) -> Option<HashMap<String, Box<dyn FileObject>>> {
+pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
@@ -401,9 +408,16 @@ pub fn from_file(filename: &Path, index: u32) -> Option<HashMap<String, Box<dyn 
                                 )
                                 .unwrap_or(0);
 
-                                if let Some(files) = from_file(&file.path(), index) {
-                                    for (child_file_id, child_file) in files {
-                                        base.children.push(child_file_id.clone());
+                                if let Some(created_files) = from_file(&file.path(), index) {
+                                    let FileObjectCreation {
+                                        object,
+                                        mut descendents,
+                                    } = created_files;
+
+                                    base.children.push(object.get_base().metadata.id.clone());
+                                    objects.insert(object.get_base().metadata.id.clone(), object);
+
+                                    for (child_file_id, child_file) in descendents.drain() {
                                         objects.insert(child_file_id, child_file);
                                     }
                                 }
@@ -434,21 +448,19 @@ pub fn from_file(filename: &Path, index: u32) -> Option<HashMap<String, Box<dyn 
         fix_indexing(&mut base.children, &mut objects);
     }
 
-    let mut underlying_obj: Box<dyn FileObject> = match file_type {
+    let mut new_file_object: Box<dyn FileObject> = match file_type {
         FileType::Scene => Box::new(Scene::new(base)),
         FileType::Character => Box::new(Character::new(base)),
         FileType::Folder => Box::new(Folder::new(base)),
         FileType::Place => Box::new(Place::new(base)),
     };
 
-    underlying_obj.load_body(file_body);
+    new_file_object.load_body(file_body);
 
-    objects.insert(
-        underlying_obj.get_base().metadata.id.clone(),
-        underlying_obj,
-    );
-
-    Some(objects)
+    Some(FileObjectCreation {
+        object: new_file_object,
+        descendents: objects,
+    })
 }
 
 impl BaseFileObject {

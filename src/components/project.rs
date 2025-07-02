@@ -6,7 +6,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use toml_edit::DocumentMut;
 
-use crate::components::file_objects::base::{load_base_metadata, metadata_extract_string};
+use crate::components::file_objects::base::{
+    FileObjectCreation, load_base_metadata, metadata_extract_string,
+};
 
 /// An entire project. This is somewhat file_object like, but we don't implement everything,
 /// so it's separate (for now)
@@ -122,19 +124,16 @@ impl Project {
         // Load or create folders
         let text_path = Path::join(&path, "text");
         // index should maybe be an option here to rely more strongly on the type system
-        let text = match from_file(&text_path, 0) {
-            Some(created_object) => {
-                match created_object.object.get_file_type() {
-                    FileObjectTypeInterface::Folder(folder) => folder,
-                    _ => {
-                        return Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "could not load text for unknown reason",
-                        ));
-                    }
-                };
-                created_object
-            }
+        let (text, text_descendents) = match from_file(&text_path, 0) {
+            Some(created_object) => match created_object {
+                FileObjectCreation::Folder(folder, contents) => (folder, contents),
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "could not load text for unknown reason",
+                    ));
+                }
+            },
             None => {
                 return Err(Error::new(
                     ErrorKind::InvalidData,

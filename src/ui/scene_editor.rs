@@ -54,21 +54,6 @@ impl<'a> SceneTextEditor<'a> {
             );
             self.process_response(response);
 
-            egui::CollapsingHeader::new("Summary")
-                .default_open(true)
-                .show(ui, |ui| {
-                    let response =
-                        ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.summary));
-                    self.process_response(response);
-                });
-
-            egui::CollapsingHeader::new("Notes")
-                .default_open(true)
-                .show(ui, |ui| {
-                    let response = ui.add(&mut BaseTextEditor::new(&mut self.scene.metadata.notes));
-                    self.process_response(response);
-                });
-
             egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
                 let words = self.scene.word_count();
                 let text = format!("{words} Words");
@@ -76,7 +61,32 @@ impl<'a> SceneTextEditor<'a> {
                     let response = ui.label(text);
                     self.process_response(response);
                 });
-            })
+            });
+
+            // Make each text box take up a bit of the screen by default
+            // this could be smarter, but available/2.5 is visually better than /3, and /2
+            // doesn't work (because the collapsing headers themself take up space)
+            let min_height = ui.available_height() / 2.5;
+
+            egui::CollapsingHeader::new("Summary")
+                .default_open(true)
+                .show(ui, |ui| {
+                    let response = ui.add_sized(
+                        egui::vec2(ui.available_width(), min_height),
+                        &mut BaseTextEditor::new(&mut self.scene.metadata.summary),
+                    );
+                    self.process_response(response);
+                });
+
+            egui::CollapsingHeader::new("Notes")
+                .default_open(true)
+                .show(ui, |ui| {
+                    let response = ui.add_sized(
+                        egui::vec2(ui.available_width(), min_height),
+                        &mut BaseTextEditor::new(&mut self.scene.metadata.notes),
+                    );
+                    self.process_response(response);
+                });
         });
     }
 

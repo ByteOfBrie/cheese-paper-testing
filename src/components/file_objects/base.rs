@@ -680,7 +680,11 @@ pub trait FileObject: Debug {
             }
         }
 
-        // TODO: check if the filename is "correct", updating it if necessary
+        // Check if the filename is "correct", updating it if necessary
+        let calculated_filename = self.calculate_filename();
+        if self.get_base().file.basename != calculated_filename {
+            self.set_filename(calculated_filename, objects)?
+        }
 
         // Ensure `toml_header` has the up-to-date metadata
         self.get_base_mut().write_metadata();
@@ -726,6 +730,9 @@ pub trait FileObject: Debug {
         }
     }
 
+    /// Allow for downcasting this as a reference, useful for creating the editors
+    #[allow(dead_code)]
     fn get_file_type(&self) -> FileObjectTypeInterface;
+    /// Allow for downcasting this as a mutable reference, useful for creating the editors
     fn get_file_type_mut(&mut self) -> MutFileObjectTypeInterface;
 }

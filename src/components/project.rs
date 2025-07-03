@@ -77,12 +77,12 @@ fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, Fi
 
 impl Project {
     /// Create a new project
-    fn new(dirname: PathBuf, project_name: String) -> Self {
+    pub fn new(dirname: PathBuf, project_name: String) -> Self {
         unimplemented!()
     }
 
     /// Load an existing project from disk
-    fn load(path: PathBuf) -> Result<Self> {
+    pub fn load(path: PathBuf) -> Result<Self> {
         if !path.exists() {
             return Err(Error::new(
                 ErrorKind::NotADirectory,
@@ -184,7 +184,11 @@ impl Project {
         Ok(project)
     }
 
-    fn save(&mut self) {
+    pub fn save(&mut self) -> Result<()> {
+        if !self.file.modified {
+            return Ok(());
+        }
+
         unimplemented!()
         // self.text.save()
     }

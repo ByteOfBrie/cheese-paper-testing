@@ -38,7 +38,7 @@ pub struct Character {
 impl Character {
     pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
         let mut character = Self {
-            base: BaseFileObject::new(FileType::Character, dirname, index),
+            base: BaseFileObject::new(dirname, Some(index)),
             metadata: CharacterMetadata::default(),
         };
 

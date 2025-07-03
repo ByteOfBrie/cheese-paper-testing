@@ -31,7 +31,7 @@ pub struct Folder {
 impl Folder {
     pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
         let mut folder = Self {
-            base: BaseFileObject::new(FileType::Folder, dirname, index),
+            base: BaseFileObject::new(dirname, Some(index)),
             metadata: FolderMetadata::default(),
         };
 
@@ -42,7 +42,7 @@ impl Folder {
 
     pub fn new_top_level(dirname: PathBuf, name: String) -> Result<Self> {
         let mut folder = Self {
-            base: BaseFileObject::new(FileType::Folder, dirname, 0),
+            base: BaseFileObject::new(dirname, None),
             metadata: FolderMetadata::default(),
         };
 

@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Using CLI interface");
         println!("{show_path:?}");
 
-        let file_object_creation = from_file(show_path, 0);
+        let file_object_creation = from_file(show_path, Some(0));
 
         println!("file(s): {:#?}", file_object_creation);
     } else if let Some(project_path) = args.show_project.as_deref() {
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         println!("Project: {project:#?}");
     } else if let Some(show_path) = args.show_ui.as_deref() {
-        let files = from_file(show_path, 0).unwrap();
+        let files = from_file(show_path, Some(0)).unwrap();
 
         let mut file: Box<dyn FileObject> = match files {
             FileObjectCreation::Scene(object, _descendents) => Box::new(object),

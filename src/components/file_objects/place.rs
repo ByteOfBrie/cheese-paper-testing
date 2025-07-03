@@ -34,7 +34,7 @@ pub struct Place {
 impl Place {
     pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
         let mut place = Self {
-            base: BaseFileObject::new(FileType::Place, dirname, index),
+            base: BaseFileObject::new(dirname, Some(index)),
             metadata: PlaceMetadata::default(),
         };
 

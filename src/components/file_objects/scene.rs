@@ -116,7 +116,7 @@ impl FileObject for Scene {
 impl Scene {
     pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
         let mut scene = Self {
-            base: BaseFileObject::new(FileType::Scene, dirname, index),
+            base: BaseFileObject::new(dirname, Some(index)),
             metadata: SceneMetadata::default(),
             text: String::new(),
         };

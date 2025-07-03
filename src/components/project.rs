@@ -50,7 +50,7 @@ const PROJECT_INFO_NAME: &str = "project.toml";
 
 fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, FileObjectStore)> {
     if folder_path.exists() {
-        match from_file(&folder_path, 0) {
+        match from_file(&folder_path, None) {
             Some(created_object) => match created_object {
                 FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
                 _ => {

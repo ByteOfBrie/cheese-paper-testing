@@ -32,6 +32,7 @@ const HEADER_SPLIT: &str = "++++++++";
 ///
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum FileObjectTypeInterface<'a> {
     Scene(&'a Scene),
     Folder(&'a Folder),
@@ -71,7 +72,7 @@ pub enum FileType {
 pub struct BaseFileObject {
     pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
-    pub index: u32,
+    pub index: Option<u32>,
     pub file: FileInfo,
     pub toml_header: DocumentMut,
     pub children: Vec<String>,
@@ -251,7 +252,9 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> u3
 
         let child_base = child.get_base();
 
-        if child_base.index
+        if child_base
+            .index
+            .expect("Children should always have indexes")
             != count
                 .try_into()
                 .expect("u32 should be massive overkill for indexes")
@@ -293,7 +296,7 @@ pub enum FileObjectCreation {
 
 // TODO: this function probably doesn't make sense as an option given the other code I'm writing
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
+pub fn from_file(filename: &Path, index: Option<u32>) -> Option<FileObjectCreation> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
@@ -406,7 +409,7 @@ pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
                                 )
                                 .unwrap_or(0);
 
-                                if let Some(created_files) = from_file(&file.path(), index) {
+                                if let Some(created_files) = from_file(&file.path(), Some(index)) {
                                     let (object, mut descendents): (Box<dyn FileObject>, _) =
                                         match created_files {
                                             FileObjectCreation::Scene(object, descendents) => {
@@ -471,39 +474,19 @@ pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
 
 impl BaseFileObject {
     /// Create a new file object in a folder
-    pub fn new(file_type: FileType, dirname: PathBuf, index: u32) -> Self {
-        let name = match file_type {
-            FileType::Scene => "New Scene",
-            FileType::Character => "New Character",
-            FileType::Folder => "New Folder",
-            FileType::Place => "New Place",
-        };
-
-        let name = truncate_name(&name, FILENAME_MAX_LENGTH);
-        let name = process_name_for_filename(name);
-        let name = add_index_to_name(&name, index);
-
-        let mut base_path = OsString::from(name);
-
-        if !file_type.is_folder() {
-            base_path.push(".");
-            base_path.push(file_type.extension());
-        }
-
+    pub fn new(dirname: PathBuf, index: Option<u32>) -> Self {
         Self {
             metadata: FileObjectMetadata::default(),
             index,
             file: FileInfo {
                 dirname,
-                basename: base_path,
+                basename: OsString::new(),
                 modtime: None,
                 modified: true, // Newly added files are modified (since they don't exist on disk)
             },
             toml_header: DocumentMut::new(),
             children: Vec::new(),
         }
-
-        // TODO: when saving is implemented, save on creation (so that it can be used in other things)
     }
 
     fn write_metadata(&mut self) {
@@ -538,16 +521,8 @@ pub trait FileObject: Debug {
 
     /// Sets the index to this file, doing the move if necessary
     fn set_index(&mut self, new_index: u32, objects: &mut FileObjectStore) -> Result<()> {
-        self.get_base_mut().index = new_index;
+        self.get_base_mut().index = Some(new_index);
 
-        self.set_filename(self.calculate_filename(), objects)
-    }
-
-    /// Recalculates the filename from the object property
-    ///
-    /// Unlike with `set_index`, we expect the underlying values to be borrowed directly,
-    /// rather than having a callback with our updated value.
-    fn set_filename_from_name(&mut self, objects: &mut FileObjectStore) -> Result<()> {
         self.set_filename(self.calculate_filename(), objects)
     }
 
@@ -558,18 +533,23 @@ pub trait FileObject: Debug {
             true => self.empty_string_name(),
         };
 
-        let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
-        let file_safe_name = process_name_for_filename(truncated_name);
-        let final_name = add_index_to_name(&file_safe_name, self.get_base().index);
+        let mut basename = match self.get_base().index {
+            Some(index) => {
+                let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
+                let file_safe_name = process_name_for_filename(truncated_name);
+                let final_name = add_index_to_name(&file_safe_name, index);
 
-        let mut filename = OsString::from(final_name);
+                OsString::from(final_name)
+            }
+            None => OsString::from(process_name_for_filename(base_name)),
+        };
 
         if self.is_folder() {
-            filename.push(".");
-            filename.push(&self.extension());
+            basename.push(".");
+            basename.push(&self.extension());
         }
 
-        filename
+        basename
     }
 
     /// Change the filename in the base object and on disk, processing any required updates
@@ -699,6 +679,8 @@ pub trait FileObject: Debug {
                 create_dir(self.get_path())?;
             }
         }
+
+        // TODO: check if the filename is "correct", updating it if necessary
 
         // Ensure `toml_header` has the up-to-date metadata
         self.get_base_mut().write_metadata();

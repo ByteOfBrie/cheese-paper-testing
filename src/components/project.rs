@@ -1,5 +1,5 @@
 use crate::components::file_objects::{
-    FileInfo, FileObjectMetadata, FileObjectTypeInterface, Folder, from_file,
+    FileInfo, FileObjectMetadata, FileObjectStore, FileObjectTypeInterface, Folder, from_file,
 };
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
@@ -47,6 +47,26 @@ impl Default for ProjectMetadata {
 }
 
 const PROJECT_INFO_NAME: &str = "project.toml";
+
+fn load_top_level_folder(folder_path: &Path) -> Result<(Folder, FileObjectStore)> {
+    match from_file(&folder_path, 0) {
+        Some(created_object) => match created_object {
+            FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "could not load text for unknown reason",
+                ));
+            }
+        },
+        None => {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "could not load text for unknown reason",
+            ));
+        }
+    }
+}
 
 impl Project {
     /// Create a new project
@@ -124,23 +144,7 @@ impl Project {
         // Load or create folders
         let text_path = Path::join(&path, "text");
         // index should maybe be an option here to rely more strongly on the type system
-        let (text, text_descendents) = match from_file(&text_path, 0) {
-            Some(created_object) => match created_object {
-                FileObjectCreation::Folder(folder, contents) => (folder, contents),
-                _ => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "could not load text for unknown reason",
-                    ));
-                }
-            },
-            None => {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "could not load text for unknown reason",
-                ));
-            }
-        };
+        let (text, text_descendents) = load_top_level_folder(&text_path)?;
 
         load_base_metadata(&toml_header, &mut base_metadata, &mut file_info)?;
 

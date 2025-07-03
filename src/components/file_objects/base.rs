@@ -132,6 +132,8 @@ impl FileType {
     }
 }
 
+pub type FileObjectStore = HashMap<String, Box<dyn FileObject>>;
+
 fn empty_string_name(file_type: FileType) -> String {
     format!("new {}", Into::<&str>::into(file_type))
 }
@@ -246,10 +248,7 @@ pub fn load_base_metadata(
 
 /// For ease of calling, `objects`` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(
-    children: &mut Vec<String>,
-    objects: &mut HashMap<String, Box<dyn FileObject>>,
-) -> u32 {
+fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> u32 {
     for (count, child_id) in children.iter().enumerate() {
         let (child_id, mut child) = objects
             .remove_entry(child_id.as_str())
@@ -291,10 +290,10 @@ fn fix_indexing(
 /// All of the descendents of that file object (including children) in a hashmap that owns them
 #[derive(Debug)]
 pub enum FileObjectCreation {
-    Scene(Scene, HashMap<String, Box<dyn FileObject>>),
-    Folder(Folder, HashMap<String, Box<dyn FileObject>>),
-    Character(Character, HashMap<String, Box<dyn FileObject>>),
-    Place(Place, HashMap<String, Box<dyn FileObject>>),
+    Scene(Scene, FileObjectStore),
+    Folder(Folder, FileObjectStore),
+    Character(Character, FileObjectStore),
+    Place(Place, FileObjectStore),
 }
 
 // TODO: this function probably doesn't make sense as an option given the other code I'm writing
@@ -384,7 +383,7 @@ pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
     // Will eventually return this and all children
     // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
     // of cloning it
-    let mut objects: HashMap<String, Box<dyn FileObject>> = HashMap::new();
+    let mut objects: FileObjectStore = HashMap::new();
 
     // Load children of this file object
     if file_type.is_folder() {
@@ -539,11 +538,7 @@ pub trait FileObject: Debug {
     fn write_metadata(&mut self);
 
     /// Sets the index to this file, doing the move if necessary
-    fn set_index(
-        &mut self,
-        new_index: u32,
-        objects: &mut HashMap<String, Box<dyn FileObject>>,
-    ) -> Result<()> {
+    fn set_index(&mut self, new_index: u32, objects: &mut FileObjectStore) -> Result<()> {
         self.get_base_mut().index = new_index;
 
         self.set_filename(self.calculate_filename(), objects)
@@ -553,10 +548,7 @@ pub trait FileObject: Debug {
     ///
     /// Unlike with `set_index`, we expect the underlying values to be borrowed directly,
     /// rather than having a callback with our updated value.
-    fn set_filename_from_name(
-        &mut self,
-        objects: &mut HashMap<String, Box<dyn FileObject>>,
-    ) -> Result<()> {
+    fn set_filename_from_name(&mut self, objects: &mut FileObjectStore) -> Result<()> {
         self.set_filename(self.calculate_filename(), objects)
     }
 
@@ -585,7 +577,7 @@ pub trait FileObject: Debug {
     fn set_filename(
         &mut self,
         new_filename: OsString,
-        objects: &mut HashMap<String, Box<dyn FileObject>>,
+        objects: &mut FileObjectStore,
     ) -> Result<()> {
         let old_path = self.get_path();
         let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
@@ -631,11 +623,7 @@ pub trait FileObject: Debug {
     }
 
     /// When the parent changes path, updates this dirname and any other children
-    fn process_path_update(
-        &mut self,
-        new_directory: PathBuf,
-        objects: &mut HashMap<String, Box<dyn FileObject>>,
-    ) {
+    fn process_path_update(&mut self, new_directory: PathBuf, objects: &mut FileObjectStore) {
         self.get_base_mut().file.dirname = new_directory;
 
         // Propogate this to any children
@@ -699,7 +687,7 @@ pub trait FileObject: Debug {
         Ok(())
     }
 
-    fn save(&mut self, objects: &mut HashMap<String, Box<dyn FileObject>>) -> Result<()> {
+    fn save(&mut self, objects: &mut FileObjectStore) -> Result<()> {
         if !self.get_base().file.modified {
             // Nothing to do
             return Ok(());

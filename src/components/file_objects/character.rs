@@ -5,14 +5,14 @@ use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
-struct CharacterMetadata {
-    summary: String,
-    notes: String,
-    appearance: String,
-    personality: String,
-    goal: String,
-    conflict: String,
-    habits: String,
+pub struct CharacterMetadata {
+    pub summary: String,
+    pub notes: String,
+    pub appearance: String,
+    pub personality: String,
+    pub goal: String,
+    pub conflict: String,
+    pub habits: String,
 }
 
 impl Default for CharacterMetadata {
@@ -31,8 +31,8 @@ impl Default for CharacterMetadata {
 
 #[derive(Debug)]
 pub struct Character {
-    base: BaseFileObject,
-    metadata: CharacterMetadata,
+    pub base: BaseFileObject,
+    pub metadata: CharacterMetadata,
 }
 
 impl Character {

@@ -5,12 +5,12 @@ use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
-struct PlaceMetadata {
-    connection: String,
-    description: String,
-    appearance: String,
-    other_senses: String,
-    notes: String,
+pub struct PlaceMetadata {
+    pub connection: String,
+    pub description: String,
+    pub appearance: String,
+    pub other_senses: String,
+    pub notes: String,
 }
 
 impl Default for PlaceMetadata {
@@ -27,8 +27,8 @@ impl Default for PlaceMetadata {
 
 #[derive(Debug)]
 pub struct Place {
-    base: BaseFileObject,
-    metadata: PlaceMetadata,
+    pub base: BaseFileObject,
+    pub metadata: PlaceMetadata,
 }
 
 impl Place {

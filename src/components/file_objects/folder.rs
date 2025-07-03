@@ -6,10 +6,10 @@ use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
-struct FolderMetadata {
-    summary: String,
-    notes: String,
-    compile_status: bool,
+pub struct FolderMetadata {
+    pub summary: String,
+    pub notes: String,
+    pub compile_status: bool,
 }
 
 impl Default for FolderMetadata {
@@ -24,8 +24,8 @@ impl Default for FolderMetadata {
 
 #[derive(Debug)]
 pub struct Folder {
-    base: BaseFileObject,
-    metadata: FolderMetadata,
+    pub base: BaseFileObject,
+    pub metadata: FolderMetadata,
 }
 
 impl Folder {

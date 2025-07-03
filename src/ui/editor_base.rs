@@ -1,16 +1,18 @@
 use egui::{FontFamily, FontId, TextStyle};
 use std::time::{Duration, SystemTime};
 
+use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneTextEditor};
+
 use crate::ui::file_object_editor::FileObjectEditor;
-use crate::ui::folder_editor::FolderEditor;
 use crate::{
     components::file_objects::FileObject, components::file_objects::MutFileObjectTypeInterface,
-    ui::SceneTextEditor,
 };
 
 pub enum FileEditor<'a> {
     Scene(SceneTextEditor<'a>),
+    Character(CharacterEditor<'a>),
     Folder(FolderEditor<'a>),
+    Place(PlaceEditor<'a>),
 }
 
 pub struct CheesePaperApp<'a> {
@@ -21,8 +23,10 @@ pub struct CheesePaperApp<'a> {
 impl<'a> eframe::App for CheesePaperApp<'a> {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         match &mut self.editor {
-            FileEditor::Scene(scene_editor) => scene_editor.panels(ctx),
-            FileEditor::Folder(folder_editor) => folder_editor.panels(ctx),
+            FileEditor::Scene(editor) => editor.panels(ctx),
+            FileEditor::Character(editor) => editor.panels(ctx),
+            FileEditor::Folder(editor) => editor.panels(ctx),
+            FileEditor::Place(editor) => editor.panels(ctx),
         }
         // self.editor.panels(ctx);
         let current_time = SystemTime::now();
@@ -62,7 +66,16 @@ impl<'a> CheesePaperApp<'a> {
                 editor: FileEditor::Folder(FolderEditor { folder: folder }),
                 last_write: SystemTime::now(),
             },
-            _ => panic!(),
+            MutFileObjectTypeInterface::Character(character) => Self {
+                editor: FileEditor::Character(CharacterEditor {
+                    character: character,
+                }),
+                last_write: SystemTime::now(),
+            },
+            MutFileObjectTypeInterface::Place(place) => Self {
+                editor: FileEditor::Place(PlaceEditor { place: place }),
+                last_write: SystemTime::now(),
+            },
         }
     }
 }

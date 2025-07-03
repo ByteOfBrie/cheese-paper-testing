@@ -1,5 +1,6 @@
 mod base_text_editor;
 mod editor_base;
+mod file_object_editor;
 mod folder_editor;
 mod scene_editor;
 

@@ -1,21 +1,25 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
+use crate::ui::file_object_editor::FileObjectEditor;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
 
 /// Text editor view for an entire scene object, will be embeded in other file objects
+#[derive(Debug)]
 pub struct SceneTextEditor<'a> {
     pub scene: &'a mut Scene,
 }
 
-impl<'a> SceneTextEditor<'a> {
-    pub fn panels(&mut self, ctx: &egui::Context) {
+impl<'a> FileObjectEditor<'a> for SceneTextEditor<'a> {
+    fn panels(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui(ui);
         });
     }
+}
 
+impl<'a> SceneTextEditor<'a> {
     fn ui(&mut self, ui: &mut egui::Ui) {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)

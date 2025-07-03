@@ -561,6 +561,13 @@ pub trait FileObject: Debug {
         let old_path = self.get_path();
         let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
 
+        if new_path.exists() {
+            return Err(Error::new(
+                ErrorKind::InvalidFilename,
+                format!("attempted to rename {old_path:?}, but {new_path:?} already exists"),
+            ));
+        }
+
         if new_path != old_path {
             std::fs::rename(old_path, &new_path)?;
             self.get_base_mut().file.basename = new_filename;

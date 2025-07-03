@@ -1,6 +1,7 @@
 use crate::components::file_objects::{
     FileInfo, FileObjectMetadata, FileObjectStore, FileObjectTypeInterface, Folder, from_file,
 };
+use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::path::PathBuf;
@@ -20,8 +21,7 @@ pub struct Project {
     text: Folder,
     characters: Folder,
     worldbuilding: Folder,
-    /// Whether the Project's files themselves have been modified, not related to children
-    modified: bool,
+    objects: FileObjectStore,
     toml_header: DocumentMut,
 }
 
@@ -48,23 +48,30 @@ impl Default for ProjectMetadata {
 
 const PROJECT_INFO_NAME: &str = "project.toml";
 
-fn load_top_level_folder(folder_path: &Path) -> Result<(Folder, FileObjectStore)> {
-    match from_file(&folder_path, 0) {
-        Some(created_object) => match created_object {
-            FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
-            _ => {
+fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, FileObjectStore)> {
+    if folder_path.exists() {
+        match from_file(&folder_path, 0) {
+            Some(created_object) => match created_object {
+                FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
+                _ => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "could not load text for unknown reason",
+                    ));
+                }
+            },
+            None => {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
                     "could not load text for unknown reason",
                 ));
             }
-        },
-        None => {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                "could not load text for unknown reason",
-            ));
         }
+    } else {
+        Ok((
+            Folder::new_top_level(folder_path.to_owned(), name)?,
+            HashMap::new(),
+        ))
     }
 }
 
@@ -142,13 +149,39 @@ impl Project {
         };
 
         // Load or create folders
-        let text_path = Path::join(&path, "text");
-        // index should maybe be an option here to rely more strongly on the type system
-        let (text, text_descendents) = load_top_level_folder(&text_path)?;
+        let (text, mut descendents) =
+            load_top_level_folder(&Path::join(&path, "text"), "text".to_string())?;
+
+        let (characters, characters_descendents) =
+            load_top_level_folder(&Path::join(&path, "characters"), "characters".to_string())?;
+
+        let (worldbuilding, worldbuilding_descendents) = load_top_level_folder(
+            &Path::join(&path, "worldbuilding"),
+            "worldbuilding".to_string(),
+        )?;
+
+        // merge all of the descendents into a single hashmap that owns all of them
+        descendents.extend(characters_descendents);
+        descendents.extend(worldbuilding_descendents);
 
         load_base_metadata(&toml_header, &mut base_metadata, &mut file_info)?;
 
-        unimplemented!()
+        let mut project = Self {
+            metadata,
+            base_metadata,
+            file: file_info,
+            text,
+            characters,
+            worldbuilding,
+            toml_header,
+            objects: descendents,
+        };
+
+        project.load_metadata()?;
+
+        project.save();
+
+        Ok(project)
     }
 
     fn save(&mut self) {

@@ -134,10 +134,6 @@ impl FileType {
 
 pub type FileObjectStore = HashMap<String, Box<dyn FileObject>>;
 
-fn empty_string_name(file_type: FileType) -> String {
-    format!("new {}", Into::<&str>::into(file_type))
-}
-
 #[derive(Debug)]
 pub struct FileInfo {
     /// Path of the directory containing this file
@@ -478,7 +474,12 @@ pub fn from_file(filename: &Path, index: u32) -> Option<FileObjectCreation> {
 impl BaseFileObject {
     /// Create a new file object in a folder
     pub fn new(file_type: FileType, dirname: PathBuf, index: u32) -> Self {
-        let name = empty_string_name(file_type);
+        let name = match file_type {
+            FileType::Scene => "New Scene",
+            FileType::Character => "New Character",
+            FileType::Folder => "New Folder",
+            FileType::Place => "New Place",
+        };
 
         let name = truncate_name(&name, FILENAME_MAX_LENGTH);
         let name = process_name_for_filename(name);

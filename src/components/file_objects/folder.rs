@@ -1,6 +1,7 @@
 use crate::components::file_objects::base::{
     BaseFileObject, FileObject, FileType, metadata_extract_bool, metadata_extract_string,
 };
+use std::ffi::OsString;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -33,6 +34,20 @@ impl Folder {
             base: BaseFileObject::new(FileType::Folder, dirname, index),
             metadata: FolderMetadata::default(),
         };
+
+        folder.save(&mut HashMap::new())?;
+
+        Ok(folder)
+    }
+
+    pub fn new_top_level(dirname: PathBuf, name: String) -> Result<Self> {
+        let mut folder = Self {
+            base: BaseFileObject::new(FileType::Folder, dirname, 0),
+            metadata: FolderMetadata::default(),
+        };
+
+        folder.get_base_mut().metadata.name = name.clone();
+        folder.get_base_mut().file.basename = OsString::from(name);
 
         folder.save(&mut HashMap::new())?;
 

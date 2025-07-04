@@ -242,7 +242,7 @@ pub fn load_base_metadata(
     Ok(())
 }
 
-/// For ease of calling, `objects`` can contain arbitrary objects, only values contained
+/// For ease of calling, `objects` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
 fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> u32 {
     for (count, child_id) in children.iter().enumerate() {
@@ -294,7 +294,117 @@ pub enum FileObjectCreation {
     Place(Place, FileObjectStore),
 }
 
-// TODO: this function probably doesn't make sense as an option given the other code I'm writing
+fn is_child(parent_id: &str, child_id: &str, objects: &mut FileObjectStore) -> bool {
+    unimplemented!()
+}
+
+fn create_index_gap(parent_id: &str, index: usize, object: &mut FileObjectStore) -> Result<()> {
+    unimplemented!()
+}
+
+/// Move a child between two folders, `source_file_id` and `dest_file_id`
+///
+/// This can't be part of the FileObject trait because ownership is complicated between
+/// the
+fn move_child(
+    moving_file_id: &str,
+    source_file_id: &str,
+    dest_file_id: &str,
+    new_index: u32,
+    objects: &mut FileObjectStore,
+) -> Result<()> {
+    // TODO:
+    // Check for it being a valid move:
+    // * can't move to one of your own children
+    // * can't move something without an index
+    // * shouldn't move a folder where it already is
+
+    // TODO:
+    // Create index "gap" in destination (helpful to do first in case we're moving "up" and this
+    // changes the path of the object being moved)
+
+    // Remove the moving object from it's current parent
+    let source = objects
+        .get_mut(source_file_id)
+        .expect("objects should contain dest file id");
+
+    let child_id_position_option = source
+        .get_base()
+        .children
+        .iter()
+        .position(|val| moving_file_id == val);
+
+    // This should be impossible but we check anyway
+    if child_id_position_option.is_none() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!(
+                "Attempted to remove a child from an element that doesn't contain it: \
+                        child id: {moving_file_id}, parent: {source_file_id}",
+            ),
+        ));
+    }
+
+    let child_id_position = child_id_position_option.unwrap();
+
+    let child_id_string = source.get_base_mut().children.remove(child_id_position);
+
+    // Object is now removed from it's current parent, although still actually there on disk
+    // We should also stop using `source` or the (scary) borrow checker will get mad at us
+
+    // Remove dest from the object list (to avoid borrowing twice)
+    let (dest_id_string, mut dest) = objects
+        .remove_entry(dest_file_id)
+        .expect("dest must be in the object map when calling move");
+
+    let insertion_index = std::cmp::max(
+        new_index,
+        dest.get_base().children.len().try_into().unwrap(),
+    );
+    // Move the object into the children of dest (at the proper place)
+    dest.get_base_mut()
+        .children
+        .insert(insertion_index.try_into().unwrap(), child_id_string);
+
+    let (child_id_string, mut child) = objects
+        .remove_entry(moving_file_id)
+        .expect("the moved object needs to be in the object map");
+
+    // Move the actual child on disk
+    if let Err(err) = child.move_object(insertion_index, &dest.get_path(), objects) {
+        // be as graceful as possible, put the children back, the current state is still likely
+        // sorta broken :/
+        objects.insert(child_id_string, child);
+        objects.insert(dest_id_string, dest);
+        log::error!("Encountered error while trying to move {moving_file_id}");
+        return Err(err);
+    }
+
+    // We no longer have ownership of the child
+    objects.insert(child_id_string, child);
+
+    // Fix indexing in the destination (now that it has the child)
+    fix_indexing(&mut dest.get_base_mut().children, objects);
+
+    // Put the destination back in in the map
+    objects.insert(dest_id_string, dest);
+
+    // if we're moving within an object, we already fixed indexing a few lines above
+    if source_file_id != dest_file_id {
+        // We just need to clean up and re-index the source to fill in the gap we left
+        let (source_id_string, mut source) = objects
+            .remove_entry(dest_file_id)
+            .expect("source must be in the object map when calling move");
+
+        fix_indexing(&mut source.get_base_mut().children, objects);
+
+        objects.insert(source_id_string, source);
+    }
+
+    Ok(())
+}
+
+// TODO: this function probably doesn't make sense as an option (instead of result) given the other code I'm writing
 /// Load an arbitrary file object from a file on disk
 pub fn from_file(filename: &Path, index: Option<u32>) -> Option<FileObjectCreation> {
     // Create the file info right at the start
@@ -544,7 +654,7 @@ pub trait FileObject: Debug {
             None => OsString::from(process_name_for_filename(base_name)),
         };
 
-        if self.is_folder() {
+        if !self.is_folder() {
             basename.push(".");
             basename.push(&self.extension());
         }
@@ -561,16 +671,58 @@ pub trait FileObject: Debug {
         let old_path = self.get_path();
         let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
 
+        if new_path == old_path {
+            // Nothing to do
+            log::warn!(
+                "tried to move {old_path:?} to itself (set_filename), harmless but shouldn't happen"
+            );
+            return Ok(());
+        }
+
+        self.move_on_disk(old_path, new_path, objects)
+    }
+
+    /// Processes the actual move on disk of this file object. Does *not* handle any logic about
+    /// parents or indexes, see `move_child`
+    fn move_object(
+        &mut self,
+        new_index: u32,
+        new_path: &Path,
+        objects: &mut FileObjectStore,
+    ) -> Result<()> {
+        let old_path = self.get_path();
+
+        self.get_base_mut().index = Some(new_index);
+        let new_path = Path::join(new_path, self.calculate_filename());
+
+        if new_path == old_path {
+            // Nothing to do:
+            log::warn!("tried to move {old_path:?} to itself, harmless but shouldn't happen");
+            return Ok(());
+        }
+
+        self.move_on_disk(old_path, new_path, objects)
+    }
+
+    fn move_on_disk(
+        &mut self,
+        old_path: PathBuf,
+        new_path: PathBuf,
+        objects: &mut FileObjectStore,
+    ) -> Result<()> {
+        if new_path == old_path {
+            // Nothing to do
+            return Err(Error::new(
+                ErrorKind::InvalidFilename,
+                format!("attempted to rename {old_path:?} to itself"),
+            ));
+        }
+
         if new_path.exists() {
             return Err(Error::new(
                 ErrorKind::InvalidFilename,
                 format!("attempted to rename {old_path:?}, but {new_path:?} already exists"),
             ));
-        }
-
-        if new_path != old_path {
-            std::fs::rename(old_path, &new_path)?;
-            self.get_base_mut().file.basename = new_filename;
         }
 
         for child_id in self.get_base().children.iter() {
@@ -582,6 +734,7 @@ pub trait FileObject: Debug {
 
             objects.insert(child_id, child);
         }
+
         Ok(())
     }
 

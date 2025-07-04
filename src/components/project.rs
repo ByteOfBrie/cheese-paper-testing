@@ -3,6 +3,7 @@ use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
 };
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::path::PathBuf;
@@ -78,8 +79,25 @@ fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, Fi
 
 impl Project {
     /// Create a new project
-    pub fn new(dirname: PathBuf, project_name: String) -> Self {
-        unimplemented!()
+    pub fn new(dirname: PathBuf, project_name: String) -> Result<Self> {
+        Ok(Self {
+            base_metadata: FileObjectMetadata {
+                name: project_name,
+                ..Default::default()
+            },
+            metadata: ProjectMetadata::default(),
+            text: Folder::new_top_level(dirname.clone(), "text".to_owned())?,
+            characters: Folder::new_top_level(dirname.clone(), "characters".to_owned())?,
+            worldbuilding: Folder::new_top_level(dirname.clone(), "worldbuilding".to_owned())?,
+            file: FileInfo {
+                dirname,
+                basename: OsString::new(),
+                modtime: None,
+                modified: true, // Newly added files are modified (they don't exist on disk)
+            },
+            toml_header: DocumentMut::new(),
+            objects: HashMap::new(),
+        })
     }
 
     /// Load an existing project from disk

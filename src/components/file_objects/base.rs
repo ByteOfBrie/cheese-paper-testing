@@ -660,7 +660,7 @@ impl BaseFileObject {
                 dirname,
                 basename: OsString::new(),
                 modtime: None,
-                modified: true, // Newly added files are modified (since they don't exist on disk)
+                modified: true, // Newly added files are modified (they don't exist on disk)
             },
             toml_header: DocumentMut::new(),
             children: Vec::new(),

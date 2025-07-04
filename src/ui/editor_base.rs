@@ -1,7 +1,7 @@
 use egui::{FontFamily, FontId, TextStyle};
 use std::time::{Duration, SystemTime};
 
-use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneTextEditor};
+use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 
 use crate::ui::file_object_editor::FileObjectEditor;
 use crate::{
@@ -9,7 +9,7 @@ use crate::{
 };
 
 pub enum FileEditor<'a> {
-    Scene(SceneTextEditor<'a>),
+    Scene(SceneEditor<'a>),
     Character(CharacterEditor<'a>),
     Folder(FolderEditor<'a>),
     Place(PlaceEditor<'a>),
@@ -59,7 +59,7 @@ impl<'a> CheesePaperApp<'a> {
 
         match file_object.get_file_type_mut() {
             MutFileObjectTypeInterface::Scene(scene) => Self {
-                editor: FileEditor::Scene(SceneTextEditor { scene: scene }),
+                editor: FileEditor::Scene(SceneEditor { scene: scene }),
                 last_write: SystemTime::now(),
             },
             MutFileObjectTypeInterface::Folder(folder) => Self {

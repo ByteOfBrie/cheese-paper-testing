@@ -7,11 +7,11 @@ use egui::ScrollArea;
 
 /// Text editor view for an entire scene object, will be embeded in other file objects
 #[derive(Debug)]
-pub struct SceneTextEditor<'a> {
+pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
 }
 
-impl<'a> FileObjectEditor<'a> for SceneTextEditor<'a> {
+impl<'a> FileObjectEditor<'a> for SceneEditor<'a> {
     fn panels(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui(ui);
@@ -19,7 +19,7 @@ impl<'a> FileObjectEditor<'a> for SceneTextEditor<'a> {
     }
 }
 
-impl<'a> SceneTextEditor<'a> {
+impl<'a> SceneEditor<'a> {
     fn ui(&mut self, ui: &mut egui::Ui) {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)

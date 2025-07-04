@@ -13,6 +13,6 @@ pub use base_text_editor::BaseTextEditor;
 use character_editor::CharacterEditor;
 use folder_editor::FolderEditor;
 use place_editor::PlaceEditor;
-pub use scene_editor::SceneTextEditor;
+pub use scene_editor::SceneEditor;
 
 pub use editor_base::CheesePaperApp;

@@ -557,8 +557,6 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
     };
 
     // Will eventually return this and all children
-    // TODO: should maybe convert to <&str, Self> and borrow the metadata.id, instead
-    // of cloning it
     let mut objects: FileObjectStore = HashMap::new();
 
     // Load children of this file object
@@ -571,49 +569,94 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                     // 2. Store all indexes that exist
                     // 3. Find the max of those indexes, assign (increasing) indexes to all remaining files
                     // 4. Call fix_indexing (which might end up being a non-member function because of ownership stuff)
+                    let mut indexed_files: Vec<(usize, PathBuf)> = Vec::new();
+                    let mut unindexed_files: Vec<PathBuf> = Vec::new();
                     for file in files {
                         match file {
                             Ok(file) => {
+                                // We've already read this file, nothing to do
                                 if file.path().file_name()
                                     == Some(&OsString::from(FOLDER_METADATA_FILE_NAME))
                                 {
                                     continue;
                                 }
 
+                                let file_path = file.path();
+
+                                let file_name_str = match file_path.file_name() {
+                                    Some(file_name) => match file_name.to_str() {
+                                        Some(file_name_str) => file_name_str,
+                                        None => {
+                                            log::error!(
+                                                "Encountered file without valid unicode name: {file:?}"
+                                            );
+                                            return None;
+                                        }
+                                    },
+                                    None => {
+                                        log::error!(
+                                            "Encountered file without valid unicode name: {file:?}"
+                                        );
+                                        return None;
+                                    }
+                                };
+
                                 // fuck, this is going to be even more complicated once indexing
                                 // is done properly, it'll require multiple passes
-                                let index = get_index_from_name(
-                                    file.path().file_name().unwrap().to_str().unwrap(),
-                                )
-                                .unwrap_or(0);
-
-                                if let Some(created_files) = from_file(&file.path(), Some(index)) {
-                                    let (object, mut descendents): (Box<dyn FileObject>, _) =
-                                        match created_files {
-                                            FileObjectCreation::Scene(object, descendents) => {
-                                                (Box::new(object), descendents)
-                                            }
-                                            FileObjectCreation::Folder(object, descendents) => {
-                                                (Box::new(object), descendents)
-                                            }
-                                            FileObjectCreation::Character(object, descendents) => {
-                                                (Box::new(object), descendents)
-                                            }
-                                            FileObjectCreation::Place(object, descendents) => {
-                                                (Box::new(object), descendents)
-                                            }
-                                        };
-
-                                    base.children.push(object.get_base().metadata.id.clone());
-                                    objects.insert(object.get_base().metadata.id.clone(), object);
-
-                                    for (child_file_id, child_file) in descendents.drain() {
-                                        objects.insert(child_file_id, child_file);
+                                match get_index_from_name(file_name_str) {
+                                    Some(index) => {
+                                        indexed_files.push((index, file.path()));
                                     }
-                                }
+                                    None => unindexed_files.push(file.path()),
+                                };
                             }
                             Err(err) => {
                                 warn!("Could not read file in folder {:?}: {}", &filename, &err)
+                            }
+                        }
+                    }
+
+                    // sort the list of files and grab the first one
+                    indexed_files.sort();
+                    let max_indexed_file = match indexed_files.last() {
+                        Some((final_index, _file)) => *final_index,
+                        None => 0,
+                    };
+                    let unindexed_offset = max_indexed_file + 1;
+
+                    // add the unindexed files to the list, arbitrarily assigning them indexes
+                    // (assuming they fall strictly *after* the file path)
+                    for (index, file) in unindexed_files.drain(..).enumerate() {
+                        indexed_files.push((index + unindexed_offset, file));
+                    }
+
+                    // Insert all of the files at their given indexes
+                    //
+                    // There may still be gaps at this point, but they'll get filled in at the end
+                    // by `fix_indexing`
+                    for (index, file) in indexed_files.drain(..) {
+                        if let Some(created_files) = from_file(&file, Some(index)) {
+                            let (object, mut descendents): (Box<dyn FileObject>, FileObjectStore) =
+                                match created_files {
+                                    FileObjectCreation::Scene(object, descendents) => {
+                                        (Box::new(object), descendents)
+                                    }
+                                    FileObjectCreation::Folder(object, descendents) => {
+                                        (Box::new(object), descendents)
+                                    }
+                                    FileObjectCreation::Character(object, descendents) => {
+                                        (Box::new(object), descendents)
+                                    }
+                                    FileObjectCreation::Place(object, descendents) => {
+                                        (Box::new(object), descendents)
+                                    }
+                                };
+
+                            base.children.push(object.get_base().metadata.id.clone());
+                            objects.insert(object.get_base().metadata.id.clone(), object);
+
+                            for (child_file_id, child_file) in descendents.drain() {
+                                objects.insert(child_file_id, child_file);
                             }
                         }
                     }
@@ -630,7 +673,8 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
             log::error!(
                 "attempted to construct a folder-type from a non-folder filename {:?}",
                 &filename
-            )
+            );
+            return None;
         }
 
         // This will ensure that all children have the correct indexing. The only file objects

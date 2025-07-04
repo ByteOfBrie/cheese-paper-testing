@@ -311,8 +311,41 @@ fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectS
     return found;
 }
 
+/// Creates a gap in the indexes, to be called immediately before a move
 fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore) -> Result<()> {
-    unimplemented!()
+    let (parent_id_string, parent) = objects
+        .remove_entry(parent_id)
+        .expect("objects should contain parent id");
+
+    let children = &parent.get_base().children;
+
+    if index >= children.len() {
+        return Ok(());
+    }
+
+    // Go backwards from the end of the list to the place where the gap is being created
+    // to ensure that we don't have collisions with names
+    for i in (index..children.len()).rev() {
+        let child_id = children[i].as_str();
+
+        let (child_id_string, mut child) = objects
+            .remove_entry(child_id)
+            .expect("create_index_gap needs to borrow a map with the children");
+
+        // Try to increase the index of the child
+        if let Err(err) = child.set_index(i + 1, objects) {
+            objects.insert(child_id_string, child);
+            objects.insert(parent_id_string, parent);
+
+            return Err(err);
+        }
+
+        objects.insert(child_id_string, child);
+    }
+
+    objects.insert(parent_id_string, parent);
+
+    Ok(())
 }
 
 /// Move a child between two folders, `source_file_id` and `dest_file_id`
@@ -357,10 +390,9 @@ fn move_child(
 
     // We know it's a valid move (or at least think we do), go ahead with the move
 
-    // TODO:
     // Create index "gap" in destination (helpful to do first in case we're moving "up" and this
     // changes the path of the object being moved)
-    create_index_gap(dest_file_id, new_index, objects)
+    create_index_gap(dest_file_id, new_index, objects)?;
 
     // Remove the moving object from it's current parent
     let source = objects

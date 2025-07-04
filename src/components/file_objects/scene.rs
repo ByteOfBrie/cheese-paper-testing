@@ -1,5 +1,5 @@
 use crate::components::file_objects::base::{
-    BaseFileObject, FileObject, FileType, metadata_extract_bool, metadata_extract_string,
+    BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
 use regex::Regex;
 use std::io::Result;
@@ -114,7 +114,7 @@ impl FileObject for Scene {
 }
 
 impl Scene {
-    pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
+    pub fn new(dirname: PathBuf, index: usize) -> Result<Self> {
         let mut scene = Self {
             base: BaseFileObject::new(dirname, Some(index)),
             metadata: SceneMetadata::default(),

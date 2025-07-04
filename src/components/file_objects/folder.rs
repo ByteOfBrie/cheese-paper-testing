@@ -1,5 +1,5 @@
 use crate::components::file_objects::base::{
-    BaseFileObject, FileObject, FileType, metadata_extract_bool, metadata_extract_string,
+    BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
 use std::ffi::OsString;
 use std::io::Result;
@@ -29,7 +29,7 @@ pub struct Folder {
 }
 
 impl Folder {
-    pub fn new(dirname: PathBuf, index: u32) -> Result<Self> {
+    pub fn new(dirname: PathBuf, index: usize) -> Result<Self> {
         let mut folder = Self {
             base: BaseFileObject::new(dirname, Some(index)),
             metadata: FolderMetadata::default(),

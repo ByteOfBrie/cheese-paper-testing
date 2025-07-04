@@ -59,12 +59,12 @@ fn test_process_name_for_filename() {
 }
 
 /// Just adds an index to a name, no real logic
-pub fn add_index_to_name(name: &str, index: u32) -> String {
+pub fn add_index_to_name(name: &str, index: usize) -> String {
     format!("{index:03}-{name}")
 }
 
 /// Gets the file index from a string if it exists
-pub fn get_index_from_name(name: &str) -> Option<u32> {
+pub fn get_index_from_name(name: &str) -> Option<usize> {
     // This can probably be done smarter with maps but I don't see how to do it now and I'm sleepy
     match name.split_once('-') {
         Some((prefix, _suffix)) => prefix.parse().ok(),

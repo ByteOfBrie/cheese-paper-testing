@@ -72,7 +72,7 @@ pub enum FileType {
 pub struct BaseFileObject {
     pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
-    pub index: Option<u32>,
+    pub index: Option<usize>,
     pub file: FileInfo,
     pub toml_header: DocumentMut,
     pub children: Vec<String>,
@@ -244,7 +244,7 @@ pub fn load_base_metadata(
 
 /// For ease of calling, `objects` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> u32 {
+fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> usize {
     for (count, child_id) in children.iter().enumerate() {
         let (child_id, mut child) = objects
             .remove_entry(child_id.as_str())
@@ -256,13 +256,8 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> u3
             .index
             .expect("Children should always have indexes")
             != count
-                .try_into()
-                .expect("u32 should be massive overkill for indexes")
         {
-            if let Err(err) = child.set_index(
-                count.try_into().expect("should be able to convert u32"),
-                objects,
-            ) {
+            if let Err(err) = child.set_index(count, objects) {
                 log::error!(
                     "Error while trying to fix indexing of child {:?}: {}",
                     child,
@@ -278,10 +273,7 @@ fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> u3
         objects.insert(child_id, child);
     }
 
-    children
-        .len()
-        .try_into()
-        .expect("should be able to convert to u32")
+    children.len()
 }
 
 /// The object that was requested,
@@ -310,7 +302,7 @@ fn move_child(
     moving_file_id: &str,
     source_file_id: &str,
     dest_file_id: &str,
-    new_index: u32,
+    new_index: usize,
     objects: &mut FileObjectStore,
 ) -> Result<()> {
     // TODO:
@@ -357,14 +349,11 @@ fn move_child(
         .remove_entry(dest_file_id)
         .expect("dest must be in the object map when calling move");
 
-    let insertion_index = std::cmp::max(
-        new_index,
-        dest.get_base().children.len().try_into().unwrap(),
-    );
+    let insertion_index = std::cmp::max(new_index, dest.get_base().children.len());
     // Move the object into the children of dest (at the proper place)
     dest.get_base_mut()
         .children
-        .insert(insertion_index.try_into().unwrap(), child_id_string);
+        .insert(insertion_index, child_id_string);
 
     let (child_id_string, mut child) = objects
         .remove_entry(moving_file_id)
@@ -406,7 +395,7 @@ fn move_child(
 
 // TODO: this function probably doesn't make sense as an option (instead of result) given the other code I'm writing
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path, index: Option<u32>) -> Option<FileObjectCreation> {
+pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCreation> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
@@ -584,7 +573,7 @@ pub fn from_file(filename: &Path, index: Option<u32>) -> Option<FileObjectCreati
 
 impl BaseFileObject {
     /// Create a new file object in a folder
-    pub fn new(dirname: PathBuf, index: Option<u32>) -> Self {
+    pub fn new(dirname: PathBuf, index: Option<usize>) -> Self {
         Self {
             metadata: FileObjectMetadata::default(),
             index,
@@ -630,7 +619,7 @@ pub trait FileObject: Debug {
     fn write_metadata(&mut self);
 
     /// Sets the index to this file, doing the move if necessary
-    fn set_index(&mut self, new_index: u32, objects: &mut FileObjectStore) -> Result<()> {
+    fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<()> {
         self.get_base_mut().index = Some(new_index);
 
         self.set_filename(self.calculate_filename(), objects)
@@ -686,7 +675,7 @@ pub trait FileObject: Debug {
     /// parents or indexes, see `move_child`
     fn move_object(
         &mut self,
-        new_index: u32,
+        new_index: usize,
         new_path: &Path,
         objects: &mut FileObjectStore,
     ) -> Result<()> {

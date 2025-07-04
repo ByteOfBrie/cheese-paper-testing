@@ -1,5 +1,5 @@
 use crate::components::file_objects::{
-    FileInfo, FileObjectMetadata, FileObjectStore, FileObjectTypeInterface, Folder, from_file,
+    FileInfo, FileObjectMetadata, FileObjectStore, Folder, from_file,
 };
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
@@ -116,7 +116,7 @@ impl Project {
         };
 
         let mut base_metadata = FileObjectMetadata::default();
-        let mut metadata = ProjectMetadata::default();
+        let metadata = ProjectMetadata::default();
 
         // Load project metadata
         let project_info_path = Path::join(&path, PROJECT_INFO_NAME);
@@ -179,7 +179,7 @@ impl Project {
 
         project.load_metadata()?;
 
-        project.save();
+        project.save()?;
 
         Ok(project)
     }

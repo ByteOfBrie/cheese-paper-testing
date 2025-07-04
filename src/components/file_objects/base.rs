@@ -286,11 +286,32 @@ pub enum FileObjectCreation {
     Place(Place, FileObjectStore),
 }
 
-fn is_child(parent_id: &str, child_id: &str, objects: &mut FileObjectStore) -> bool {
-    unimplemented!()
+fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectStore) -> bool {
+    let (parent_id_string, parent) = objects
+        .remove_entry(parent_id)
+        .expect("objects should contain parent id");
+
+    let mut found = false;
+
+    for child_id in parent.get_base().children.iter() {
+        // directly check if this is object we're looking for
+        if child_id == checking_id {
+            found = true;
+            break;
+        }
+
+        // check all of the children
+        if parent_contains(&child_id, checking_id, objects) {
+            found = true;
+            break;
+        }
+    }
+
+    objects.insert(parent_id_string, parent);
+    return found;
 }
 
-fn create_index_gap(parent_id: &str, index: usize, object: &mut FileObjectStore) -> Result<()> {
+fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore) -> Result<()> {
     unimplemented!()
 }
 
@@ -305,39 +326,65 @@ fn move_child(
     new_index: usize,
     objects: &mut FileObjectStore,
 ) -> Result<()> {
-    // TODO:
     // Check for it being a valid move:
     // * can't move to one of your own children
+    if parent_contains(moving_file_id, dest_file_id, objects) {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("attempted to move {moving_file_id:} into itself"),
+        ));
+    }
+
     // * can't move something without an index
-    // * shouldn't move a folder where it already is
+    let moving = objects
+        .get(moving_file_id)
+        .expect("objects should contain moving file id");
+
+    let moving_index = match moving.get_base().index {
+        Some(index) => index,
+        None => {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!("attempted to move {moving_file_id:} into itself"),
+            ));
+        }
+    };
+    // * shouldn't move something where it already is
+    if source_file_id == dest_file_id && moving_index == new_index {
+        log::warn!("attempted to move {moving_file_id} to itself, skipping");
+        return Ok(());
+    }
+
+    // We know it's a valid move (or at least think we do), go ahead with the move
 
     // TODO:
     // Create index "gap" in destination (helpful to do first in case we're moving "up" and this
     // changes the path of the object being moved)
+    create_index_gap(dest_file_id, new_index, objects)
 
     // Remove the moving object from it's current parent
     let source = objects
         .get_mut(source_file_id)
-        .expect("objects should contain dest file id");
+        .expect("objects should contain source file id");
 
-    let child_id_position_option = source
+    let child_id_position = match source
         .get_base()
         .children
         .iter()
-        .position(|val| moving_file_id == val);
-
-    // This should be impossible but we check anyway
-    if child_id_position_option.is_none() {
-        return Err(Error::new(
-            ErrorKind::InvalidInput,
-            format!(
-                "Attempted to remove a child from an element that doesn't contain it: \
+        .position(|val| moving_file_id == val)
+    {
+        Some(child_starting_index) => child_starting_index,
+        None => {
+            // This should be impossible but we check anyway
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "Attempted to remove a child from an element that doesn't contain it: \
                         child id: {moving_file_id}, parent: {source_file_id}",
-            ),
-        ));
-    }
-
-    let child_id_position = child_id_position_option.unwrap();
+                ),
+            ));
+        }
+    };
 
     let child_id_string = source.get_base_mut().children.remove(child_id_position);
 

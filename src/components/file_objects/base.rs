@@ -50,7 +50,7 @@ pub enum MutFileObjectTypeInterface<'a> {
 #[derive(Debug)]
 pub struct FileObjectMetadata {
     /// Version of the object, can eventually be used to detect compatibility changes
-    version: u32,
+    pub version: u32,
     /// Name of the object (e.g., title of a scene, character name)
     pub name: String,
     /// ID unique across all objects. The reference implementations use UUIDv4, but any string
@@ -934,7 +934,7 @@ pub trait FileObject: Debug {
             .modified()
             .expect("Modtime not available");
 
-        // Update file on disk
+        // Update modtime based on what we just wrote
         self.get_base_mut().file.modtime = Some(new_modtime);
 
         // Also save children, intentionally trying all of them

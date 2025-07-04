@@ -1,5 +1,6 @@
+use crate::components::file_objects::write_with_temp_file;
 use crate::components::file_objects::{
-    FileInfo, FileObjectMetadata, FileObjectStore, Folder, from_file,
+    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
 };
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind, Result};
@@ -189,8 +190,37 @@ impl Project {
             return Ok(());
         }
 
-        unimplemented!()
-        // self.text.save()
+        self.text.save(&mut self.objects)?;
+        self.characters.save(&mut self.objects)?;
+        self.worldbuilding.save(&mut self.objects)?;
+
+        self.write_metadata();
+
+        let final_str = self.toml_header.to_string();
+
+        write_with_temp_file(&self.get_project_info_file(), final_str.as_bytes())?;
+
+        let new_modtime = std::fs::metadata(&self.get_project_info_file())
+            .expect("attempted to load file that does not exist")
+            .modified()
+            .expect("Modtime not available");
+
+        // Update modtime based on what we just wrote
+        self.file.modtime = Some(new_modtime);
+
+        Ok(())
+    }
+
+    fn write_metadata(&mut self) {
+        self.toml_header["version"] = toml_edit::value(self.base_metadata.version as i64);
+        self.toml_header["name"] = toml_edit::value(&self.base_metadata.name);
+        self.toml_header["id"] = toml_edit::value(&self.base_metadata.id);
+
+        self.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
+        self.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+        self.toml_header["genre"] = toml_edit::value(&self.metadata.genre);
+        self.toml_header["author"] = toml_edit::value(&self.metadata.author);
+        self.toml_header["email"] = toml_edit::value(&self.metadata.email);
     }
 
     fn get_path(&self) -> PathBuf {

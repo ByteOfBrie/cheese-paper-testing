@@ -103,11 +103,12 @@ fn test_create_top_level_folder() -> Result<()> {
 
 #[test]
 /// Ensure names actually get truncated when saving (there are other tests that cover truncation
-/// behavior in more depth)
-fn test_really_long_name() {
+/// behavior in more depth), and that names get characters removed
+fn test_complicated_file_object_names() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let scene1 = Scene::new(base_dir.path().to_path_buf(), 1).unwrap();
     scene.get_base_mut().metadata.name =
         "This is a really long scene name that will have to be shortened".to_string();
 
@@ -120,6 +121,60 @@ fn test_really_long_name() {
         "000-This_is_a_really_long_scene.md"
     );
 
+    assert_eq!(read_dir(base_dir.path()).unwrap().count(), 2);
     assert!(scene.get_file().exists());
     assert_ne!(read_to_string(scene.get_file()).unwrap().len(), 0);
+
+    scene.get_base_mut().metadata.name = "Difficult(to)ParseName/Bad_ ".to_string();
+    scene.save(&mut HashMap::new()).unwrap();
+
+    assert_eq!(read_dir(base_dir.path()).unwrap().count(), 2);
+    assert!(scene.get_file().exists());
+    assert_ne!(read_to_string(scene.get_file()).unwrap().len(), 0);
+
+    assert_eq!(
+        scene.get_file().file_name().unwrap(),
+        "000-Difficult(to)ParseName-Bad_.md"
+    );
+
+    // At the end, ensure we didn't clobber the other scene somehow
+    assert_eq!(
+        scene1.get_base().file.basename,
+        OsString::from("001-New_Scene.md")
+    );
+    assert!(scene1.get_file().exists());
+    assert_ne!(read_to_string(scene1.get_file()).unwrap().len(), 0);
+}
+
+#[test]
+fn test_change_index_scene() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let scene1 = Scene::new(base_dir.path().to_path_buf(), 1).unwrap();
+
+    scene.text = "sample scene text".to_string();
+    scene.save(&mut HashMap::new()).unwrap();
+
+    scene.set_index(2, &mut HashMap::new()).unwrap();
+
+    // Make sure the untouched scene didn't change somehow
+    assert_eq!(
+        scene1.get_base().file.basename,
+        OsString::from("001-New_Scene.md")
+    );
+    assert!(scene1.get_file().exists());
+    assert_ne!(read_to_string(scene1.get_file()).unwrap().len(), 0);
+
+    // Make sure the moved scene is at the expected path
+    assert_eq!(scene.get_base().index, Some(2));
+    assert_eq!(
+        scene.get_base().file.basename,
+        OsString::from("002-New_Scene.md")
+    );
+    assert!(scene.get_file().exists());
+
+    // Make sure the file contents moved with it
+    let scene_text_full = read_to_string(scene.get_file()).unwrap();
+    assert_ne!(scene_text_full.len(), 0);
+    assert!(scene_text_full.contains("sample scene text"));
 }

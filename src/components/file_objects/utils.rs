@@ -96,12 +96,12 @@ fn test_write_with_temp_file() -> std::io::Result<()> {
 
     let file_full_path = base_dir.path().join(&filename);
 
-    assert!(!std::fs::metadata(&file_full_path).is_ok());
+    assert!(!file_full_path.exists());
     assert_eq!(std::fs::read_dir(base_dir.path())?.count(), 0);
 
     write_with_temp_file(&file_full_path, contents.as_bytes())?;
 
-    assert!(std::fs::metadata(&file_full_path).is_ok());
+    assert!(file_full_path.exists());
     assert_eq!(std::fs::read_dir(base_dir.path())?.count(), 1);
 
     let disk_contents = std::fs::read_to_string(&file_full_path)?;

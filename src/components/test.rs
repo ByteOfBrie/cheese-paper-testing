@@ -3,6 +3,7 @@ use crate::components::file_objects::{
     Character, FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, Place, Scene,
     from_file,
 };
+#[cfg(test)]
 use crate::components::project::Project;
 #[cfg(test)]
 use std::ffi::OsString;

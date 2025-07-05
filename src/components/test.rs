@@ -29,14 +29,14 @@ fn test_basic_create_project() -> Result<()> {
     let mut project = Project::new(base_dir.path().to_path_buf(), project_name.to_string())?;
     project.save()?;
 
+    assert_eq!(project_path, project.get_path());
+
     assert_eq!(read_dir(base_dir.path())?.count(), 1);
     assert!(project_path.exists());
     assert_eq!(read_dir(&project_path)?.count(), 4);
 
-    let project_toml_contents = read_to_string(project_path.join("project.toml"))?;
-
-    // Ensure that the file is populated at least
-    assert!(project_toml_contents.len() != 0);
+    // Ensure that the file is at least populated
+    assert_ne!(read_to_string(project.get_project_info_file())?.len(), 0);
 
     Ok(())
 }
@@ -51,6 +51,7 @@ fn test_basic_create_file_object() -> Result<()> {
     let folder = Folder::new(base_dir.path().to_path_buf(), 0)?;
     let place = Place::new(base_dir.path().to_path_buf(), 0)?;
 
+    // Ensure that all four of the files exist in the proper place
     assert_eq!(read_dir(base_dir.path())?.count(), 4);
     assert_eq!(
         scene.get_base().file.basename,
@@ -68,6 +69,32 @@ fn test_basic_create_file_object() -> Result<()> {
         place.get_base().file.basename,
         OsString::from("000-New_Place")
     );
+
+    // Ensure that folders are created with the metadata.toml file
+    assert_eq!(read_dir(folder.get_path())?.count(), 1);
+    assert_eq!(read_dir(place.get_path())?.count(), 1);
+
+    // Ensure that the files contain stuff
+    assert_ne!(read_to_string(scene.get_file())?.len(), 0);
+    assert_ne!(read_to_string(character.get_file())?.len(), 0);
+    assert_ne!(read_to_string(folder.get_file())?.len(), 0);
+    assert_ne!(read_to_string(place.get_file())?.len(), 0);
+
+    Ok(())
+}
+
+#[test]
+/// Ensure that top level folders work the way we want
+fn test_create_top_level_folder() -> Result<()> {
+    let base_dir = tempfile::TempDir::new()?;
+
+    let text = Folder::new_top_level(base_dir.path().to_path_buf(), "text".to_string())?;
+
+    assert_eq!(read_dir(base_dir.path())?.count(), 1);
+    assert_eq!(read_dir(text.get_path())?.count(), 1);
+
+    assert_eq!(text.get_path().file_name().unwrap(), "text");
+    assert_eq!(text.get_base().index, None);
 
     Ok(())
 }

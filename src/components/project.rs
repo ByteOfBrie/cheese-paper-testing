@@ -259,11 +259,11 @@ impl Project {
         self.toml_header["email"] = toml_edit::value(&self.metadata.email);
     }
 
-    fn get_path(&self) -> PathBuf {
+    pub fn get_path(&self) -> PathBuf {
         Path::join(&self.file.dirname, &self.file.basename)
     }
 
-    fn get_project_info_file(&self) -> PathBuf {
+    pub fn get_project_info_file(&self) -> PathBuf {
         let mut path = self.get_path();
         path.push(PROJECT_INFO_NAME);
 

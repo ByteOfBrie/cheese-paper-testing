@@ -506,6 +506,27 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
         .parse::<DocumentMut>()
         .expect("invalid file metadata header");
 
+    if !toml_header.contains_key("name") {
+        let file_name = PathBuf::from(&file_info.basename)
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let name_to_parse = if let Some((prefix, suffix)) = file_name.split_once('-') {
+            match prefix.parse::<i64>() {
+                Ok(_) => suffix,
+                Err(_) => file_name.as_str(),
+            }
+        } else {
+            file_name.as_str()
+        };
+
+        metadata.name = name_to_parse.replace("_", " ").trim().to_string();
+        if !metadata.name.is_empty() {
+            file_info.modified = true;
+        }
+    }
+
     if let Err(err) = load_base_metadata(&toml_header, &mut metadata, &mut file_info) {
         log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
         return None;

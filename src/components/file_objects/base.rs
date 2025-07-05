@@ -781,12 +781,15 @@ pub trait FileObject: Debug {
             return Ok(());
         }
 
+        self.get_base_mut().file.basename = new_filename;
+
         if let Err(err) = self.move_on_disk(old_path, new_path, objects) {
-            log::error!("failed to set filename of {self:?} to {new_filename:?}");
+            log::error!(
+                "failed to set filename of {self:?} to {:?}",
+                self.get_base().file.basename
+            );
             return Err(err);
         }
-
-        self.get_base_mut().file.basename = new_filename;
 
         Ok(())
     }
@@ -997,6 +1000,28 @@ pub trait FileObject: Debug {
             Some(err) => Err(err),
             None => Ok(()),
         }
+    }
+
+    /// Creates a child in this folder, returning it to be added to the list
+    fn create_child(&mut self, file_type: FileType) -> Result<Box<dyn FileObject>> {
+        assert!(self.is_folder());
+
+        // TODO: add a check to ensure that we don't have any indexing gaps when running this
+        // maybe a bool somewhere that gets set in `create_indexing_gap` and removed in `fix_indexing`
+        let new_index = self.get_base().children.len();
+
+        let new_object: Box<dyn FileObject> = match file_type {
+            FileType::Scene => Box::new(Scene::new(self.get_path(), new_index)?),
+            FileType::Character => Box::new(Character::new(self.get_path(), new_index)?),
+            FileType::Folder => Box::new(Folder::new(self.get_path(), new_index)?),
+            FileType::Place => Box::new(Place::new(self.get_path(), new_index)?),
+        };
+
+        self.get_base_mut()
+            .children
+            .push(new_object.get_base().metadata.id.clone());
+
+        Ok(new_object)
     }
 
     /// Allow for downcasting this as a reference, useful for creating the editors

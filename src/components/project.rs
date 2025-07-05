@@ -22,10 +22,10 @@ pub struct Project {
     pub metadata: ProjectMetadata,
     pub base_metadata: FileObjectMetadata,
     pub file: FileInfo,
-    text: Folder,
-    characters: Folder,
-    worldbuilding: Folder,
-    objects: FileObjectStore,
+    pub text: Folder,
+    pub characters: Folder,
+    pub worldbuilding: Folder,
+    pub objects: FileObjectStore,
     toml_header: DocumentMut,
 }
 
@@ -220,6 +220,11 @@ impl Project {
         project.save()?;
 
         Ok(project)
+    }
+
+    pub fn add_object(&mut self, new_object: Box<dyn FileObject>) {
+        self.objects
+            .insert(new_object.get_base().metadata.id.clone(), new_object);
     }
 
     pub fn save(&mut self) -> Result<()> {

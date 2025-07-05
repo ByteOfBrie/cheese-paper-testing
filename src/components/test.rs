@@ -1,8 +1,9 @@
 #[cfg(test)]
-use crate::components::file_objects::{
-    Character, FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, Place, Scene,
-    from_file,
-};
+use crate::components::file_objects::MutFileObjectTypeInterface;
+#[cfg(test)]
+use crate::components::file_objects::base::FileType;
+#[cfg(test)]
+use crate::components::file_objects::{Character, FileObject, Folder, Place, Scene, from_file};
 #[cfg(test)]
 use crate::components::project::Project;
 #[cfg(test)]
@@ -182,4 +183,115 @@ fn test_change_index_scene() {
     let scene_text_full = read_to_string(scene.get_file()).unwrap();
     assert_ne!(scene_text_full.len(), 0);
     assert!(scene_text_full.contains("sample scene text"));
+}
+
+#[test]
+fn test_create_child() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let scene = project.text.create_child(FileType::Scene).unwrap();
+    let character = project.text.create_child(FileType::Character).unwrap();
+    let folder = project.text.create_child(FileType::Folder).unwrap();
+    let place = project.text.create_child(FileType::Place).unwrap();
+
+    // Four file objects plus the metadata
+    assert_eq!(read_dir(project.text.get_path()).unwrap().count(), 5);
+    assert!(scene.get_file().exists());
+    assert_eq!(scene.get_base().index, Some(0));
+    assert!(character.get_file().exists());
+    assert_eq!(character.get_base().index, Some(1));
+    assert!(folder.get_file().exists());
+    assert_eq!(folder.get_base().index, Some(2));
+    assert!(place.get_file().exists());
+    assert_eq!(place.get_base().index, Some(3));
+}
+
+#[test]
+fn test_set_index_folders() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut top_level_folder = project.text.create_child(FileType::Folder).unwrap();
+    let mut mid_level_folder = top_level_folder.create_child(FileType::Folder).unwrap();
+    let child_scene = mid_level_folder.create_child(FileType::Scene).unwrap();
+    let child_scene_id = child_scene.get_base().metadata.id.clone();
+
+    assert!(child_scene.get_file().exists());
+    assert_eq!(child_scene.get_base().index, Some(0));
+
+    project.add_object(mid_level_folder);
+    project.add_object(child_scene);
+
+    top_level_folder.set_index(1, &mut project.objects).unwrap();
+
+    let (child_string, child) = project.objects.remove_entry(&child_scene_id).unwrap();
+
+    assert_eq!(child.get_base().index, Some(0));
+    assert!(child.get_file().exists());
+
+    assert!(
+        child
+            .get_path()
+            .ends_with("000-New_Folder/000-New_Scene.md")
+    );
+}
+
+#[test]
+/// Run save on a folder and scene without changing anything, ensure that they don't get re-writtten
+fn test_avoid_pointless_save() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let scene_old_modtime = scene.get_base().file.modtime;
+    // Check that we get the correct modtime
+    assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
+
+    // Try to save again, we shouldn't do anything
+    scene.save(&mut HashMap::new()).unwrap();
+    assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
+
+    let mut folder = Folder::new(base_dir.path().to_path_buf(), 1).unwrap();
+    let folder_old_modtime = folder.get_base().file.modtime;
+    folder.save(&mut HashMap::new()).unwrap();
+    assert_eq!(folder.get_base().file.modtime, folder_old_modtime);
+}
+
+#[test]
+fn test_save_in_folder() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let sample_text = "sample body";
+
+    let mut folder = Folder::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = folder.create_child(FileType::Scene).unwrap();
+
+    match scene.get_file_type_mut() {
+        MutFileObjectTypeInterface::Scene(scene) => {
+            scene.text.push_str(sample_text);
+        }
+        _ => panic!(),
+    }
+    scene.get_base_mut().file.modified = true;
+
+    let scene_id = scene.get_base().metadata.id.clone();
+
+    let mut map: HashMap<String, Box<dyn FileObject>> = HashMap::new();
+    map.insert(scene.get_base().metadata.id.clone(), scene);
+
+    folder.save(&mut map).unwrap();
+
+    let scene = map.get(&scene_id).unwrap();
+    assert!(!scene.get_base().file.modified);
+    assert!(scene.get_file().exists());
+    assert!(
+        read_to_string(scene.get_file())
+            .unwrap()
+            .contains(sample_text)
+    );
+}
+
+#[test]
+fn test_reload_project() {
+    let base_dir = tempfile::TempDir::new().unwrap();
 }

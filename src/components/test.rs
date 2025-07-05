@@ -554,5 +554,16 @@ fn test_move_to_child() {
 /// Make sure places can nest
 #[test]
 fn test_place_nesting() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut text =
+        Folder::new_top_level(base_dir.path().to_path_buf(), "text".to_string()).unwrap();
+
+    let mut place1 = text.create_child(FileType::Place).unwrap();
+
+    let place2 = place1.create_child(FileType::Place).unwrap();
+
+    assert!(place2.get_file().exists());
+    assert_eq!(place1.get_base().index, Some(0));
+    assert_eq!(place2.get_base().index, Some(0));
 }

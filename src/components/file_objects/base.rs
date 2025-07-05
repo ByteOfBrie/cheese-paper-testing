@@ -1,6 +1,5 @@
 use log::warn;
 use std::collections::HashMap;
-use std::fs::create_dir;
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
@@ -108,21 +107,12 @@ impl TryFrom<&str> for FileType {
             "folder" => Ok(FileType::Folder),
             "character" => Ok(FileType::Character),
             "worldbuilding" => Ok(FileType::Place),
-            _ => Err("Unknown error type"),
+            _ => Err("Unknown file type"),
         }
     }
 }
 
 impl FileType {
-    fn extension(self) -> &'static str {
-        match self {
-            FileType::Scene => "md",
-            FileType::Folder => "toml",
-            FileType::Character => "toml",
-            FileType::Place => "toml",
-        }
-    }
-
     fn is_folder(self) -> bool {
         match self {
             FileType::Scene => false,
@@ -950,17 +940,26 @@ pub trait FileObject: Debug {
     }
 
     fn save(&mut self, objects: &mut FileObjectStore) -> Result<()> {
-        if !self.get_base().file.modified {
-            // Nothing to do
-            return Ok(());
+        // First, try to save children, intentionally trying all of them
+        let mut errors = vec![];
+        for child_id in self.get_base().children.iter() {
+            let (child_id_removed, mut child) = objects
+                .remove_entry(child_id.as_str())
+                .expect("process_path_update needs to borrow a map with the children");
+
+            if let Err(err) = child.save(objects) {
+                errors.push(err);
+            }
+
+            objects.insert(child_id_removed, child);
         }
 
-        // Save this file
-        // Pre-check: attempt to create the folder
-        if self.is_folder() {
-            if !self.get_path().exists() {
-                create_dir(self.get_path())?;
-            }
+        if !self.get_base().file.modified {
+            // If we had *any* errors, return one of them
+            return match errors.pop() {
+                Some(err) => Err(err),
+                None => Ok(()),
+            };
         }
 
         // Check if the filename is "correct", updating it if necessary
@@ -991,20 +990,7 @@ pub trait FileObject: Debug {
 
         // Update modtime based on what we just wrote
         self.get_base_mut().file.modtime = Some(new_modtime);
-
-        // Also save children, intentionally trying all of them
-        let mut errors = vec![];
-        for child_id in self.get_base().children.iter() {
-            let (child_id_removed, mut child) = objects
-                .remove_entry(child_id.as_str())
-                .expect("process_path_update needs to borrow a map with the children");
-
-            if let Err(err) = child.save(objects) {
-                errors.push(err);
-            }
-
-            objects.insert(child_id_removed, child);
-        }
+        self.get_base_mut().file.modified = false;
 
         // If we had *any* errors, return one of them
         match errors.pop() {

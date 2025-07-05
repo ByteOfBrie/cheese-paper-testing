@@ -95,7 +95,7 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
-        Ok(Self {
+        let mut project = Self {
             base_metadata: FileObjectMetadata {
                 name: project_name,
                 ..Default::default()
@@ -112,7 +112,11 @@ impl Project {
             },
             toml_header: DocumentMut::new(),
             objects: HashMap::new(),
-        })
+        };
+
+        project.save()?;
+
+        Ok(project)
     }
 
     /// Load an existing project from disk

@@ -20,27 +20,29 @@ use std::path::PathBuf;
 
 #[test]
 /// Ensure that projects are created properly
-fn test_basic_create_project() -> Result<()> {
-    let base_dir = tempfile::TempDir::new()?;
-    let project_name = "test_project";
-    let project_path = base_dir.path().join(project_name);
+fn test_basic_create_project() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let project_name = "test project";
+    let project_path = base_dir.path().join("test_project");
 
     assert!(!project_path.exists());
-    assert_eq!(read_dir(base_dir.path())?.count(), 0);
+    assert_eq!(read_dir(base_dir.path()).unwrap().count(), 0);
 
-    let mut project = Project::new(base_dir.path().to_path_buf(), project_name.to_string())?;
-    project.save()?;
+    let project = Project::new(base_dir.path().to_path_buf(), project_name.to_string()).unwrap();
 
     assert_eq!(project_path, project.get_path());
 
-    assert_eq!(read_dir(base_dir.path())?.count(), 1);
+    assert_eq!(read_dir(base_dir.path()).unwrap().count(), 1);
     assert!(project_path.exists());
-    assert_eq!(read_dir(&project_path)?.count(), 4);
+    assert_eq!(read_dir(&project_path).unwrap().count(), 4);
 
     // Ensure that the file is at least populated
-    assert_ne!(read_to_string(project.get_project_info_file())?.len(), 0);
-
-    Ok(())
+    assert_ne!(
+        read_to_string(project.get_project_info_file())
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[test]
@@ -48,13 +50,13 @@ fn test_basic_create_project() -> Result<()> {
 fn test_basic_create_file_object() -> Result<()> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let scene = Scene::new(base_dir.path().to_path_buf(), 0)?;
-    let character = Character::new(base_dir.path().to_path_buf(), 0)?;
-    let folder = Folder::new(base_dir.path().to_path_buf(), 0)?;
-    let place = Place::new(base_dir.path().to_path_buf(), 0)?;
+    let scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let character = Character::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let folder = Folder::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let place = Place::new(base_dir.path().to_path_buf(), 0).unwrap();
 
     // Ensure that all four of the files exist in the proper place
-    assert_eq!(read_dir(base_dir.path())?.count(), 4);
+    assert_eq!(read_dir(base_dir.path()).unwrap().count(), 4);
     assert_eq!(
         scene.get_base().file.basename,
         OsString::from("000-New_Scene.md")
@@ -73,14 +75,14 @@ fn test_basic_create_file_object() -> Result<()> {
     );
 
     // Ensure that folders are created with the metadata.toml file
-    assert_eq!(read_dir(folder.get_path())?.count(), 1);
-    assert_eq!(read_dir(place.get_path())?.count(), 1);
+    assert_eq!(read_dir(folder.get_path()).unwrap().count(), 1);
+    assert_eq!(read_dir(place.get_path()).unwrap().count(), 1);
 
     // Ensure that the files contain stuff
-    assert_ne!(read_to_string(scene.get_file())?.len(), 0);
-    assert_ne!(read_to_string(character.get_file())?.len(), 0);
-    assert_ne!(read_to_string(folder.get_file())?.len(), 0);
-    assert_ne!(read_to_string(place.get_file())?.len(), 0);
+    assert_ne!(read_to_string(scene.get_file()).unwrap().len(), 0);
+    assert_ne!(read_to_string(character.get_file()).unwrap().len(), 0);
+    assert_ne!(read_to_string(folder.get_file()).unwrap().len(), 0);
+    assert_ne!(read_to_string(place.get_file()).unwrap().len(), 0);
 
     Ok(())
 }
@@ -111,6 +113,7 @@ fn test_complicated_file_object_names() {
     let scene1 = Scene::new(base_dir.path().to_path_buf(), 1).unwrap();
     scene.get_base_mut().metadata.name =
         "This is a really long scene name that will have to be shortened".to_string();
+    scene.get_base_mut().file.modified = true;
 
     scene.save(&mut HashMap::new()).unwrap();
 
@@ -126,6 +129,7 @@ fn test_complicated_file_object_names() {
     assert_ne!(read_to_string(scene.get_file()).unwrap().len(), 0);
 
     scene.get_base_mut().metadata.name = "Difficult(to)ParseName/Bad_ ".to_string();
+    scene.get_base_mut().file.modified = true;
     scene.save(&mut HashMap::new()).unwrap();
 
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 2);
@@ -153,6 +157,7 @@ fn test_change_index_scene() {
     let scene1 = Scene::new(base_dir.path().to_path_buf(), 1).unwrap();
 
     scene.text = "sample scene text".to_string();
+    scene.get_base_mut().file.modified = true;
     scene.save(&mut HashMap::new()).unwrap();
 
     scene.set_index(2, &mut HashMap::new()).unwrap();

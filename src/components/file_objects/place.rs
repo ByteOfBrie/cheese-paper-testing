@@ -1,4 +1,5 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use std::fs::create_dir;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -38,6 +39,7 @@ impl Place {
 
         place.base.file.basename = place.calculate_filename();
 
+        create_dir(place.get_path())?;
         place.save(&mut HashMap::new())?;
 
         Ok(place)

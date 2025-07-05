@@ -2,6 +2,7 @@ use crate::components::file_objects::base::{
     BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
 use std::ffi::OsString;
+use std::fs::create_dir;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -37,6 +38,7 @@ impl Folder {
 
         folder.base.file.basename = folder.calculate_filename();
 
+        create_dir(folder.get_path())?;
         folder.save(&mut HashMap::new())?;
 
         Ok(folder)
@@ -51,6 +53,7 @@ impl Folder {
         folder.get_base_mut().metadata.name = name.clone();
         folder.get_base_mut().file.basename = OsString::from(name);
 
+        create_dir(folder.get_path())?;
         folder.save(&mut HashMap::new())?;
 
         Ok(folder)

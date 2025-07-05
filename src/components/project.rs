@@ -228,16 +228,18 @@ impl Project {
     }
 
     pub fn save(&mut self) -> Result<()> {
-        if !self.file.modified {
-            return Ok(());
-        }
-
-        // unlike other file objects, this one doesn't rename automatically. This might be something
-        // I want to add later, but it's currently intentional
-
+        // First, try saving the children
         self.text.save(&mut self.objects)?;
         self.characters.save(&mut self.objects)?;
         self.worldbuilding.save(&mut self.objects)?;
+
+        // Now save the project itself
+        // unlike other file objects, this one doesn't rename automatically. This might be something
+        // I want to add later, but it's currently intentional
+
+        if !self.file.modified {
+            return Ok(());
+        }
 
         self.write_metadata();
 

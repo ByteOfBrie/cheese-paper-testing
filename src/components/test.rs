@@ -429,3 +429,46 @@ fn test_load_markdown() {
     let scene = values.pop().unwrap();
     assert_eq!(scene.get_body().trim(), sample_body);
 }
+
+/// Make sure metadata gets filled in
+#[test]
+fn test_load_partial_metadata() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let file_text = r#"name = "Other title"
+summary = """multiline block inside
+another multiline block
+"""
+++++++++
+contents1
+"#;
+    // open and immediately drop the project (just creating the files)
+    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    write_with_temp_file(
+        &Path::join(base_dir.path(), "test_project/text/000-New_Scene.md"),
+        file_text.as_bytes(),
+    )
+    .unwrap();
+
+    let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
+    project.save().unwrap();
+
+    let mut values: Vec<_> = project.objects.values().collect();
+    let scene = values.pop().unwrap();
+    assert_eq!(scene.get_body().trim(), "contents1");
+    match scene.get_file_type() {
+        FileObjectTypeInterface::Scene(scene) => {
+            assert_eq!(
+                scene.metadata.summary,
+                "multiline block inside\nanother multiline block\n"
+            );
+        }
+        _ => panic!(),
+    }
+
+    assert!(
+        read_to_string(scene.get_file())
+            .unwrap()
+            .contains(r#"notes = """#)
+    );
+}

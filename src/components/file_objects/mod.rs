@@ -3,7 +3,7 @@ mod character;
 mod folder;
 mod place;
 mod scene;
-mod utils;
+pub mod utils;
 
 pub use base::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, FileObjectTypeInterface,

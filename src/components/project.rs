@@ -1,6 +1,6 @@
-use crate::components::file_objects::write_with_temp_file;
 use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
+    write_with_temp_file,
 };
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -8,6 +8,8 @@ use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::path::PathBuf;
 use toml_edit::DocumentMut;
+
+use crate::components::file_objects::utils::process_name_for_filename;
 
 use crate::components::file_objects::base::{
     FileObjectCreation, load_base_metadata, metadata_extract_string,
@@ -80,18 +82,31 @@ fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, Fi
 impl Project {
     /// Create a new project
     pub fn new(dirname: PathBuf, project_name: String) -> Result<Self> {
+        // Not truncating here (for now)
+        let file_safe_name = process_name_for_filename(&project_name);
+        let project_path = dirname.join(&file_safe_name);
+
+        if project_path.exists() {
+            return Err(Error::new(
+                ErrorKind::AlreadyExists,
+                format!("attempted to initialize {project_path:?}, which already exists"),
+            ));
+        } else {
+            std::fs::create_dir(&project_path)?;
+        }
+
         Ok(Self {
             base_metadata: FileObjectMetadata {
                 name: project_name,
                 ..Default::default()
             },
             metadata: ProjectMetadata::default(),
-            text: Folder::new_top_level(dirname.clone(), "text".to_owned())?,
-            characters: Folder::new_top_level(dirname.clone(), "characters".to_owned())?,
-            worldbuilding: Folder::new_top_level(dirname.clone(), "worldbuilding".to_owned())?,
+            text: Folder::new_top_level(project_path.clone(), "text".to_owned())?,
+            characters: Folder::new_top_level(project_path.clone(), "characters".to_owned())?,
+            worldbuilding: Folder::new_top_level(project_path.clone(), "worldbuilding".to_owned())?,
             file: FileInfo {
                 dirname,
-                basename: OsString::new(),
+                basename: OsString::from(file_safe_name),
                 modtime: None,
                 modified: true, // Newly added files are modified (they don't exist on disk)
             },
@@ -207,6 +222,9 @@ impl Project {
         if !self.file.modified {
             return Ok(());
         }
+
+        // unlike other file objects, this one doesn't rename automatically. This might be something
+        // I want to add later, but it's currently intentional
 
         self.text.save(&mut self.objects)?;
         self.characters.save(&mut self.objects)?;

@@ -500,7 +500,70 @@ fn test_name_from_filename() {
 /// Load various files with indexes out of order (and some missing) and verify that they all get indexed correctly
 #[test]
 fn test_fix_indexing_on_load() {
-    unimplemented!()
+    // Create files with known id for convenience, verify that the children dict ends up in the expect place
+    // after loading
+
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "text".to_string())
+        .unwrap()
+        .get_path();
+
+    write_with_temp_file(
+        &text_path.join("4-scene2.md"),
+        r#"id = "0"
+++++++++"#
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+
+    std::fs::create_dir(text_path.join("05-dir")).unwrap();
+
+    write_with_temp_file(
+        &text_path.join("05-dir/metadata.toml"),
+        r#"id = "1""#.to_string().as_bytes(),
+    )
+    .unwrap();
+
+    write_with_temp_file(
+        &text_path.join("05-dir/2-scene.md"),
+        r#"id = "1-0"
+++++++++
+contents123"#
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+
+    write_with_temp_file(
+        &text_path.join("10-scene2.md"),
+        r#"id = "2"
+++++++++"#
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+
+    write_with_temp_file(
+        &text_path.join("scene_no_index.md"),
+        r#"id = "3"
+++++++++"#
+            .to_string()
+            .as_bytes(),
+    )
+    .unwrap();
+
+    match from_file(&text_path, None).unwrap() {
+        FileObjectCreation::Folder(mut folder, mut contents) => {
+            folder.save(&mut contents).unwrap();
+            assert_eq!(folder.base.children, vec!["0", "1", "2", "3"]);
+            let child = contents.get("1-0").unwrap();
+            assert_eq!(child.get_base().index, Some(0));
+            assert_eq!(child.get_body(), "contents123\n");
+        }
+        _ => panic!(),
+    };
 }
 
 /// Try to delete a file object, verifying it gets removed from disk

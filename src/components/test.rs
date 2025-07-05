@@ -496,3 +496,63 @@ fn test_name_from_filename() {
         _ => panic!(),
     };
 }
+
+/// Load various files with indexes out of order (and some missing) and verify that they all get indexed correctly
+#[test]
+fn test_fix_indexing_on_load() {
+    unimplemented!()
+}
+
+/// Try to delete a file object, verifying it gets removed from disk
+#[test]
+fn test_delete() {
+    unimplemented!()
+}
+
+/// Try to delete a file object in the middle of a folder, ensuring indexing works correctly afterwards
+#[test]
+fn test_delete_middle() {
+    unimplemented!()
+}
+
+/// Simple move, move a scene from the end of one folder to the end of another
+#[test]
+fn test_move_simple() {
+    unimplemented!()
+}
+
+/// Move a folder that contains things
+#[test]
+fn test_move_folder_contents() {
+    unimplemented!()
+}
+
+/// Move an object within a folder (forwards and backwards)
+#[test]
+fn test_move_within_folder() {
+    unimplemented!()
+}
+
+/// Move an object to its parent
+#[test]
+fn test_move_to_parent() {
+    unimplemented!()
+}
+
+/// Move something where it already is (should be no-op)
+#[test]
+fn test_move_to_self() {
+    unimplemented!()
+}
+
+/// Try to move a folder into one of it's (distant) children, verify that it does not allow it
+#[test]
+fn test_move_to_child() {
+    unimplemented!()
+}
+
+/// Make sure places can nest
+#[test]
+fn test_place_nesting() {
+    unimplemented!()
+}

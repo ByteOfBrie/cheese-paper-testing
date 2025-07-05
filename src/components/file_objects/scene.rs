@@ -121,6 +121,8 @@ impl Scene {
             text: String::new(),
         };
 
+        scene.base.file.basename = scene.calculate_filename();
+
         scene.save(&mut HashMap::new())?;
 
         Ok(scene)

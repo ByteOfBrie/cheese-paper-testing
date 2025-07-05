@@ -40,6 +40,8 @@ impl Character {
             metadata: CharacterMetadata::default(),
         };
 
+        character.base.file.basename = character.calculate_filename();
+
         character.save(&mut HashMap::new())?;
 
         Ok(character)

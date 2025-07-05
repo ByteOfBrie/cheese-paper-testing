@@ -36,6 +36,8 @@ impl Place {
             metadata: PlaceMetadata::default(),
         };
 
+        place.base.file.basename = place.calculate_filename();
+
         place.save(&mut HashMap::new())?;
 
         Ok(place)

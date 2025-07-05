@@ -35,6 +35,8 @@ impl Folder {
             metadata: FolderMetadata::default(),
         };
 
+        folder.base.file.basename = folder.calculate_filename();
+
         folder.save(&mut HashMap::new())?;
 
         Ok(folder)

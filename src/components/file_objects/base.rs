@@ -837,6 +837,10 @@ pub trait FileObject: Debug {
             ));
         }
 
+        if old_path.exists() {
+            std::fs::rename(old_path, new_path)?;
+        }
+
         for child_id in self.get_base().children.iter() {
             let (child_id, mut child) = objects
                 .remove_entry(child_id.as_str())

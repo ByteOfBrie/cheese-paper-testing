@@ -3,7 +3,7 @@ use crate::components::file_objects::base::FileType;
 #[cfg(test)]
 use crate::components::file_objects::{
     Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
-    Scene, from_file,
+    Scene, from_file, write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::Project;
@@ -406,4 +406,26 @@ fn test_reload_project() {
         }
         _ => panic!(),
     }
+}
+
+/// Make sure that a `.md` file gets loaded without a text editor
+#[test]
+fn test_load_markdown() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let sample_body = "sample body";
+
+    // open and immediately drop the project (just creating the files)
+    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    write_with_temp_file(
+        &Path::join(base_dir.path(), "test_project/text/000-New_Scene.md"),
+        sample_body.as_bytes(),
+    )
+    .unwrap();
+
+    let project = Project::load(base_dir.path().join("test_project")).unwrap();
+
+    let mut values: Vec<_> = project.objects.values().collect();
+    let scene = values.pop().unwrap();
+    assert_eq!(scene.get_body().trim(), sample_body);
 }

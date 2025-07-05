@@ -106,6 +106,7 @@ impl FileObject for Scene {
     }
 
     fn write_metadata(&mut self) {
+        self.base.toml_header["file_type"] = toml_edit::value("scene");
         self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
         self.base.toml_header["pov"] = toml_edit::value(&self.metadata.pov);

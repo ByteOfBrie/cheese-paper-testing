@@ -1,9 +1,10 @@
 #[cfg(test)]
-use crate::components::file_objects::MutFileObjectTypeInterface;
-#[cfg(test)]
 use crate::components::file_objects::base::FileType;
 #[cfg(test)]
-use crate::components::file_objects::{Character, FileObject, Folder, Place, Scene, from_file};
+use crate::components::file_objects::{
+    Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
+    Scene, from_file,
+};
 #[cfg(test)]
 use crate::components::project::Project;
 #[cfg(test)]
@@ -225,7 +226,7 @@ fn test_set_index_folders() {
 
     top_level_folder.set_index(1, &mut project.objects).unwrap();
 
-    let (child_string, child) = project.objects.remove_entry(&child_scene_id).unwrap();
+    let (_child_string, child) = project.objects.remove_entry(&child_scene_id).unwrap();
 
     assert_eq!(child.get_base().index, Some(0));
     assert!(child.get_file().exists());
@@ -294,4 +295,115 @@ fn test_save_in_folder() {
 #[test]
 fn test_reload_project() {
     let base_dir = tempfile::TempDir::new().unwrap();
+
+    let sample_body = "sample body";
+    let character_appearance = "tall";
+    let folder_notes = "this is a folder";
+    let place_description = "lots and lots of trees!";
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut scene = project.text.create_child(FileType::Scene).unwrap();
+    let scene_id = scene.get_base().metadata.id.clone();
+    let mut character = project
+        .characters
+        .create_child(FileType::Character)
+        .unwrap();
+    let character_id = character.get_base().metadata.id.clone();
+    let mut folder = project.text.create_child(FileType::Folder).unwrap();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let mut place = project.worldbuilding.create_child(FileType::Place).unwrap();
+    let place_id = place.get_base().metadata.id.clone();
+
+    // modify the file objects:
+    match scene.get_file_type_mut() {
+        MutFileObjectTypeInterface::Scene(scene) => {
+            scene.text.push_str(sample_body);
+        }
+        _ => panic!(),
+    }
+    scene.get_base_mut().file.modified = true;
+
+    match character.get_file_type_mut() {
+        MutFileObjectTypeInterface::Character(character) => {
+            character.metadata.appearance = character_appearance.to_string();
+        }
+        _ => panic!(),
+    }
+    character.get_base_mut().file.modified = true;
+
+    match folder.get_file_type_mut() {
+        MutFileObjectTypeInterface::Folder(folder) => {
+            folder.metadata.notes = folder_notes.to_string()
+        }
+        _ => panic!(),
+    }
+    folder.get_base_mut().file.modified = true;
+
+    match place.get_file_type_mut() {
+        MutFileObjectTypeInterface::Place(place) => {
+            place.metadata.description = place_description.to_string()
+        }
+        _ => panic!(),
+    }
+    place.get_base_mut().file.modified = true;
+
+    project.add_object(scene);
+    project.add_object(character);
+    project.add_object(folder);
+    project.add_object(place);
+
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    drop(project);
+
+    let project = Project::load(project_path).unwrap();
+    let scene = project.objects.get(&scene_id).unwrap();
+    let character = project.objects.get(&character_id).unwrap();
+    let folder = project.objects.get(&folder_id).unwrap();
+    let place = project.objects.get(&place_id).unwrap();
+
+    // Go through each folder:
+    // Text (scene, folder)
+    assert_eq!(read_dir(project.text.get_path()).unwrap().count(), 3);
+
+    assert!(scene.get_file().exists());
+    assert_eq!(scene.get_base().index, Some(0));
+    assert!(scene.get_body().contains(sample_body));
+
+    assert!(folder.get_file().exists());
+    assert_eq!(folder.get_base().index, Some(1));
+    match folder.get_file_type() {
+        FileObjectTypeInterface::Folder(folder) => {
+            assert_eq!(folder.metadata.notes, folder_notes);
+        }
+        _ => panic!(),
+    }
+
+    // Characters (character)
+    assert_eq!(read_dir(project.characters.get_path()).unwrap().count(), 2);
+    assert!(character.get_file().exists());
+    assert_eq!(character.get_base().index, Some(0));
+    match character.get_file_type() {
+        FileObjectTypeInterface::Character(character) => {
+            assert_eq!(character.metadata.appearance, character_appearance);
+        }
+        _ => panic!(),
+    }
+
+    // Worldbuilding (place)
+    assert_eq!(
+        read_dir(project.worldbuilding.get_path()).unwrap().count(),
+        2
+    );
+    assert!(place.get_file().exists());
+    assert_eq!(place.get_base().index, Some(0));
+    match place.get_file_type() {
+        FileObjectTypeInterface::Place(place) => {
+            assert_eq!(place.metadata.description, place_description);
+        }
+        _ => panic!(),
+    }
 }

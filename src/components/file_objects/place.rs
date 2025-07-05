@@ -140,6 +140,7 @@ impl FileObject for Place {
     }
 
     fn write_metadata(&mut self) {
+        self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
         self.base.toml_header["connection"] = toml_edit::value(&self.metadata.connection);
         self.base.toml_header["description"] = toml_edit::value(&self.metadata.description);
         self.base.toml_header["appearance"] = toml_edit::value(&self.metadata.appearance);

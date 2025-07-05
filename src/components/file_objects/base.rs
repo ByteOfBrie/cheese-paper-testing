@@ -529,12 +529,17 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
     let file_type: FileType = match file_type_str.as_str().try_into() {
         Ok(file_type) => file_type,
         Err(_) => {
-            log::error!(
-                "Found unknown file type ({}) while attempt to read {:?}",
-                &file_type_str,
-                &filename
-            );
-            return None;
+            // The "correct" string is `worldbuilding`, but allow place anyway
+            if file_type_str == "place" {
+                FileType::Place
+            } else {
+                log::error!(
+                    "Found unknown file type ({}) while attempt to read {:?}",
+                    &file_type_str,
+                    &filename
+                );
+                return None;
+            }
         }
     };
 

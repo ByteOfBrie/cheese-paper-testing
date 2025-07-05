@@ -6,6 +6,8 @@ use crate::components::file_objects::{
 #[cfg(test)]
 use crate::components::project::Project;
 #[cfg(test)]
+use std::collections::HashMap;
+#[cfg(test)]
 use std::ffi::OsString;
 #[cfg(test)]
 use std::fs::{read_dir, read_to_string};
@@ -97,4 +99,27 @@ fn test_create_top_level_folder() -> Result<()> {
     assert_eq!(text.get_base().index, None);
 
     Ok(())
+}
+
+#[test]
+/// Ensure names actually get truncated when saving (there are other tests that cover truncation
+/// behavior in more depth)
+fn test_really_long_name() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    scene.get_base_mut().metadata.name =
+        "This is a really long scene name that will have to be shortened".to_string();
+
+    scene.save(&mut HashMap::new()).unwrap();
+
+    // This is probably getting too far into specifics of behavior for this test,
+    // but I don't think it'll change very much, so I'm writing it like this now
+    assert_eq!(
+        scene.get_file().file_name().unwrap(),
+        "000-This_is_a_really_long_scene.md"
+    );
+
+    assert!(scene.get_file().exists());
+    assert_ne!(read_to_string(scene.get_file()).unwrap().len(), 0);
 }

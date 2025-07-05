@@ -791,7 +791,14 @@ pub trait FileObject: Debug {
             return Ok(());
         }
 
-        self.move_on_disk(old_path, new_path, objects)
+        if let Err(err) = self.move_on_disk(old_path, new_path, objects) {
+            log::error!("failed to set filename of {self:?} to {new_filename:?}");
+            return Err(err);
+        }
+
+        self.get_base_mut().file.basename = new_filename;
+
+        Ok(())
     }
 
     /// Processes the actual move on disk of this file object. Does *not* handle any logic about

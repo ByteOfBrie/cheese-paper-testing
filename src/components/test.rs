@@ -1,5 +1,5 @@
 #[cfg(test)]
-use crate::components::file_objects::base::FileType;
+use crate::components::file_objects::base::{FileObjectCreation, FileType};
 #[cfg(test)]
 use crate::components::file_objects::{
     Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
@@ -471,4 +471,28 @@ contents1
             .unwrap()
             .contains(r#"notes = """#)
     );
+}
+
+/// Make sure that the filename is kept when an object gets renamed
+#[test]
+fn test_name_from_filename() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "text".to_string())
+        .unwrap()
+        .get_path();
+
+    write_with_temp_file(
+        &text_path.join("4-scene2.md"),
+        "contents1".to_string().as_bytes(),
+    )
+    .unwrap();
+
+    match from_file(&text_path, None).unwrap() {
+        FileObjectCreation::Folder(mut folder, mut contents) => {
+            folder.save(&mut contents).unwrap();
+            assert!(folder.get_path().join("000-scene2.md").exists());
+        }
+        _ => panic!(),
+    };
 }

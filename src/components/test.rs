@@ -3,7 +3,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 #[cfg(test)]
 use crate::components::file_objects::{
     Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
-    Scene, from_file, write_with_temp_file,
+    Scene, from_file, move_child, write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::Project;
@@ -581,7 +581,67 @@ fn test_delete_middle() {
 /// Simple move, move a scene from the end of one folder to the end of another
 #[test]
 fn test_move_simple() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut folder1 = project.text.create_child(FileType::Folder).unwrap();
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
+
+    let mut folder2 = project.text.create_child(FileType::Folder).unwrap();
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
+
+    let mut scene_to_move = folder1.create_child(FileType::Scene).unwrap();
+    scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
+    scene_to_move.get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene_to_move.get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(folder2);
+    project.add_object(scene_to_move);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
+
+    // Do the move
+    move_child(&scene_id, &folder1_id, &folder2_id, 0, &mut project.objects).unwrap();
+
+    // Verify that the move happened on disk
+    assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(project_path.join("text/001-folder2/000-scene1.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        0
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
 }
 
 /// Move a folder that contains things

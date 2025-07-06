@@ -309,28 +309,27 @@ fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore
 
     let children = &parent.get_base().children;
 
-    if index >= children.len() {
-        return Ok(());
-    }
+    // Ensure we have to do the work
+    if index < children.len() {
+        // Go backwards from the end of the list to the place where the gap is being created
+        // to ensure that we don't have collisions with names
+        for i in (index..children.len()).rev() {
+            let child_id = children[i].as_str();
 
-    // Go backwards from the end of the list to the place where the gap is being created
-    // to ensure that we don't have collisions with names
-    for i in (index..children.len()).rev() {
-        let child_id = children[i].as_str();
+            let (child_id_string, mut child) = objects
+                .remove_entry(child_id)
+                .expect("create_index_gap needs to borrow a map with the children");
 
-        let (child_id_string, mut child) = objects
-            .remove_entry(child_id)
-            .expect("create_index_gap needs to borrow a map with the children");
+            // Try to increase the index of the child
+            if let Err(err) = child.set_index(i + 1, objects) {
+                objects.insert(child_id_string, child);
+                objects.insert(parent_id_string, parent);
 
-        // Try to increase the index of the child
-        if let Err(err) = child.set_index(i + 1, objects) {
+                return Err(err);
+            }
+
             objects.insert(child_id_string, child);
-            objects.insert(parent_id_string, parent);
-
-            return Err(err);
         }
-
-        objects.insert(child_id_string, child);
     }
 
     objects.insert(parent_id_string, parent);
@@ -342,7 +341,7 @@ fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore
 ///
 /// This can't be part of the FileObject trait because ownership is complicated between
 /// the
-fn move_child(
+pub fn move_child(
     moving_file_id: &str,
     source_file_id: &str,
     dest_file_id: &str,

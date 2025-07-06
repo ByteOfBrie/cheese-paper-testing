@@ -644,10 +644,121 @@ fn test_move_simple() {
     );
 }
 
-/// Move a folder that contains things
+/// Move a folder that contains things. Almost the same as `test_move_simple`,
+/// but moves the entire folder instead
 #[test]
 fn test_move_folder_contents() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut folder1 = project.text.create_child(FileType::Folder).unwrap();
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
+
+    let mut folder2 = project.text.create_child(FileType::Folder).unwrap();
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
+
+    let mut scene = folder2.create_child(FileType::Scene).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(folder2);
+    project.add_object(scene);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(project_path.join("text/001-folder2/000-scene1.md").exists());
+
+    // Do the move (folder2 (which contains scene) into folder1)
+    // TODO: this won't work because objects doesn't own text (will be fixed in some way)
+    move_child(
+        &folder2_id,
+        &project.text.base.metadata.id,
+        &folder1_id,
+        0,
+        &mut project.objects,
+    )
+    .unwrap();
+
+    // Verify that the move happened on disk:
+    // 1. old folder isn't there
+    assert!(!project_path.join("text/001-folder2").exists());
+    // 2. folder got moved
+    assert!(
+        project_path
+            .join("text/000-folder1/000-folder2/metadata.toml")
+            .exists()
+    );
+    assert!(project_path.join("text/000-folder1/000-folder2").exists()); // 3. scene got moved too
+    // 3. scene got moved too
+    assert!(
+        project_path
+            .join("text/000-folder1/000-folder1/000-scene1.md")
+            .exists()
+    );
+    // 4. nothing happened to the folder2 metadata.toml
+    assert!(project_path.join("text/000-folder1/metadata.toml").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
+
+    // Folder 1 contains folder2's ID
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &folder2_id
+    );
+
+    // Folder 2 has 1 child
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
+
+    // Folder 2 contains scene's ID
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &scene_id
+    );
 }
 
 /// Move an object within a folder (forwards and backwards)

@@ -22,9 +22,9 @@ pub struct Project {
     pub metadata: ProjectMetadata,
     pub base_metadata: FileObjectMetadata,
     pub file: FileInfo,
-    pub text: Folder,
-    pub characters: Folder,
-    pub worldbuilding: Folder,
+    pub text_id: String,
+    pub characters_id: String,
+    pub worldbuilding_id: String,
     pub objects: FileObjectStore,
     toml_header: DocumentMut,
 }
@@ -95,15 +95,20 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
+        let text = Folder::new_top_level(project_path.clone(), "text".to_owned())?;
+        let characters = Folder::new_top_level(project_path.clone(), "characters".to_owned())?;
+        let worldbuilding =
+            Folder::new_top_level(project_path.clone(), "worldbuilding".to_owned())?;
+
         let mut project = Self {
             base_metadata: FileObjectMetadata {
                 name: project_name,
                 ..Default::default()
             },
             metadata: ProjectMetadata::default(),
-            text: Folder::new_top_level(project_path.clone(), "text".to_owned())?,
-            characters: Folder::new_top_level(project_path.clone(), "characters".to_owned())?,
-            worldbuilding: Folder::new_top_level(project_path.clone(), "worldbuilding".to_owned())?,
+            text_id: text.get_base().metadata.id.clone(),
+            characters_id: characters.get_base().metadata.id.clone(),
+            worldbuilding_id: worldbuilding.get_base().metadata.id.clone(),
             file: FileInfo {
                 dirname,
                 basename: OsString::from(file_safe_name),
@@ -113,6 +118,10 @@ impl Project {
             toml_header: DocumentMut::new(),
             objects: HashMap::new(),
         };
+
+        project.add_object(Box::new(text));
+        project.add_object(Box::new(characters));
+        project.add_object(Box::new(worldbuilding));
 
         project.save()?;
 
@@ -208,14 +217,17 @@ impl Project {
             metadata,
             base_metadata,
             file: file_info,
-            text,
-            characters,
-            worldbuilding,
+            text_id: text.get_base().metadata.id.clone(),
+            characters_id: characters.get_base().metadata.id.clone(),
+            worldbuilding_id: worldbuilding.get_base().metadata.id.clone(),
             toml_header,
             objects: descendents,
         };
 
         project.load_metadata()?;
+        project.add_object(Box::new(text));
+        project.add_object(Box::new(characters));
+        project.add_object(Box::new(worldbuilding));
 
         project.save()?;
 
@@ -227,33 +239,76 @@ impl Project {
             .insert(new_object.get_base().metadata.id.clone(), new_object);
     }
 
+    /// Intended to replace constantly doing this myself in code:
+    /// ```
+    /// let (text_id_string, mut text) = self
+    ///     .objects
+    ///     .remove_entry(&self.text_id)
+    ///     .expect("text should always be in objects");
+    ///
+    /// let text_save = text.save(&mut self.objects);
+    ///
+    /// self.objects.insert(text_id_string, text);
+    /// ```
+    /// with:
+    /// ```
+    /// self.run_with_file_object(&self.text_id, |text, objects| text.save(&mut objects))
+    /// ```
+    pub fn run_with_file_object<T>(
+        &mut self,
+        id_string: &str,
+        func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> Result<T>,
+    ) -> Result<T> {
+        let (object_id_string, mut object) = self
+            .objects
+            .remove_entry(id_string)
+            .expect("id_string should always be contained within objects");
+
+        let result = func(&mut object, &mut self.objects);
+
+        self.objects.insert(object_id_string, object);
+
+        result
+    }
+
     pub fn save(&mut self) -> Result<()> {
         // First, try saving the children
-        self.text.save(&mut self.objects)?;
-        self.characters.save(&mut self.objects)?;
-        self.worldbuilding.save(&mut self.objects)?;
+
+        let text_result = self.run_with_file_object(&self.text_id.clone(), |text, mut objects| {
+            text.save(&mut objects)
+        });
+        let characters_result = self
+            .run_with_file_object(&self.characters_id.clone(), |characters, mut objects| {
+                characters.save(&mut objects)
+            });
+        let worldbuilding_result = self.run_with_file_object(
+            &self.worldbuilding_id.clone(),
+            |worldbuilding, mut objects| worldbuilding.save(&mut objects),
+        );
 
         // Now save the project itself
         // unlike other file objects, this one doesn't rename automatically. This might be something
         // I want to add later, but it's currently intentional
 
-        if !self.file.modified {
-            return Ok(());
+        if self.file.modified {
+            self.write_metadata();
+
+            let final_str = self.toml_header.to_string();
+
+            write_with_temp_file(&self.get_project_info_file(), final_str.as_bytes())?;
+
+            let new_modtime = std::fs::metadata(&self.get_project_info_file())
+                .expect("attempted to load file that does not exist")
+                .modified()
+                .expect("Modtime not available");
+
+            // Update modtime based on what we just wrote
+            self.file.modtime = Some(new_modtime);
         }
 
-        self.write_metadata();
-
-        let final_str = self.toml_header.to_string();
-
-        write_with_temp_file(&self.get_project_info_file(), final_str.as_bytes())?;
-
-        let new_modtime = std::fs::metadata(&self.get_project_info_file())
-            .expect("attempted to load file that does not exist")
-            .modified()
-            .expect("Modtime not available");
-
-        // Update modtime based on what we just wrote
-        self.file.modtime = Some(new_modtime);
+        text_result?;
+        characters_result?;
+        worldbuilding_result?;
 
         Ok(())
     }

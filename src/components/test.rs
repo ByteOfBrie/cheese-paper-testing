@@ -191,13 +191,34 @@ fn test_create_child() {
     let base_dir = tempfile::TempDir::new().unwrap();
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
-    let scene = project.text.create_child(FileType::Scene).unwrap();
-    let character = project.text.create_child(FileType::Character).unwrap();
-    let folder = project.text.create_child(FileType::Folder).unwrap();
-    let place = project.text.create_child(FileType::Place).unwrap();
+
+    let text_id = project.text_id.clone();
+
+    // create the scenes
+    let scene = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Scene))
+        .unwrap();
+    let character = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Character))
+        .unwrap();
+    let folder = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
+    let place = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Place))
+        .unwrap();
 
     // Four file objects plus the metadata
-    assert_eq!(read_dir(project.text.get_path()).unwrap().count(), 5);
+    assert_eq!(
+        read_dir(
+            project
+                .run_with_file_object(&text_id, |text, _| { Ok(text.get_path()) })
+                .unwrap()
+        )
+        .unwrap()
+        .count(),
+        5
+    );
     assert!(scene.get_file().exists());
     assert_eq!(scene.get_base().index, Some(0));
     assert!(character.get_file().exists());
@@ -211,9 +232,16 @@ fn test_create_child() {
 #[test]
 fn test_set_index_folders() {
     let base_dir = tempfile::TempDir::new().unwrap();
+
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
-    let mut top_level_folder = project.text.create_child(FileType::Folder).unwrap();
+
+    let text_id = project.text_id.clone();
+
+    let mut top_level_folder = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
+
     let mut mid_level_folder = top_level_folder.create_child(FileType::Folder).unwrap();
     let child_scene = mid_level_folder.create_child(FileType::Scene).unwrap();
     let child_scene_id = child_scene.get_base().metadata.id.clone();
@@ -303,16 +331,33 @@ fn test_reload_project() {
 
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
-    let mut scene = project.text.create_child(FileType::Scene).unwrap();
+
+    let text_id = project.text_id.clone();
+    let characters_id = project.characters_id.clone();
+    let worldbuilding_id = project.worldbuilding_id.clone();
+
+    let mut scene = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Scene))
+        .unwrap();
     let scene_id = scene.get_base().metadata.id.clone();
+
     let mut character = project
-        .characters
-        .create_child(FileType::Character)
+        .run_with_file_object(&characters_id, |text, _| {
+            text.create_child(FileType::Character)
+        })
         .unwrap();
     let character_id = character.get_base().metadata.id.clone();
-    let mut folder = project.text.create_child(FileType::Folder).unwrap();
+
+    let mut folder = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
     let folder_id = folder.get_base().metadata.id.clone();
-    let mut place = project.worldbuilding.create_child(FileType::Place).unwrap();
+
+    let mut place = project
+        .run_with_file_object(&worldbuilding_id, |text, _| {
+            text.create_child(FileType::Place)
+        })
+        .unwrap();
     let place_id = place.get_base().metadata.id.clone();
 
     // modify the file objects:
@@ -359,16 +404,57 @@ fn test_reload_project() {
 
     drop(project);
 
-    let project = Project::load(project_path).unwrap();
+    let mut project = Project::load(project_path).unwrap();
+
+    // Verify the counts in each folder are correct:
+    // Text (scene, folder + metadata)
+    assert_eq!(
+        read_dir(
+            project
+                .run_with_file_object(&text_id, |text, _| { Ok(text.get_path()) })
+                .unwrap()
+        )
+        .unwrap()
+        .count(),
+        3
+    );
+
+    // Characters (character + metadata)
+    assert_eq!(
+        read_dir(
+            project
+                .run_with_file_object(&characters_id, |characters, _| {
+                    Ok(characters.get_path())
+                })
+                .unwrap()
+        )
+        .unwrap()
+        .count(),
+        2
+    );
+
+    // Worldbuilding (place + metadata)
+    assert_eq!(
+        read_dir(
+            project
+                .run_with_file_object(&worldbuilding_id, |worldbuilding, _| {
+                    Ok(worldbuilding.get_path())
+                })
+                .unwrap()
+        )
+        .unwrap()
+        .count(),
+        2
+    );
+
+    // Now inspect the file objects
     let scene = project.objects.get(&scene_id).unwrap();
     let character = project.objects.get(&character_id).unwrap();
     let folder = project.objects.get(&folder_id).unwrap();
     let place = project.objects.get(&place_id).unwrap();
 
     // Go through each folder:
-    // Text (scene, folder)
-    assert_eq!(read_dir(project.text.get_path()).unwrap().count(), 3);
-
+    // Text (scene, folder + metadata)
     assert!(scene.get_file().exists());
     assert_eq!(scene.get_base().index, Some(0));
     assert!(scene.get_body().contains(sample_body));
@@ -382,8 +468,7 @@ fn test_reload_project() {
         _ => panic!(),
     }
 
-    // Characters (character)
-    assert_eq!(read_dir(project.characters.get_path()).unwrap().count(), 2);
+    // Characters (character + metadata)
     assert!(character.get_file().exists());
     assert_eq!(character.get_base().index, Some(0));
     match character.get_file_type() {
@@ -393,11 +478,7 @@ fn test_reload_project() {
         _ => panic!(),
     }
 
-    // Worldbuilding (place)
-    assert_eq!(
-        read_dir(project.worldbuilding.get_path()).unwrap().count(),
-        2
-    );
+    // Worldbuilding (place + metadata)
     assert!(place.get_file().exists());
     assert_eq!(place.get_base().index, Some(0));
     match place.get_file_type() {
@@ -434,7 +515,8 @@ fn test_load_markdown() {
 #[test]
 fn test_load_partial_metadata() {
     let base_dir = tempfile::TempDir::new().unwrap();
-    let file_text = r#"name = "Other title"
+    let file_text = r#"id = "1"
+name = "Other title"
 summary = """multiline block inside
 another multiline block
 """
@@ -453,8 +535,7 @@ contents1
     let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
     project.save().unwrap();
 
-    let mut values: Vec<_> = project.objects.values().collect();
-    let scene = values.pop().unwrap();
+    let scene = project.objects.get("1").unwrap();
     assert_eq!(scene.get_body().trim(), "contents1");
     match scene.get_file_type() {
         FileObjectTypeInterface::Scene(scene) => {
@@ -586,11 +667,17 @@ fn test_move_simple() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let mut folder1 = project.text.create_child(FileType::Folder).unwrap();
+    let text_id = project.text_id.clone();
+
+    let mut folder1 = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
     folder1.get_base_mut().file.modified = true;
 
-    let mut folder2 = project.text.create_child(FileType::Folder).unwrap();
+    let mut folder2 = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
     folder2.get_base_mut().metadata.name = "folder2".to_string();
     folder2.get_base_mut().file.modified = true;
 
@@ -653,11 +740,17 @@ fn test_move_folder_contents() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let mut folder1 = project.text.create_child(FileType::Folder).unwrap();
+    let text_id = project.text_id.clone();
+
+    let mut folder1 = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
     folder1.get_base_mut().file.modified = true;
 
-    let mut folder2 = project.text.create_child(FileType::Folder).unwrap();
+    let mut folder2 = project
+        .run_with_file_object(&text_id, |text, _| text.create_child(FileType::Folder))
+        .unwrap();
     folder2.get_base_mut().metadata.name = "folder2".to_string();
     folder2.get_base_mut().file.modified = true;
 
@@ -682,14 +775,7 @@ fn test_move_folder_contents() {
 
     // Do the move (folder2 (which contains scene) into folder1)
     // TODO: this won't work because objects doesn't own text (will be fixed in some way)
-    move_child(
-        &folder2_id,
-        &project.text.base.metadata.id,
-        &folder1_id,
-        0,
-        &mut project.objects,
-    )
-    .unwrap();
+    move_child(&folder2_id, &text_id, &folder1_id, 0, &mut project.objects).unwrap();
 
     // Verify that the move happened on disk:
     // 1. old folder isn't there

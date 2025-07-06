@@ -3,7 +3,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 #[cfg(test)]
 use crate::components::file_objects::{
     Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
-    Scene, from_file, move_child, run_with_file_object, write_with_temp_file,
+    Scene, from_file, move_child, write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::{Project, ProjectFolder};
@@ -14,11 +14,9 @@ use std::ffi::OsString;
 #[cfg(test)]
 use std::fs::{read_dir, read_to_string};
 #[cfg(test)]
-use std::io::{Error, ErrorKind, Result};
+use std::io::Result;
 #[cfg(test)]
 use std::path::Path;
-#[cfg(test)]
-use std::path::PathBuf;
 
 #[test]
 /// Ensure that projects are created properly
@@ -680,8 +678,6 @@ fn test_move_simple() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let text_id = project.text_id.clone();
-
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
             text.create_child(FileType::Folder)
@@ -811,7 +807,7 @@ fn test_move_folder_contents() {
     // 3. scene got moved too
     assert!(
         project_path
-            .join("text/000-folder1/000-folder1/000-scene1.md")
+            .join("text/000-folder1/000-folder2/000-scene1.md")
             .exists()
     );
     // 4. nothing happened to the folder2 metadata.toml

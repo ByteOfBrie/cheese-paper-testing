@@ -3,7 +3,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 #[cfg(test)]
 use crate::components::file_objects::{
     Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
-    Scene, from_file, move_child, write_with_temp_file,
+    Scene, from_file, move_child, run_with_file_object, write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::{Project, ProjectFolder};
@@ -1200,7 +1200,102 @@ fn test_move_to_parent_current_position() {
 /// Move something where it already is (should be no-op)
 #[test]
 fn test_move_to_self() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let text_id = project.text_id.clone();
+
+    let mut folder = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
+
+    let mut scene = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Scene)
+        })
+        .unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
+
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
+
+    project.add_object(folder);
+    project.add_object(scene);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-folder1/").exists());
+    assert!(project_path.join("text/001-scene1.md").exists());
+
+    let scene_original_modtime =
+        run_with_file_object(&scene_id, &mut project.objects, |scene, _| {
+            scene.get_base().file.modtime.unwrap().clone()
+        });
+
+    let folder_original_modtime =
+        run_with_file_object(&scene_id, &mut project.objects, |scene, _| {
+            scene.get_base().file.modtime.unwrap().clone()
+        });
+
+    // Do the move
+    move_child(&folder_id, &text_id, &text_id, 0, &mut project.objects).unwrap();
+
+    // Verify that nothing happened on disk:
+    assert!(project_path.join("text/000-folder1/").exists());
+    assert!(project_path.join("text/001-scene1.md").exists());
+    assert!(!project_path.join("text/000-scene1.md").exists());
+    assert!(!project_path.join("text/001-folder1/").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project.objects.get(&scene_id).unwrap().get_base().index,
+        Some(1)
+    );
+    assert_eq!(
+        project.objects.get(&folder_id).unwrap().get_base().index,
+        Some(0)
+    );
+
+    // Check that the values are properly ordered within the children
+    assert_eq!(
+        project.run_with_folder(ProjectFolder::text, |text, _| text
+            .get_base()
+            .children
+            .get(0)
+            .unwrap()
+            .to_owned()),
+        folder_id
+    );
+
+    assert_eq!(
+        project.run_with_folder(ProjectFolder::text, |text, _| text
+            .get_base()
+            .children
+            .get(1)
+            .unwrap()
+            .to_owned()),
+        scene_id
+    );
+
+    let scene_new_modtime = run_with_file_object(&scene_id, &mut project.objects, |scene, _| {
+        scene.get_base().file.modtime.unwrap().clone()
+    });
+
+    let folder_new_modtime = run_with_file_object(&scene_id, &mut project.objects, |scene, _| {
+        scene.get_base().file.modtime.unwrap().clone()
+    });
+
+    assert_eq!(scene_original_modtime, scene_new_modtime);
+    assert_eq!(folder_original_modtime, folder_new_modtime);
 }
 
 /// Try to move a folder into one of it's (distant) children, verify that it does not allow it

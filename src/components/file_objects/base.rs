@@ -433,7 +433,7 @@ pub fn move_child(
         .remove_entry(dest_file_id)
         .expect("dest must be in the object map when calling move");
 
-    let insertion_index = std::cmp::max(new_index, dest.get_base().children.len());
+    let insertion_index = std::cmp::min(new_index, dest.get_base().children.len());
     // Move the object into the children of dest (at the proper place)
     dest.get_base_mut()
         .children

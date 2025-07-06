@@ -900,11 +900,11 @@ fn test_move_within_folder() {
     // Make sure the file objects moved the children appropriately
     assert_eq!(
         project.objects.get(&folder_id).unwrap().get_base().index,
-        Some(0)
+        Some(1)
     );
     assert_eq!(
-        project.objects.get(&text_id).unwrap().get_base().index,
-        Some(1)
+        project.objects.get(&scene_id).unwrap().get_base().index,
+        Some(0)
     );
 
     // Check that the values are properly ordered within the children
@@ -912,7 +912,7 @@ fn test_move_within_folder() {
         project.run_with_folder(ProjectFolder::text, |text, _| text
             .get_base()
             .children
-            .get(0)
+            .get(1)
             .unwrap()
             .to_owned()),
         folder_id
@@ -922,10 +922,10 @@ fn test_move_within_folder() {
         project.run_with_folder(ProjectFolder::text, |text, _| text
             .get_base()
             .children
-            .get(1)
+            .get(0)
             .unwrap()
             .to_owned()),
-        text_id
+        scene_id
     );
 
     // TODO: test moving forwards
@@ -971,7 +971,7 @@ fn test_move_to_parent() {
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-folder1/metadata.toml").exists());
-    assert!(!project_path.join("text/000-folder1/000-scene1").exists()); // 3. scene got moved too
+    assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
     assert!(project_path.join("text/001-scene1.md").exists());
 
     // Make sure the file objects moved the children appropriately

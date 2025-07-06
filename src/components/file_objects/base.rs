@@ -232,6 +232,22 @@ pub fn load_base_metadata(
     Ok(())
 }
 
+pub fn run_with_file_object<T>(
+    id_string: &str,
+    objects: &mut FileObjectStore,
+    func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> Result<T>,
+) -> Result<T> {
+    let (object_id_string, mut object) = objects
+        .remove_entry(id_string)
+        .expect("id_string should always be contained within objects");
+
+    let result = func(&mut object, objects);
+
+    objects.insert(object_id_string, object);
+
+    result
+}
+
 /// For ease of calling, `objects` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
 fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> usize {

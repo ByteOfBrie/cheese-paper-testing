@@ -1,6 +1,6 @@
 use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
-    write_with_temp_file,
+    run_with_file_object, write_with_temp_file,
 };
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -36,6 +36,12 @@ pub struct ProjectMetadata {
     genre: String,
     author: String,
     email: String,
+}
+
+pub enum ProjectFolder {
+    text,
+    characters,
+    worldbuilding,
 }
 
 impl Default for ProjectMetadata {
@@ -254,35 +260,32 @@ impl Project {
     /// ```
     /// self.run_with_file_object(&self.text_id, |text, objects| text.save(&mut objects))
     /// ```
-    pub fn run_with_file_object<T>(
+    pub fn run_with_folder<T>(
         &mut self,
-        id_string: &str,
+        folder: ProjectFolder,
         func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> Result<T>,
     ) -> Result<T> {
-        let (object_id_string, mut object) = self
-            .objects
-            .remove_entry(id_string)
-            .expect("id_string should always be contained within objects");
+        let id_string = match folder {
+            ProjectFolder::text => &self.text_id,
+            ProjectFolder::characters => &self.characters_id,
+            ProjectFolder::worldbuilding => &self.worldbuilding_id,
+        };
 
-        let result = func(&mut object, &mut self.objects);
-
-        self.objects.insert(object_id_string, object);
-
-        result
+        run_with_file_object(id_string, &mut self.objects, func)
     }
 
     pub fn save(&mut self) -> Result<()> {
         // First, try saving the children
 
-        let text_result = self.run_with_file_object(&self.text_id.clone(), |text, mut objects| {
+        let text_result = self.run_with_folder(ProjectFolder::text, |text, mut objects| {
             text.save(&mut objects)
         });
         let characters_result = self
-            .run_with_file_object(&self.characters_id.clone(), |characters, mut objects| {
+            .run_with_folder(ProjectFolder::characters, |characters, mut objects| {
                 characters.save(&mut objects)
             });
-        let worldbuilding_result = self.run_with_file_object(
-            &self.worldbuilding_id.clone(),
+        let worldbuilding_result = self.run_with_folder(
+            ProjectFolder::worldbuilding,
             |worldbuilding, mut objects| worldbuilding.save(&mut objects),
         );
 

@@ -1301,7 +1301,107 @@ fn test_move_to_self() {
 /// Try to move a folder into one of it's (distant) children, verify that it does not allow it
 #[test]
 fn test_move_to_child() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut top_level_folder = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    let top_level_folder_id = top_level_folder.get_base().metadata.id.clone();
+    top_level_folder.get_base_mut().metadata.name = String::from("top");
+    top_level_folder.get_base_mut().file.modified = true;
+
+    let mut mid_level_folder = top_level_folder.create_child(FileType::Folder).unwrap();
+    let mid_level_folder_id = mid_level_folder.get_base().metadata.id.clone();
+    mid_level_folder.get_base_mut().metadata.name = String::from("mid");
+    mid_level_folder.get_base_mut().file.modified = true;
+
+    let mut child_folder = mid_level_folder.create_child(FileType::Scene).unwrap();
+    let child_folder_id = child_folder.get_base().metadata.id.clone();
+    child_folder.get_base_mut().metadata.name = String::from("child");
+    child_folder.get_base_mut().file.modified = true;
+
+    assert!(child_folder.get_file().exists());
+    assert_eq!(child_folder.get_base().index, Some(0));
+
+    project.add_object(top_level_folder);
+    project.add_object(mid_level_folder);
+    project.add_object(child_folder);
+
+    project.save().unwrap();
+
+    // Try to move into a folder it directly contains:
+    let immediate_move = move_child(
+        &top_level_folder_id,
+        &project.text_id,
+        &mid_level_folder_id,
+        1,
+        &mut project.objects,
+    );
+
+    assert_eq!(
+        immediate_move.err().unwrap().to_string(),
+        format!("attempted to move {} into itself", &top_level_folder_id)
+    );
+
+    // Try to move into a folder contained within a child:
+    let child_move = move_child(
+        &top_level_folder_id,
+        &project.text_id,
+        &child_folder_id,
+        1,
+        &mut project.objects,
+    );
+
+    assert_eq!(
+        child_move.err().unwrap().to_string(),
+        format!("attempted to move {} into itself", &top_level_folder_id)
+    );
+
+    // Make sure nothing moved on disk:
+    assert_eq!(
+        project
+            .run_with_folder(ProjectFolder::text, |text, _| text
+                .get_base()
+                .children
+                .get(0)
+                .unwrap()
+                .to_owned())
+            .as_str(),
+        top_level_folder_id.as_str()
+    );
+
+    assert_eq!(
+        run_with_file_object(&top_level_folder_id, &mut project.objects, |folder, _| {
+            folder.get_base().children.get(0).unwrap().to_owned()
+        })
+        .as_str(),
+        mid_level_folder_id.as_str()
+    );
+
+    assert_eq!(
+        run_with_file_object(&mid_level_folder_id, &mut project.objects, |folder, _| {
+            folder.get_base().children.get(0).unwrap().to_owned()
+        })
+        .as_str(),
+        child_folder_id.as_str()
+    );
+
+    assert!(run_with_file_object(
+        &child_folder_id,
+        &mut project.objects,
+        |folder, _| folder.get_path().ends_with("000-top/000-mid/000-child.md")
+    ));
+
+    assert!(run_with_file_object(
+        &child_folder_id,
+        &mut project.objects,
+        |folder, _| folder.get_path().exists()
+    ));
 }
 
 /// Make sure places can nest

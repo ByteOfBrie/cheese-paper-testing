@@ -369,7 +369,7 @@ pub fn move_child(
     if parent_contains(moving_file_id, dest_file_id, objects) {
         return Err(Error::new(
             ErrorKind::InvalidInput,
-            format!("attempted to move {moving_file_id:} into itself"),
+            format!("attempted to move {moving_file_id} into itself"),
         ));
     }
 

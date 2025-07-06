@@ -852,7 +852,83 @@ fn test_move_folder_contents() {
 /// Move an object within a folder (forwards and backwards)
 #[test]
 fn test_move_within_folder() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let text_id = project.text_id.clone();
+
+    let mut folder = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
+
+    let mut scene = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Scene)
+        })
+        .unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
+
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
+
+    project.add_object(folder);
+    project.add_object(scene);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-folder1/").exists());
+    assert!(project_path.join("text/001-scene1.md").exists());
+
+    // Do the move, easy case first: moving scene1 backwards
+    move_child(&scene_id, &text_id, &text_id, 0, &mut project.objects).unwrap();
+
+    // Verify that the move happened on disk:
+    assert!(project_path.join("text/000-scene1.md").exists());
+    assert!(project_path.join("text/001-folder1/").exists());
+    assert!(!project_path.join("text/000-folder1/").exists());
+    assert!(!project_path.join("text/001-scene1.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project.objects.get(&folder_id).unwrap().get_base().index,
+        Some(0)
+    );
+    assert_eq!(
+        project.objects.get(&text_id).unwrap().get_base().index,
+        Some(1)
+    );
+
+    // Check that the values are properly ordered within the children
+    assert_eq!(
+        project.run_with_folder(ProjectFolder::text, |text, _| text
+            .get_base()
+            .children
+            .get(0)
+            .unwrap()
+            .to_owned()),
+        folder_id
+    );
+
+    assert_eq!(
+        project.run_with_folder(ProjectFolder::text, |text, _| text
+            .get_base()
+            .children
+            .get(1)
+            .unwrap()
+            .to_owned()),
+        text_id
+    );
+
+    // TODO: test moving forwards
 }
 
 /// Move an object to its parent

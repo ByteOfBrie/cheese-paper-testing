@@ -235,8 +235,8 @@ pub fn load_base_metadata(
 pub fn run_with_file_object<T>(
     id_string: &str,
     objects: &mut FileObjectStore,
-    func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> Result<T>,
-) -> Result<T> {
+    func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> T,
+) -> T {
     let (object_id_string, mut object) = objects
         .remove_entry(id_string)
         .expect("id_string should always be contained within objects");

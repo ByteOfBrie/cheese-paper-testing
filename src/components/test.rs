@@ -214,13 +214,9 @@ fn test_create_child() {
 
     // Four file objects plus the metadata
     assert_eq!(
-        read_dir(
-            project
-                .run_with_folder(ProjectFolder::text, |text, _| { Ok(text.get_path()) })
-                .unwrap()
-        )
-        .unwrap()
-        .count(),
+        read_dir(project.run_with_folder(ProjectFolder::text, |text, _| { text.get_path() }))
+            .unwrap()
+            .count(),
         5
     );
     assert!(scene.get_file().exists());
@@ -413,24 +409,18 @@ fn test_reload_project() {
     // Verify the counts in each folder are correct:
     // Text (scene, folder + metadata)
     assert_eq!(
-        read_dir(
-            project
-                .run_with_folder(ProjectFolder::text, |text, _| { Ok(text.get_path()) })
-                .unwrap()
-        )
-        .unwrap()
-        .count(),
+        read_dir(project.run_with_folder(ProjectFolder::text, |text, _| { text.get_path() }))
+            .unwrap()
+            .count(),
         3
     );
 
     // Characters (character + metadata)
     assert_eq!(
         read_dir(
-            project
-                .run_with_folder(ProjectFolder::characters, |characters, _| {
-                    Ok(characters.get_path())
-                })
-                .unwrap()
+            project.run_with_folder(ProjectFolder::characters, |characters, _| {
+                characters.get_path()
+            })
         )
         .unwrap()
         .count(),
@@ -440,11 +430,9 @@ fn test_reload_project() {
     // Worldbuilding (place + metadata)
     assert_eq!(
         read_dir(
-            project
-                .run_with_folder(ProjectFolder::worldbuilding, |worldbuilding, _| {
-                    Ok(worldbuilding.get_path())
-                })
-                .unwrap()
+            project.run_with_folder(ProjectFolder::worldbuilding, |worldbuilding, _| {
+                worldbuilding.get_path()
+            })
         )
         .unwrap()
         .count(),
@@ -510,11 +498,9 @@ fn test_load_markdown() {
 
     let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
 
-    let text_child = project
-        .run_with_folder(ProjectFolder::text, |object, _| {
-            Ok(object.get_base().children.get(0).unwrap().clone())
-        })
-        .unwrap();
+    let text_child = project.run_with_folder(ProjectFolder::text, |object, _| {
+        object.get_base().children.get(0).unwrap().clone()
+    });
 
     assert_eq!(
         project.objects.get(&text_child).unwrap().get_body().trim(),
@@ -791,7 +777,6 @@ fn test_move_folder_contents() {
     assert!(project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    // TODO: this won't work because objects doesn't own text (will be fixed in some way)
     move_child(&folder2_id, &text_id, &folder1_id, 0, &mut project.objects).unwrap();
 
     // Verify that the move happened on disk:

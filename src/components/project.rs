@@ -258,13 +258,13 @@ impl Project {
     /// ```
     /// with:
     /// ```
-    /// self.run_with_file_object(&self.text_id, |text, objects| text.save(&mut objects))
+    /// self.run_with_folder(ProjectFolder::text, |text, objects| text.save(&mut objects))
     /// ```
     pub fn run_with_folder<T>(
         &mut self,
         folder: ProjectFolder,
-        func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> Result<T>,
-    ) -> Result<T> {
+        func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> T,
+    ) -> T {
         let id_string = match folder {
             ProjectFolder::text => &self.text_id,
             ProjectFolder::characters => &self.characters_id,

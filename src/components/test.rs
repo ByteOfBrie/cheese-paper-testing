@@ -934,8 +934,98 @@ fn test_move_within_folder() {
 /// Move an object to its parent
 #[test]
 fn test_move_to_parent() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let text_id = project.text_id.clone();
+
+    let mut folder1 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
+
+    let mut scene = folder1.create_child(FileType::Scene).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(scene);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(!project_path.join("text/001-scene1.md").exists());
+
+    // Do the move (folder2 (which contains scene) into folder1)
+    move_child(&scene_id, &folder1_id, &text_id, 1, &mut project.objects).unwrap();
+
+    // Verify that the move happened on disk:
+    assert!(project_path.join("text/000-folder1/metadata.toml").exists());
+    assert!(!project_path.join("text/000-folder1/000-scene1").exists()); // 3. scene got moved too
+    assert!(project_path.join("text/001-scene1.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        0
+    );
+
+    // Text contains Folder 1
+    assert_eq!(
+        project
+            .objects
+            .get(&text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &folder1_id
+    );
+
+    // Text has 2 children
+    assert_eq!(
+        project
+            .objects
+            .get(&text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        2
+    );
+
+    // Text contains scene's ID
+    assert_eq!(
+        project
+            .objects
+            .get(&text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(1)
+            .unwrap(),
+        &scene_id
+    );
 }
+
+// TODO: test for moving to where parent currently is
 
 /// Move something where it already is (should be no-op)
 #[test]

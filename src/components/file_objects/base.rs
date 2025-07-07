@@ -250,7 +250,7 @@ pub fn run_with_file_object<T>(
 
 /// For ease of calling, `objects` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(children: &mut Vec<String>, objects: &mut FileObjectStore) -> usize {
+fn fix_indexing(children: &Vec<String>, objects: &mut FileObjectStore) -> usize {
     for (count, child_id) in children.iter().enumerate() {
         let (child_id, mut child) = objects
             .remove_entry(child_id.as_str())
@@ -774,6 +774,15 @@ pub trait FileObject: Debug {
 
     /// Sets the index to this file, doing the move if necessary
     fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<()> {
+        if self.get_base().index == Some(new_index) {
+            let name_index = get_index_from_name(&self.get_base().file.basename.to_string_lossy());
+            if name_index == self.get_base().index {
+                // We have the index in memory and on disk, there's nothing to be done here, return early
+                // and avoid writing to disk
+                return Ok(());
+            }
+        }
+
         self.get_base_mut().index = Some(new_index);
 
         self.set_filename(self.calculate_filename(), objects)
@@ -1093,11 +1102,13 @@ pub trait FileObject: Debug {
         self.get_base_mut().children.remove(child_index);
 
         // finally, we need to take care of this file
-        std::fs::remove_file(child.get_path())?;
+        std::fs::remove_file(child.get_file())?;
 
         if child.is_folder() {
             std::fs::remove_dir(child.get_path())?;
         }
+
+        fix_indexing(&self.get_base().children, objects);
 
         // If we had any errors earlier, return them
         match errors.pop() {

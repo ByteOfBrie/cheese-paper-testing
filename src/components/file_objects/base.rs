@@ -1065,6 +1065,47 @@ pub trait FileObject: Debug {
         Ok(new_object)
     }
 
+    fn remove_child(&mut self, child_id: &str, objects: &mut FileObjectStore) -> Result<()> {
+        let mut errors = Vec::new();
+        let mut child = objects
+            .remove(child_id)
+            .expect("all children should be in objects");
+
+        let children = child.get_base_mut().children.clone();
+
+        // Go through the list backwards, so calling `fix_indexing` at the end
+        // isn't expensive (having to do a bunch of moves)
+        for descendant in children.iter().rev() {
+            // save any errors for later
+            if let Err(err) = child.remove_child(&descendant, objects) {
+                errors.push(err);
+            }
+        }
+
+        // Remove this from the list of children
+        let child_index = self
+            .get_base_mut()
+            .children
+            .iter()
+            .position(|id| id == child_id)
+            .expect("child_id must be a child of this object");
+
+        self.get_base_mut().children.remove(child_index);
+
+        // finally, we need to take care of this file
+        std::fs::remove_file(child.get_path())?;
+
+        if child.is_folder() {
+            std::fs::remove_dir(child.get_path())?;
+        }
+
+        // If we had any errors earlier, return them
+        match errors.pop() {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+
     /// Allow for downcasting this as a reference, useful for creating the editors
     #[allow(dead_code)]
     fn get_file_type(&self) -> FileObjectTypeInterface;

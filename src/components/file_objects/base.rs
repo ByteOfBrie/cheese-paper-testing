@@ -250,36 +250,33 @@ pub fn run_with_file_object<T>(
 
 /// For ease of calling, `objects` can contain arbitrary objects, only values contained
 /// in `children` will actually be sorted.
-fn fix_indexing(children: &Vec<String>, objects: &mut FileObjectStore) -> usize {
+fn fix_indexing(children: &Vec<String>, objects: &mut FileObjectStore) -> Result<()> {
     for (count, child_id) in children.iter().enumerate() {
-        let (child_id, mut child) = objects
-            .remove_entry(child_id.as_str())
-            .expect("fix_indexing needs to borrow a map with the children");
+        let result = run_with_file_object(&child_id, objects, |child, objects| {
+            let child_base = child.get_base();
 
-        let child_base = child.get_base();
-
-        if child_base
-            .index
-            .expect("Children should always have indexes")
-            != count
-        {
-            if let Err(err) = child.set_index(count, objects) {
-                log::error!(
-                    "Error while trying to fix indexing of child {:?}: {}",
-                    child,
-                    err
-                );
-
-                // break out of the loop, returning early
-                objects.insert(child_id, child);
-                break;
+            if child_base
+                .index
+                .expect("Children should always have indexes")
+                != count
+            {
+                child.set_index(count, objects)
+            } else {
+                Ok(())
             }
-        }
+        });
 
-        objects.insert(child_id, child);
+        if let Err(err) = result {
+            log::error!(
+                "Error while trying to fix indexing of child {:?}: {}",
+                &child_id,
+                err
+            );
+            return Err(err);
+        }
     }
 
-    children.len()
+    Ok(())
 }
 
 /// The object that was requested,
@@ -293,64 +290,44 @@ pub enum FileObjectCreation {
 }
 
 fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectStore) -> bool {
-    let (parent_id_string, parent) = objects
-        .remove_entry(parent_id)
-        .expect("objects should contain parent id");
+    run_with_file_object(&parent_id, objects, |parent, objects| {
+        for child_id in parent.get_base().children.iter() {
+            // directly check if this is object we're looking for
+            if child_id == checking_id {
+                return true;
+            }
 
-    let mut found = false;
-
-    for child_id in parent.get_base().children.iter() {
-        // directly check if this is object we're looking for
-        if child_id == checking_id {
-            found = true;
-            break;
+            // check all of the children
+            if parent_contains(&child_id, checking_id, objects) {
+                return true;
+            }
         }
 
-        // check all of the children
-        if parent_contains(&child_id, checking_id, objects) {
-            found = true;
-            break;
-        }
-    }
-
-    objects.insert(parent_id_string, parent);
-    return found;
+        // we didn't find the file object here, return false
+        false
+    })
 }
 
 /// Creates a gap in the indexes, to be called immediately before a move
 fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore) -> Result<()> {
-    let (parent_id_string, parent) = objects
-        .remove_entry(parent_id)
-        .expect("objects should contain parent id");
+    run_with_file_object(&parent_id, objects, |parent, objects| {
+        let children = &parent.get_base().children;
 
-    let children = &parent.get_base().children;
+        // Ensure we have to do the work
+        if index < children.len() {
+            // Go backwards from the end of the list to the place where the gap is being created
+            // to ensure that we don't have collisions with names
+            for i in (index..children.len()).rev() {
+                let child_id = children[i].as_str();
 
-    // Ensure we have to do the work
-    if index < children.len() {
-        // Go backwards from the end of the list to the place where the gap is being created
-        // to ensure that we don't have collisions with names
-        for i in (index..children.len()).rev() {
-            let child_id = children[i].as_str();
-
-            let (child_id_string, mut child) = objects
-                .remove_entry(child_id)
-                .expect("create_index_gap needs to borrow a map with the children");
-
-            // Try to increase the index of the child
-            if let Err(err) = child.set_index(i + 1, objects) {
-                objects.insert(child_id_string, child);
-                objects.insert(parent_id_string, parent);
-
-                return Err(err);
+                run_with_file_object(&child_id, objects, |child, objects| {
+                    // Try to increase the index of the child
+                    child.set_index(i + 1, objects)
+                })?
             }
-
-            objects.insert(child_id_string, child);
         }
-    }
-
-    objects.insert(parent_id_string, parent);
-
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Move a child between two folders, `source_file_id` and `dest_file_id`
@@ -428,50 +405,43 @@ pub fn move_child(
     // Object is now removed from it's current parent, although still actually there on disk
     // We should also stop using `source` or the (scary) borrow checker will get mad at us
 
-    // Remove dest from the object list (to avoid borrowing twice)
-    let (dest_id_string, mut dest) = objects
-        .remove_entry(dest_file_id)
-        .expect("dest must be in the object map when calling move");
+    // avoid borrowing twice:
+    run_with_file_object(dest_file_id, objects, |dest, objects| {
+        let insertion_index = std::cmp::min(new_index, dest.get_base().children.len());
+        // Move the object into the children of dest (at the proper place)
+        dest.get_base_mut()
+            .children
+            .insert(insertion_index, child_id_string);
 
-    let insertion_index = std::cmp::min(new_index, dest.get_base().children.len());
-    // Move the object into the children of dest (at the proper place)
-    dest.get_base_mut()
-        .children
-        .insert(insertion_index, child_id_string);
+        run_with_file_object(&moving_file_id, objects, |child, objects| {
+            // Move the actual child on disk
+            if let Err(err) = child.move_object(insertion_index, &dest.get_path(), objects) {
+                // be as graceful as possible, put the children back, the current state is still likely
+                // sorta broken :/
+                log::error!("Encountered error while trying to move {moving_file_id}");
+                return Err(err);
+            }
+            Ok(())
+        })?;
 
-    let (child_id_string, mut child) = objects
-        .remove_entry(moving_file_id)
-        .expect("the moved object needs to be in the object map");
-
-    // Move the actual child on disk
-    if let Err(err) = child.move_object(insertion_index, &dest.get_path(), objects) {
-        // be as graceful as possible, put the children back, the current state is still likely
-        // sorta broken :/
-        objects.insert(child_id_string, child);
-        objects.insert(dest_id_string, dest);
-        log::error!("Encountered error while trying to move {moving_file_id}");
-        return Err(err);
-    }
-
-    // We no longer have ownership of the child
-    objects.insert(child_id_string, child);
-
-    // Fix indexing in the destination (now that it has the child)
-    fix_indexing(&mut dest.get_base_mut().children, objects);
-
-    // Put the destination back in in the map
-    objects.insert(dest_id_string, dest);
+        // Fix indexing in the destination (now that it has the child)
+        fix_indexing(&mut dest.get_base_mut().children, objects)
+    })?;
 
     // if we're moving within an object, we already fixed indexing a few lines above
     if source_file_id != dest_file_id {
+        // The borrow checker objects to using `run_with_file_object` here (since we're comparing
+        // to source), so we have to do this manually
         // We just need to clean up and re-index the source to fill in the gap we left
         let (source_id_string, mut source) = objects
             .remove_entry(dest_file_id)
             .expect("source must be in the object map when calling move");
 
-        fix_indexing(&mut source.get_base_mut().children, objects);
+        let result = fix_indexing(&mut source.get_base_mut().children, objects);
 
         objects.insert(source_id_string, source);
+
+        result?;
     }
 
     Ok(())
@@ -729,7 +699,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
 
         // This will ensure that all children have the correct indexing. The only file objects
         // that aren't the children of some folder are the roots, which don't have indexing anyway
-        fix_indexing(&mut base.children, &mut objects);
+        fix_indexing(&mut base.children, &mut objects)?;
     }
 
     match file_type {
@@ -917,13 +887,9 @@ pub trait FileObject: Debug {
         }
 
         for child_id in self.get_base().children.iter() {
-            let (child_id, mut child) = objects
-                .remove_entry(child_id.as_str())
-                .expect("set_filename needs to borrow a map with the children");
-
-            child.process_path_update(self.get_path(), objects);
-
-            objects.insert(child_id, child);
+            run_with_file_object(child_id.as_str(), objects, |child, objects| {
+                child.process_path_update(self.get_path(), objects);
+            });
         }
 
         Ok(())
@@ -958,13 +924,9 @@ pub trait FileObject: Debug {
 
         // Propogate this to any children
         for child_id in self.get_base().children.iter() {
-            let (child_id, mut child) = objects
-                .remove_entry(child_id.as_str())
-                .expect("process_path_update needs to borrow a map with the children");
-
-            child.process_path_update(self.get_path(), objects);
-
-            objects.insert(child_id, child);
+            run_with_file_object(child_id.as_str(), objects, |child, objects| {
+                child.process_path_update(self.get_path(), objects);
+            });
         }
     }
 
@@ -1021,15 +983,11 @@ pub trait FileObject: Debug {
         // First, try to save children, intentionally trying all of them
         let mut errors = vec![];
         for child_id in self.get_base().children.iter() {
-            let (child_id_removed, mut child) = objects
-                .remove_entry(child_id.as_str())
-                .expect("process_path_update needs to borrow a map with the children");
-
-            if let Err(err) = child.save(objects) {
-                errors.push(err);
-            }
-
-            objects.insert(child_id_removed, child);
+            run_with_file_object(child_id.as_str(), objects, |child, objects| {
+                if let Err(err) = child.save(objects) {
+                    errors.push(err);
+                }
+            });
         }
 
         if !self.get_base().file.modified {
@@ -1133,7 +1091,7 @@ pub trait FileObject: Debug {
             std::fs::remove_dir(child.get_path())?;
         }
 
-        fix_indexing(&self.get_base().children, objects);
+        fix_indexing(&self.get_base().children, objects)?;
 
         // If we had any errors earlier, return them
         match errors.pop() {

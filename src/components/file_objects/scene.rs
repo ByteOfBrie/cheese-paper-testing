@@ -129,7 +129,6 @@ impl Scene {
         Ok(scene)
     }
 
-    // TODO: this should be a result
     pub fn from_file_object(base: BaseFileObject) -> Result<Self> {
         let mut scene = Self {
             base,

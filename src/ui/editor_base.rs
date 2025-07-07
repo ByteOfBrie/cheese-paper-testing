@@ -1,12 +1,12 @@
 use egui::{FontFamily, FontId, TextStyle};
+use egui_ltreeview::TreeView;
 use std::time::{Duration, SystemTime};
 
+use crate::ui::project_editor::ProjectEditor;
 use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 
-use crate::ui::file_object_editor::FileObjectEditor;
-use crate::{
-    components::file_objects::FileObject, components::file_objects::MutFileObjectTypeInterface,
-};
+use crate::components::Project;
+use crate::ui::file_object_editor::FileObjectEditorType;
 
 pub enum FileEditor<'a> {
     Scene(SceneEditor<'a>),
@@ -15,20 +15,15 @@ pub enum FileEditor<'a> {
     Place(PlaceEditor<'a>),
 }
 
-pub struct CheesePaperApp<'a> {
-    pub editor: FileEditor<'a>,
+pub struct CheesePaperApp {
+    pub project_editor: ProjectEditor,
     last_write: SystemTime,
 }
 
-impl<'a> eframe::App for CheesePaperApp<'a> {
+impl eframe::App for CheesePaperApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        match &mut self.editor {
-            FileEditor::Scene(editor) => editor.panels(ctx),
-            FileEditor::Character(editor) => editor.panels(ctx),
-            FileEditor::Folder(editor) => editor.panels(ctx),
-            FileEditor::Place(editor) => editor.panels(ctx),
-        }
-        // self.editor.panels(ctx);
+        self.project_editor.panels(ctx);
+
         let current_time = SystemTime::now();
         if current_time.duration_since(self.last_write).unwrap() > Duration::from_secs(5) {
             println!("Writing at: {:#?}", current_time);
@@ -53,29 +48,13 @@ fn configure_text_styles(ctx: &egui::Context) {
     ctx.all_styles_mut(move |style| style.text_styles = text_styles.clone());
 }
 
-impl<'a> CheesePaperApp<'a> {
-    pub fn new(cc: &eframe::CreationContext<'_>, file_object: &'a mut Box<dyn FileObject>) -> Self {
+impl CheesePaperApp {
+    pub fn new(cc: &eframe::CreationContext<'_>, project: Project) -> Self {
         configure_text_styles(&cc.egui_ctx);
 
-        match file_object.get_file_type_mut() {
-            MutFileObjectTypeInterface::Scene(scene) => Self {
-                editor: FileEditor::Scene(SceneEditor { scene: scene }),
-                last_write: SystemTime::now(),
-            },
-            MutFileObjectTypeInterface::Folder(folder) => Self {
-                editor: FileEditor::Folder(FolderEditor { folder: folder }),
-                last_write: SystemTime::now(),
-            },
-            MutFileObjectTypeInterface::Character(character) => Self {
-                editor: FileEditor::Character(CharacterEditor {
-                    character: character,
-                }),
-                last_write: SystemTime::now(),
-            },
-            MutFileObjectTypeInterface::Place(place) => Self {
-                editor: FileEditor::Place(PlaceEditor { place: place }),
-                last_write: SystemTime::now(),
-            },
+        Self {
+            project_editor: ProjectEditor { project },
+            last_write: SystemTime::now(),
         }
     }
 }

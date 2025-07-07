@@ -1,6 +1,6 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
-use crate::ui::file_object_editor::FileObjectEditor;
+use crate::ui::file_object_editor::FileObjectEditorType;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
@@ -11,7 +11,7 @@ pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
 }
 
-impl<'a> FileObjectEditor<'a> for SceneEditor<'a> {
+impl<'a> FileObjectEditorType<'a> for SceneEditor<'a> {
     fn panels(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui(ui);

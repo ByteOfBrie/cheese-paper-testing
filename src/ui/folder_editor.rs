@@ -2,7 +2,7 @@ use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Folder;
 
 use crate::ui::BaseTextEditor;
-use crate::ui::file_object_editor::FileObjectEditor;
+use crate::ui::file_object_editor::FileObjectEditorType;
 use egui::ScrollArea;
 
 /// Text editor view for an entire scene object, will be embeded in other file objects
@@ -11,7 +11,7 @@ pub struct FolderEditor<'a> {
     pub folder: &'a mut Folder,
 }
 
-impl<'a> FileObjectEditor<'a> for FolderEditor<'a> {
+impl<'a> FileObjectEditorType<'a> for FolderEditor<'a> {
     fn panels(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui(ui);

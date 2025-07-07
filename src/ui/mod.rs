@@ -6,6 +6,7 @@ mod file_object_editor;
 mod character_editor;
 mod folder_editor;
 mod place_editor;
+mod project_editor;
 mod scene_editor;
 
 pub use base_text_editor::BaseTextEditor;

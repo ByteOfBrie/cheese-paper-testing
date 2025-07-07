@@ -2,7 +2,7 @@ use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
 
 use crate::ui::BaseTextEditor;
-use crate::ui::file_object_editor::FileObjectEditor;
+use crate::ui::file_object_editor::FileObjectEditorType;
 use egui::ScrollArea;
 
 /// Text editor view for an entire scene object, will be embeded in other file objects
@@ -11,7 +11,7 @@ pub struct CharacterEditor<'a> {
     pub character: &'a mut Character,
 }
 
-impl<'a> FileObjectEditor<'a> for CharacterEditor<'a> {
+impl<'a> FileObjectEditorType<'a> for CharacterEditor<'a> {
     fn panels(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             self.ui(ui);

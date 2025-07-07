@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # file components
-serde = "1.0"
+serde = { version = "1.0", features=["derive"]}
 toml = "0.8"
 toml_edit = "0.22.27"
 regex = "1.11.1"
@@ -16,16 +16,13 @@ tempfile = "3.20.0"
 
 # ui
 egui = "0.31"
-eframe = { version = "0.31", default-features = false, features = [
-    "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+eframe = { version = "0.31", features = [
     "persistence",   # Enable restoring app state when restarting the app.
-    "wayland",       # To support Linux (and CI)
-    "x11",           # To support older Linux distributions (restores one of the default features)
 ] }
 
 env_logger = { version = "0.10", default-features = false, features = [
     "auto-color",
     "humantime",
 ] }
+
+egui_ltreeview = { git = "https://github.com/LennysLounge/egui_ltreeview.git", rev="c76ee73", features = ["persistence"]}

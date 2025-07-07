@@ -47,7 +47,7 @@ impl Character {
         Ok(character)
     }
 
-    pub fn from_base(base: BaseFileObject) -> Self {
+    pub fn from_base(base: BaseFileObject) -> Result<Self> {
         let mut character = Self {
             base,
             metadata: Default::default(),
@@ -65,10 +65,11 @@ impl Character {
                     character.get_path(),
                     &err
                 );
+                return Err(err);
             }
         }
 
-        character
+        Ok(character)
     }
 }
 

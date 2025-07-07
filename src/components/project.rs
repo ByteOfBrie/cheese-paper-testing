@@ -61,7 +61,7 @@ const PROJECT_INFO_NAME: &str = "project.toml";
 fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, FileObjectStore)> {
     if folder_path.exists() {
         match from_file(&folder_path, None) {
-            Some(created_object) => match created_object {
+            Ok(created_object) => match created_object {
                 FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
                 _ => {
                     return Err(Error::new(
@@ -70,11 +70,9 @@ fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, Fi
                     ));
                 }
             },
-            None => {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "could not load text for unknown reason",
-                ));
+            Err(err) => {
+                log::error!("failed to load top level folder {name}");
+                return Err(err);
             }
         }
     } else {

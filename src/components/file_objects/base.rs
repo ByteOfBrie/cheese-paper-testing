@@ -477,19 +477,28 @@ pub fn move_child(
     Ok(())
 }
 
-// TODO: this function probably doesn't make sense as an option (instead of result) given the other code I'm writing
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCreation> {
+pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCreation> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
             Some(dirname) => dirname,
-            None => return None,
+            None => {
+                return Err(Error::new(
+                    ErrorKind::InvalidFilename,
+                    "filename supplied to from_file should have a dirname component",
+                ));
+            }
         }
         .to_path_buf(),
         basename: match filename.file_name() {
             Some(basename) => basename,
-            None => return None,
+            None => {
+                return Err(Error::new(
+                    ErrorKind::InvalidFilename,
+                    "filename supplied to from_file should have a basename component",
+                ));
+            }
         }
         .to_owned(),
         modtime: None,
@@ -510,7 +519,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                 ("".to_string(), "".to_string())
             } else {
                 log::error!("Failed to read file {:?}: {:?}", &underlying_file, err);
-                return None;
+                return Err(err);
             }
         }
     };
@@ -544,7 +553,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
 
     if let Err(err) = load_base_metadata(&toml_header, &mut metadata, &mut file_info) {
         log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
-        return None;
+        return Err(err);
     }
 
     let file_type_str = match toml_header.get("file_type") {
@@ -564,7 +573,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
 
     let file_type: FileType = match file_type_str.as_str().try_into() {
         Ok(file_type) => file_type,
-        Err(_) => {
+        Err(err) => {
             // The "correct" string is `worldbuilding`, but allow place anyway
             if file_type_str == "place" {
                 FileType::Place
@@ -574,7 +583,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                     &file_type_str,
                     &filename
                 );
-                return None;
+                return Err(Error::new(ErrorKind::InvalidData, "unknown file type"));
             }
         }
     };
@@ -595,11 +604,6 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
         if filename.is_dir() {
             match std::fs::read_dir(&filename) {
                 Ok(files) => {
-                    // TODO: Proper logic:
-                    // 1. Read all of the files (that we can) into a list, it's fine to skip errors
-                    // 2. Store all indexes that exist
-                    // 3. Find the max of those indexes, assign (increasing) indexes to all remaining files
-                    // 4. Call fix_indexing (which might end up being a non-member function because of ownership stuff)
                     let mut indexed_files: Vec<(usize, PathBuf)> = Vec::new();
                     let mut unindexed_files: Vec<PathBuf> = Vec::new();
                     for file in files {
@@ -621,19 +625,17 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                                             log::error!(
                                                 "Encountered file without valid unicode name: {file:?}"
                                             );
-                                            return None;
+                                            continue;
                                         }
                                     },
                                     None => {
                                         log::error!(
-                                            "Encountered file without valid unicode name: {file:?}"
+                                            "Encountered file without valid basename name: {file:?}"
                                         );
-                                        return None;
+                                        continue;
                                     }
                                 };
 
-                                // fuck, this is going to be even more complicated once indexing
-                                // is done properly, it'll require multiple passes
                                 match get_index_from_name(file_name_str) {
                                     Some(index) => {
                                         indexed_files.push((index, file.path()));
@@ -666,9 +668,12 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                     // There may still be gaps at this point, but they'll get filled in at the end
                     // by `fix_indexing`
                     for (index, file) in indexed_files.drain(..) {
-                        if let Some(created_files) = from_file(&file, Some(index)) {
-                            let (object, mut descendents): (Box<dyn FileObject>, FileObjectStore) =
-                                match created_files {
+                        match from_file(&file, Some(index)) {
+                            Ok(created_files) => {
+                                let (object, mut descendents): (
+                                    Box<dyn FileObject>,
+                                    FileObjectStore,
+                                ) = match created_files {
                                     FileObjectCreation::Scene(object, descendents) => {
                                         (Box::new(object), descendents)
                                     }
@@ -683,11 +688,18 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                                     }
                                 };
 
-                            base.children.push(object.get_base().metadata.id.clone());
-                            objects.insert(object.get_base().metadata.id.clone(), object);
+                                base.children.push(object.get_base().metadata.id.clone());
+                                objects.insert(object.get_base().metadata.id.clone(), object);
 
-                            for (child_file_id, child_file) in descendents.drain() {
-                                objects.insert(child_file_id, child_file);
+                                for (child_file_id, child_file) in descendents.drain() {
+                                    objects.insert(child_file_id, child_file);
+                                }
+                            }
+                            Err(err) => {
+                                log::warn!(
+                                    "found invalid file while attempting to load {:?}",
+                                    &file
+                                );
                             }
                         }
                     }
@@ -697,7 +709,8 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                         "Error while attempt to read folder {:?}: {}",
                         &filename,
                         &err
-                    )
+                    );
+                    return Err(err);
                 }
             }
         } else {
@@ -705,7 +718,13 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
                 "attempted to construct a folder-type from a non-folder filename {:?}",
                 &filename
             );
-            return None;
+            return Err(Error::new(
+                ErrorKind::InvalidFilename,
+                format!(
+                    "{:?} is a folder-type file object, but doesn't have a directory",
+                    &filename
+                ),
+            ));
         }
 
         // This will ensure that all children have the correct indexing. The only file objects
@@ -713,16 +732,22 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Option<FileObjectCrea
         fix_indexing(&mut base.children, &mut objects);
     }
 
-    Some(match file_type {
+    match file_type {
         FileType::Scene => {
-            let mut scene = Scene::from_file_object(base);
+            let mut scene = Scene::from_file_object(base)?;
             scene.load_body(file_body);
-            FileObjectCreation::Scene(scene, objects)
+            Ok(FileObjectCreation::Scene(scene, objects))
         }
-        FileType::Character => FileObjectCreation::Character(Character::from_base(base), objects),
-        FileType::Folder => FileObjectCreation::Folder(Folder::from_base(base), objects),
-        FileType::Place => FileObjectCreation::Place(Place::from_base(base), objects),
-    })
+        FileType::Character => Ok(FileObjectCreation::Character(
+            Character::from_base(base)?,
+            objects,
+        )),
+        FileType::Folder => Ok(FileObjectCreation::Folder(
+            Folder::from_base(base)?,
+            objects,
+        )),
+        FileType::Place => Ok(FileObjectCreation::Place(Place::from_base(base)?, objects)),
+    }
 }
 
 impl BaseFileObject {

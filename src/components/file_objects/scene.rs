@@ -130,7 +130,7 @@ impl Scene {
     }
 
     // TODO: this should be a result
-    pub fn from_file_object(base: BaseFileObject) -> Self {
+    pub fn from_file_object(base: BaseFileObject) -> Result<Self> {
         let mut scene = Self {
             base,
             metadata: Default::default(),
@@ -150,10 +150,11 @@ impl Scene {
                     scene.get_path(),
                     &err
                 );
+                return Err(err);
             }
         }
 
-        scene
+        Ok(scene)
     }
 
     pub fn word_count(&self) -> usize {

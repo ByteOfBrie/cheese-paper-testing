@@ -59,7 +59,7 @@ impl Folder {
         Ok(folder)
     }
 
-    pub fn from_base(base: BaseFileObject) -> Self {
+    pub fn from_base(base: BaseFileObject) -> Result<Self> {
         let mut folder = Self {
             base,
             metadata: Default::default(),
@@ -77,10 +77,11 @@ impl Folder {
                     folder.get_path(),
                     &err
                 );
+                return Err(err);
             }
         }
 
-        folder
+        Ok(folder)
     }
 }
 

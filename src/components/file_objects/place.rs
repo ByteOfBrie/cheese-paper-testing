@@ -45,7 +45,7 @@ impl Place {
         Ok(place)
     }
 
-    pub fn from_base(base: BaseFileObject) -> Self {
+    pub fn from_base(base: BaseFileObject) -> Result<Self> {
         let mut place = Self {
             base,
             metadata: Default::default(),
@@ -63,10 +63,11 @@ impl Place {
                     place.get_path(),
                     &err
                 );
+                return Err(err);
             }
         }
 
-        place
+        Ok(place)
     }
 }
 

@@ -778,7 +778,61 @@ fn test_delete() {
 /// Try to delete a file object in the middle of a folder, ensuring indexing works correctly afterwards
 #[test]
 fn test_delete_middle() {
-    unimplemented!()
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut folder1 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
+
+    let mut scene1 = folder1.create_child(FileType::Scene).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
+
+    let mut scene2 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Scene)
+        })
+        .unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(scene2);
+    project.add_object(scene1);
+    project.save().unwrap();
+
+    project
+        .run_with_folder(ProjectFolder::text, |text, objects| {
+            text.remove_child(&folder1_id, objects)
+        })
+        .unwrap();
+
+    assert!(!project.get_path().join("text/000-folder1/").exists());
+    assert!(project.get_path().join("text/000-scene2.md").exists());
+
+    assert_eq!(
+        project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
+
+    assert!(project.objects.get(&folder1_id).is_none());
+    assert!(project.objects.get(&scene2_id).is_some());
 }
 
 /// Simple move, move a scene from the end of one folder to the end of another

@@ -1999,6 +1999,102 @@ fn test_move_to_child() {
     ));
 }
 
+#[test]
+fn test_move_no_clobber() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut scene1 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Scene)
+        })
+        .unwrap();
+    scene1.get_base_mut().metadata.name = "a".to_string();
+    scene1.get_base_mut().file.modified = true;
+
+    let mut scene2 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Scene)
+        })
+        .unwrap();
+    scene2.get_base_mut().metadata.name = "a".to_string();
+    scene2.get_base_mut().file.modified = true;
+
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
+
+    project.add_object(scene1);
+    project.add_object(scene2);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-a.md").exists());
+    assert!(project_path.join("text/001-a.md").exists());
+
+    // Move b into folder 2
+    move_child(
+        &scene1_id,
+        &project.text_id,
+        &project.text_id,
+        1,
+        &mut project.objects,
+    )
+    .unwrap();
+
+    assert!(project_path.join("text/000-a.md").exists());
+    assert!(project_path.join("text/001-a.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        2
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &scene2_id
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &scene2_id
+    );
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project.objects.get(&scene1_id).unwrap().get_base().index,
+        Some(1)
+    );
+    assert_eq!(
+        project.objects.get(&scene2_id).unwrap().get_base().index,
+        Some(0)
+    );
+}
+
 /// Make sure places can nest
 #[test]
 fn test_place_nesting() {

@@ -1,6 +1,6 @@
 use crate::components::Project;
 use crate::components::file_objects::{
-    FileObject, FileObjectStore, MutFileObjectTypeInterface, run_with_file_object,
+    FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
 };
 use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 use egui::{Response, Widget};
@@ -103,7 +103,65 @@ impl ProjectEditor {
                     // We only allow for one node at a time to be selected, so this is fine
                     self.open_scene = nodes.get(0).map(|id| id.clone());
                 }
-                Action::Drag(drag) => println!("drag: {:?}", drag.source),
+                Action::Move(drag_and_drop) => {
+                    if let Some(source) = drag_and_drop.source.get(0) {
+                        // Don't move one of the roots
+                        if *source == self.project.text_id
+                            || *source == self.project.characters_id
+                            || *source == self.project.worldbuilding_id
+                        {
+                            continue;
+                        }
+
+                        let index: usize = match drag_and_drop.position {
+                            egui_ltreeview::DirPosition::First => 0,
+                            egui_ltreeview::DirPosition::Last => self
+                                .project
+                                .objects
+                                .get(&drag_and_drop.target)
+                                .expect("objects in the tree must be in the object map")
+                                .get_base()
+                                .children
+                                .len(),
+                            egui_ltreeview::DirPosition::Before(node) => self
+                                .project
+                                .objects
+                                .get(&node)
+                                .expect("objects in the tree must be in the object map")
+                                .get_base()
+                                .index
+                                .expect("nodes in the tree should always have indexes"),
+                            egui_ltreeview::DirPosition::After(node) => {
+                                self.project
+                                    .objects
+                                    .get(&node)
+                                    .expect("objects in the tree must be in the object map")
+                                    .get_base()
+                                    .index
+                                    .expect("nodes in the tree should always have indexes")
+                                    + 1
+                            }
+                        };
+
+                        let mut source_parent: Option<String> = None;
+
+                        for object in self.project.objects.values() {
+                            if object.get_base().children.contains(source) {
+                                source_parent = Some(object.get_base().metadata.id.clone());
+                            }
+                        }
+
+                        if let Err(err) = move_child(
+                            &source,
+                            &source_parent.expect("moving item's parent should be in tree"),
+                            &drag_and_drop.target,
+                            index,
+                            &mut self.project.objects,
+                        ) {
+                            log::error!("error encountered while moving file object: {err:?}");
+                        }
+                    }
+                }
                 _ => {}
             }
         }

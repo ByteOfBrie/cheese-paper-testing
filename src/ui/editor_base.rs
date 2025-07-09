@@ -28,6 +28,12 @@ impl eframe::App for CheesePaperApp {
     }
 }
 
+impl Drop for CheesePaperApp {
+    fn drop(&mut self) {
+        self.project_editor.save();
+    }
+}
+
 fn configure_text_styles(ctx: &egui::Context) {
     use FontFamily::{Monospace, Proportional};
 

@@ -254,7 +254,7 @@ fn test_set_index_folders() {
 
     top_level_folder.set_index(1, &mut project.objects).unwrap();
 
-    let (_child_string, child) = project.objects.remove_entry(&child_scene_id).unwrap();
+    let child = project.objects.remove(&child_scene_id).unwrap();
 
     assert_eq!(child.get_base().index, Some(0));
     assert!(child.get_file().exists());
@@ -909,6 +909,109 @@ fn test_move_simple() {
     );
 }
 
+/// Try moving file multiple times to make sure we're setting properties correctly
+#[test]
+fn test_move_multiple_times() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut folder1 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
+
+    let mut folder2 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
+
+    let mut scene_to_move = folder1.create_child(FileType::Scene).unwrap();
+    scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
+    scene_to_move.get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene_to_move.get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(folder2);
+    project.add_object(scene_to_move);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
+
+    // Do the first move
+    move_child(&scene_id, &folder1_id, &folder2_id, 0, &mut project.objects).unwrap();
+
+    // Verify that the move happened on disk
+    assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(project_path.join("text/001-folder2/000-scene1.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        0
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
+
+    // Do the second move (back)
+    move_child(&scene_id, &folder2_id, &folder1_id, 0, &mut project.objects).unwrap();
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        0
+    );
+
+    assert!(project_path.join("text/000-folder1/000-scene1.md").exists());
+    assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
+}
+
 /// Move a folder that contains things. Almost the same as `test_move_simple`,
 /// but moves the entire folder instead
 #[test]
@@ -967,7 +1070,7 @@ fn test_move_folder_contents() {
             .join("text/000-folder1/000-folder2/metadata.toml")
             .exists()
     );
-    assert!(project_path.join("text/000-folder1/000-folder2").exists()); // 3. scene got moved too
+    assert!(project_path.join("text/000-folder1/000-folder2").exists());
     // 3. scene got moved too
     assert!(
         project_path
@@ -1185,6 +1288,319 @@ fn test_move_within_folder_forwards() {
             .unwrap()
             .to_owned()),
         scene_id
+    );
+}
+
+/// Move an object from the middle of a folder to another folder and back
+///
+/// Starting layout:
+///
+/// ```
+/// text
+/// ├── 000-folder1
+/// │   ├── 000-a.md
+/// │   ├── 001-b.md
+/// │   ├── 002-c.md
+/// │   └── metadata.toml
+/// ├── 001-folder2
+/// │   └── metadata.toml
+/// └── metadata.toml
+/// ```
+///
+/// `b` moves to folder 2, leaving `000-a.md` and `001-c.md`,
+/// then `b` moves to index 0 of folder 1, leaving `000-b.md`, `001-a.md` and `002-c.md`
+///
+/// Currently the most comprehensive test (at checking it's assumptions in multiple places),
+/// probably because it was written last
+#[test]
+fn test_move_between_folder_contents() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let mut folder1 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
+
+    let mut folder2 = project
+        .run_with_folder(ProjectFolder::text, |text, _| {
+            text.create_child(FileType::Folder)
+        })
+        .unwrap();
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
+
+    let mut scene_a = folder1.create_child(FileType::Scene).unwrap();
+    scene_a.get_base_mut().metadata.name = "a".to_string();
+    scene_a.get_base_mut().file.modified = true;
+
+    let mut scene_b = folder1.create_child(FileType::Scene).unwrap();
+    scene_b.get_base_mut().metadata.name = "b".to_string();
+    scene_b.get_base_mut().file.modified = true;
+
+    let mut scene_c = folder1.create_child(FileType::Scene).unwrap();
+    scene_c.get_base_mut().metadata.name = "c".to_string();
+    scene_c.get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_a_id = scene_a.get_base().metadata.id.clone();
+    let scene_b_id = scene_b.get_base().metadata.id.clone();
+    let scene_c_id = scene_c.get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(folder2);
+    project.add_object(scene_a);
+    project.add_object(scene_b);
+    project.add_object(scene_c);
+    project.save().unwrap();
+
+    let project_path = project.get_path();
+
+    // Check before the move
+    assert!(project_path.join("text/000-folder1/000-a.md").exists());
+    assert!(project_path.join("text/000-folder1/001-b.md").exists());
+    assert!(project_path.join("text/000-folder1/002-c.md").exists());
+
+    // Move b into folder 2
+    move_child(
+        &scene_b_id,
+        &folder1_id,
+        &folder2_id,
+        0,
+        &mut project.objects,
+    )
+    .unwrap();
+
+    // Ensure the file got moved
+    assert!(project_path.join("text/001-folder2/000-b.md").exists());
+    assert!(!project_path.join("text/000-folder1/001-b.md").exists());
+
+    // Ensure indexing is correct in the old folder
+    assert!(project_path.join("text/000-folder1/000-a.md").exists());
+    assert!(project_path.join("text/000-folder1/001-c.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        2
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        1
+    );
+
+    // children are in the correct spots in the folder
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &scene_a_id
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(1)
+            .unwrap(),
+        &scene_c_id
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &scene_b_id
+    );
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project.objects.get(&scene_a_id).unwrap().get_base().index,
+        Some(0)
+    );
+    assert_eq!(
+        project.objects.get(&scene_c_id).unwrap().get_base().index,
+        Some(1)
+    );
+    assert_eq!(
+        project.objects.get(&scene_b_id).unwrap().get_base().index,
+        Some(0)
+    );
+
+    assert!(
+        project
+            .objects
+            .get(&scene_b_id)
+            .unwrap()
+            .get_path()
+            .ends_with("text/001-folder2/000-b.md")
+    );
+
+    assert!(
+        project
+            .objects
+            .get(&scene_a_id)
+            .unwrap()
+            .get_path()
+            .ends_with("text/000-folder1/000-a.md")
+    );
+
+    assert!(
+        project
+            .objects
+            .get(&scene_c_id)
+            .unwrap()
+            .get_path()
+            .ends_with("text/000-folder1/001-c.md")
+    );
+
+    // Now, move b back into the start of folder 1
+    move_child(
+        &scene_b_id,
+        &folder2_id,
+        &folder1_id,
+        0,
+        &mut project.objects,
+    )
+    .unwrap();
+
+    // Ensure indexing is correct in the new folder
+    assert!(!project_path.join("text/001-folder2/000-b.md").exists());
+    assert!(project_path.join("text/000-folder1/000-b.md").exists());
+    assert!(project_path.join("text/000-folder1/001-a.md").exists());
+    assert!(project_path.join("text/000-folder1/002-c.md").exists());
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        3
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder2_id)
+            .unwrap()
+            .get_base()
+            .children
+            .len(),
+        0
+    );
+
+    // children are in the correct spots in the folder
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(0)
+            .unwrap(),
+        &scene_b_id
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(1)
+            .unwrap(),
+        &scene_a_id
+    );
+
+    assert_eq!(
+        project
+            .objects
+            .get(&folder1_id)
+            .unwrap()
+            .get_base()
+            .children
+            .get(2)
+            .unwrap(),
+        &scene_c_id
+    );
+
+    // Make sure the file objects moved the children appropriately
+    assert_eq!(
+        project.objects.get(&scene_b_id).unwrap().get_base().index,
+        Some(0)
+    );
+    assert_eq!(
+        project.objects.get(&scene_a_id).unwrap().get_base().index,
+        Some(1)
+    );
+    assert_eq!(
+        project.objects.get(&scene_c_id).unwrap().get_base().index,
+        Some(2)
+    );
+
+    assert!(
+        project
+            .objects
+            .get(&scene_b_id)
+            .unwrap()
+            .get_path()
+            .ends_with("text/000-folder1/000-b.md")
+    );
+
+    assert!(
+        project
+            .objects
+            .get(&scene_a_id)
+            .unwrap()
+            .get_path()
+            .ends_with("text/000-folder1/001-a.md")
+    );
+
+    assert!(
+        project
+            .objects
+            .get(&scene_c_id)
+            .unwrap()
+            .get_path()
+            .ends_with("text/000-folder1/002-c.md")
     );
 }
 

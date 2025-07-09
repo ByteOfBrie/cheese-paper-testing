@@ -10,8 +10,7 @@ mod tiny_markdown;
 mod ui;
 
 use crate::components::Project;
-use crate::components::file_objects::base::FileObjectCreation;
-use crate::components::file_objects::{FileObject, from_file};
+use crate::components::file_objects::from_file;
 
 use crate::ui::CheesePaperApp;
 

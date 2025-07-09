@@ -252,27 +252,17 @@ pub fn run_with_file_object<T>(
 /// in `children` will actually be sorted.
 fn fix_indexing(children: &Vec<String>, objects: &mut FileObjectStore) -> Result<()> {
     for (count, child_id) in children.iter().enumerate() {
-        let result = run_with_file_object(&child_id, objects, |child, objects| {
-            let child_base = child.get_base();
-
-            if child_base
-                .index
-                .expect("Children should always have indexes")
-                != count
-            {
-                child.set_index(count, objects)
-            } else {
-                Ok(())
+        match run_with_file_object(child_id, objects, |child, objects| {
+            child.set_index(count, objects)
+        }) {
+            Ok(true) => {
+                log::debug!("Updated index of {child_id} to {count}")
             }
-        });
-
-        if let Err(err) = result {
-            log::error!(
-                "Error while trying to fix indexing of child {:?}: {}",
-                &child_id,
-                err
-            );
-            return Err(err);
+            Ok(false) => {}
+            Err(err) => {
+                log::error!("Error while trying to fix indexing of child {child_id}: {err}");
+                return Err(err);
+            }
         }
     }
 
@@ -323,10 +313,15 @@ fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore
                 run_with_file_object(&child_id, objects, |child, objects| {
                     // Try to increase the index of the child
                     child.set_index(i + 1, objects)
-                })?
+                })?;
             }
+
+            log::debug!("created indexing gap in {parent_id} at {index}");
+            Ok(())
+        } else {
+            log::debug!("indexing gap requested at the end of {parent_id}, nothing to do");
+            Ok(())
         }
-        Ok(())
     })
 }
 
@@ -366,7 +361,7 @@ pub fn move_child(
     };
     // * shouldn't move something where it already is
     if source_file_id == dest_file_id && moving_index == new_index {
-        log::warn!("attempted to move {moving_file_id} to itself, skipping");
+        log::debug!("attempted to move {moving_file_id} to itself, skipping");
         return Ok(());
     }
 
@@ -415,7 +410,7 @@ pub fn move_child(
 
         run_with_file_object(&moving_file_id, objects, |child, objects| {
             // Move the actual child on disk
-            if let Err(err) = child.move_object(insertion_index, &dest.get_path(), objects) {
+            if let Err(err) = child.move_object(insertion_index, dest.get_path(), objects) {
                 // be as graceful as possible, put the children back, the current state is still likely
                 // sorta broken :/
                 log::error!("Encountered error while trying to move {moving_file_id}");
@@ -430,18 +425,10 @@ pub fn move_child(
 
     // if we're moving within an object, we already fixed indexing a few lines above
     if source_file_id != dest_file_id {
-        // The borrow checker objects to using `run_with_file_object` here (since we're comparing
-        // to source), so we have to do this manually
         // We just need to clean up and re-index the source to fill in the gap we left
-        let (source_id_string, mut source) = objects
-            .remove_entry(dest_file_id)
-            .expect("source must be in the object map when calling move");
-
-        let result = fix_indexing(&mut source.get_base_mut().children, objects);
-
-        objects.insert(source_id_string, source);
-
-        result?;
+        run_with_file_object(source_file_id, objects, |source, objects| {
+            fix_indexing(&mut source.get_base_mut().children, objects)
+        })?
     }
 
     Ok(())
@@ -549,9 +536,10 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                 FileType::Place
             } else {
                 log::error!(
-                    "Found unknown file type ({}) while attempt to read {:?}",
+                    "Found unknown file type ({}) while attempt to read {:?}: {}",
                     &file_type_str,
-                    &filename
+                    &filename,
+                    err
                 );
                 return Err(Error::new(ErrorKind::InvalidData, "unknown file type"));
             }
@@ -667,8 +655,9 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                             }
                             Err(err) => {
                                 log::warn!(
-                                    "found invalid file while attempting to load {:?}",
-                                    &file
+                                    "found invalid file while attempting to load {:?}, {}",
+                                    &file,
+                                    err
                                 );
                             }
                         }
@@ -768,19 +757,21 @@ pub trait FileObject: Debug {
     fn write_metadata(&mut self);
 
     /// Sets the index to this file, doing the move if necessary
-    fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<()> {
+    fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<bool> {
         if self.get_base().index == Some(new_index) {
             let name_index = get_index_from_name(&self.get_base().file.basename.to_string_lossy());
             if name_index == self.get_base().index {
                 // We have the index in memory and on disk, there's nothing to be done here, return early
                 // and avoid writing to disk
-                return Ok(());
+                return Ok(false);
             }
         }
 
         self.get_base_mut().index = Some(new_index);
 
-        self.set_filename(self.calculate_filename(), objects)
+        self.set_filename(self.calculate_filename(), objects)?;
+
+        Ok(true)
     }
 
     /// Calculates the filename for a particular object
@@ -844,19 +835,28 @@ pub trait FileObject: Debug {
     fn move_object(
         &mut self,
         new_index: usize,
-        new_path: &Path,
+        new_path: PathBuf,
         objects: &mut FileObjectStore,
     ) -> Result<()> {
         let old_path = self.get_path();
 
         self.get_base_mut().index = Some(new_index);
-        let new_path = Path::join(new_path, self.calculate_filename());
+        self.get_base_mut().file.dirname = new_path;
+        self.get_base_mut().file.basename = self.calculate_filename();
+        let new_path = self.get_path();
 
         if new_path == old_path {
             // Nothing to do:
             log::warn!("tried to move {old_path:?} to itself, harmless but shouldn't happen");
             return Ok(());
         }
+
+        log::debug!(
+            "moving {} from {:#?} to {:?}",
+            &self.get_base().metadata.name,
+            &old_path,
+            &new_path
+        );
 
         self.move_on_disk(old_path, new_path, objects)
     }

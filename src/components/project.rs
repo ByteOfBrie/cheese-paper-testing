@@ -66,7 +66,7 @@ fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, Fi
                 _ => {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
-                        "could not load text for unknown reason",
+                        "somehow loaded a non-folder as a top level folder",
                     ));
                 }
             },

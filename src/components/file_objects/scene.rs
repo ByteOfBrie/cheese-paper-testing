@@ -143,7 +143,6 @@ impl Scene {
                 }
             }
             Err(err) => {
-                // TODO: throw actual error
                 log::error!(
                     "Error while loading object-specific metadata for {:?}: {}",
                     scene.get_path(),

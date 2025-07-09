@@ -115,4 +115,10 @@ impl ProjectEditor {
             open_scene: None,
         }
     }
+
+    pub fn save(&mut self) {
+        if let Err(err) = self.project.save() {
+            log::error!("encountered error while saving project: {err}");
+        }
+    }
 }

@@ -7,6 +7,12 @@ use crate::components::Project;
 
 pub struct CheesePaperApp {
     pub project_editor: ProjectEditor,
+
+    /// Time for autosaves
+    ///
+    ///  Shockingly, it actually makes some amount of sense to keep the logic here (instead of in
+    ///`ProjectEditor`), since we'll eventually want to save editor configs as well, and it's better
+    /// to propagate the event downwards
     last_write: SystemTime,
 }
 
@@ -16,7 +22,7 @@ impl eframe::App for CheesePaperApp {
 
         let current_time = SystemTime::now();
         if current_time.duration_since(self.last_write).unwrap() > Duration::from_secs(5) {
-            println!("Writing at: {:#?}", current_time);
+            self.project_editor.save();
             self.last_write = current_time;
         }
     }

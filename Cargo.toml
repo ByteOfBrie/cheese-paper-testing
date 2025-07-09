@@ -25,4 +25,4 @@ env_logger = { version = "0.10", default-features = false, features = [
     "humantime",
 ] }
 
-egui_ltreeview = { git = "https://github.com/LennysLounge/egui_ltreeview.git", rev="c76ee73", features = ["persistence"]}
+egui_ltreeview = { git = "https://github.com/ByteOfBrie/egui_ltreeview.git", rev="352e220", features = ["persistence"]}

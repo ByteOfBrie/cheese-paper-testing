@@ -1,19 +1,9 @@
 use egui::{FontFamily, FontId, TextStyle};
-use egui_ltreeview::TreeView;
 use std::time::{Duration, SystemTime};
 
 use crate::ui::project_editor::ProjectEditor;
-use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 
 use crate::components::Project;
-use crate::ui::file_object_editor::FileObjectEditorType;
-
-pub enum FileEditor<'a> {
-    Scene(SceneEditor<'a>),
-    Character(CharacterEditor<'a>),
-    Folder(FolderEditor<'a>),
-    Place(PlaceEditor<'a>),
-}
 
 pub struct CheesePaperApp {
     pub project_editor: ProjectEditor,

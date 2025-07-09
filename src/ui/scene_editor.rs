@@ -1,6 +1,6 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
-use crate::ui::file_object_editor::FileObjectEditorType;
+use egui::{Response, Widget};
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
@@ -11,25 +11,21 @@ pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
 }
 
-impl<'a> FileObjectEditorType<'a> for SceneEditor<'a> {
-    fn panels(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.ui(ui);
-        });
-    }
-}
-
-impl<'a> SceneEditor<'a> {
-    fn ui(&mut self, ui: &mut egui::Ui) {
+impl<'a> Widget for &mut SceneEditor<'a> {
+    fn ui(self, ui: &mut egui::Ui) -> Response {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)
             .width_range(50.0..=500.0)
             .show_inside(ui, |ui| self.show_sidebar(ui));
 
-        egui::CentralPanel::default().show_inside(ui, |ui| self.show_text_editor(ui));
+        egui::CentralPanel::default()
+            .show_inside(ui, |ui| self.show_text_editor(ui))
+            .response
     }
+}
 
+impl<'a> SceneEditor<'a> {
     fn show_text_editor(&mut self, ui: &mut egui::Ui) {
         ScrollArea::vertical()
             .id_salt("text")

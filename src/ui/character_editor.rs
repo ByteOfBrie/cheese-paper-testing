@@ -1,8 +1,8 @@
 use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
+use egui::{Response, Widget};
 
 use crate::ui::BaseTextEditor;
-use crate::ui::file_object_editor::FileObjectEditorType;
 use egui::ScrollArea;
 
 /// Text editor view for an entire scene object, will be embeded in other file objects
@@ -11,25 +11,21 @@ pub struct CharacterEditor<'a> {
     pub character: &'a mut Character,
 }
 
-impl<'a> FileObjectEditorType<'a> for CharacterEditor<'a> {
-    fn panels(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.ui(ui);
-        });
-    }
-}
-
-impl<'a> CharacterEditor<'a> {
-    fn ui(&mut self, ui: &mut egui::Ui) {
+impl<'a> Widget for &mut CharacterEditor<'a> {
+    fn ui(self, ui: &mut egui::Ui) -> Response {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)
             .width_range(50.0..=500.0)
             .show_inside(ui, |ui| self.show_sidebar(ui));
 
-        egui::CentralPanel::default().show_inside(ui, |ui| self.show_editor(ui));
+        egui::CentralPanel::default()
+            .show_inside(ui, |ui| self.show_editor(ui))
+            .response
     }
+}
 
+impl<'a> CharacterEditor<'a> {
     fn show_sidebar(&mut self, ui: &mut egui::Ui) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(

@@ -1,5 +1,9 @@
 use crate::components::Project;
-use crate::components::file_objects::{FileObject, FileObjectStore, run_with_file_object};
+use crate::components::file_objects::{
+    FileObject, FileObjectStore, MutFileObjectTypeInterface, run_with_file_object,
+};
+use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
+use egui::{Response, Widget};
 use egui_ltreeview::{Action, NodeBuilder, TreeView};
 
 #[derive(Debug)]
@@ -68,7 +72,21 @@ impl ProjectEditor {
         });
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) {}
+    fn ui(&mut self, ui: &mut egui::Ui) -> Response {
+        if let Some(open_scene) = &self.open_scene {
+            let file_object = self.project.objects.get_mut(open_scene).unwrap();
+            match file_object.get_file_type_mut() {
+                MutFileObjectTypeInterface::Scene(obj) => SceneEditor { scene: obj }.ui(ui),
+                MutFileObjectTypeInterface::Character(obj) => {
+                    CharacterEditor { character: obj }.ui(ui)
+                }
+                MutFileObjectTypeInterface::Folder(obj) => FolderEditor { folder: obj }.ui(ui),
+                MutFileObjectTypeInterface::Place(obj) => PlaceEditor { place: obj }.ui(ui),
+            }
+        } else {
+            ui.response()
+        }
+    }
 
     fn draw_tree(&mut self, ui: &mut egui::Ui) {
         let (_response, actions) = TreeView::new(ui.make_persistent_id("project tree"))

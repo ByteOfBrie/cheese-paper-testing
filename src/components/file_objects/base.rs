@@ -248,27 +248,6 @@ pub fn run_with_file_object<T>(
     result
 }
 
-/// For ease of calling, `objects` can contain arbitrary objects, only values contained
-/// in `children` will actually be sorted.
-fn fix_indexing(children: &Vec<String>, objects: &mut FileObjectStore) -> Result<()> {
-    for (count, child_id) in children.iter().enumerate() {
-        match run_with_file_object(child_id, objects, |child, objects| {
-            child.set_index(count, objects)
-        }) {
-            Ok(true) => {
-                log::debug!("Updated index of {child_id} to {count}")
-            }
-            Ok(false) => {}
-            Err(err) => {
-                log::error!("Error while trying to fix indexing of child {child_id}: {err}");
-                return Err(err);
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// The object that was requested,
 /// All of the descendents of that file object (including children) in a hashmap that owns them
 #[derive(Debug)]
@@ -420,14 +399,14 @@ pub fn move_child(
         })?;
 
         // Fix indexing in the destination (now that it has the child)
-        fix_indexing(&mut dest.get_base_mut().children, objects)
+        dest.fix_indexing(objects)
     })?;
 
     // if we're moving within an object, we already fixed indexing a few lines above
     if source_file_id != dest_file_id {
         // We just need to clean up and re-index the source to fill in the gap we left
         run_with_file_object(source_file_id, objects, |source, objects| {
-            fix_indexing(&mut source.get_base_mut().children, objects)
+            source.fix_indexing(objects)
         })?
     }
 
@@ -685,10 +664,9 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                 ),
             ));
         }
-
+        // We fix the indexing at the end when returning a folder or place
         // This will ensure that all children have the correct indexing. The only file objects
         // that aren't the children of some folder are the roots, which don't have indexing anyway
-        fix_indexing(&mut base.children, &mut objects)?;
     }
 
     match file_type {
@@ -701,11 +679,21 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
             Character::from_base(base)?,
             objects,
         )),
-        FileType::Folder => Ok(FileObjectCreation::Folder(
-            Folder::from_base(base)?,
-            objects,
-        )),
-        FileType::Place => Ok(FileObjectCreation::Place(Place::from_base(base)?, objects)),
+        FileType::Folder => {
+            let mut folder = Folder::from_base(base)?;
+
+            folder.fix_indexing(&mut objects)?;
+
+            Ok(FileObjectCreation::Folder(folder, objects))
+        }
+
+        FileType::Place => {
+            let mut place = Place::from_base(base)?;
+
+            place.fix_indexing(&mut objects)?;
+
+            Ok(FileObjectCreation::Place(place, objects))
+        }
     }
 }
 
@@ -1091,13 +1079,34 @@ pub trait FileObject: Debug {
             std::fs::remove_dir(child.get_path())?;
         }
 
-        fix_indexing(&self.get_base().children, objects)?;
+        self.fix_indexing(objects)?;
 
         // If we had any errors earlier, return them
         match errors.pop() {
             Some(err) => Err(err),
             None => Ok(()),
         }
+    }
+
+    /// For ease of calling, `objects` can contain arbitrary objects, only values contained
+    /// in `children` will actually be sorted.
+    fn fix_indexing(&mut self, objects: &mut FileObjectStore) -> Result<()> {
+        for (count, child_id) in self.get_base().children.iter().enumerate() {
+            match run_with_file_object(child_id, objects, |child, objects| {
+                child.set_index(count, objects)
+            }) {
+                Ok(true) => {
+                    log::debug!("Updated index of {child_id} to {count}")
+                }
+                Ok(false) => {}
+                Err(err) => {
+                    log::error!("Error while trying to fix indexing of child {child_id}: {err}");
+                    return Err(err);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Allow for downcasting this as a reference, useful for creating the editors

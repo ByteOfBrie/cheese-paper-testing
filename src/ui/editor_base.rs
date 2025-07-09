@@ -53,7 +53,7 @@ impl CheesePaperApp {
         configure_text_styles(&cc.egui_ctx);
 
         Self {
-            project_editor: ProjectEditor { project },
+            project_editor: ProjectEditor::new(project),
             last_write: SystemTime::now(),
         }
     }

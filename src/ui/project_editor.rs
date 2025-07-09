@@ -5,6 +5,7 @@ use egui_ltreeview::{Action, NodeBuilder, TreeView};
 #[derive(Debug)]
 pub struct ProjectEditor {
     pub project: Project,
+    open_scene: Option<String>,
 }
 
 impl dyn FileObject {
@@ -13,11 +14,11 @@ impl dyn FileObject {
         objects: &mut FileObjectStore,
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
     ) {
-        const node_height: f32 = 26.0;
+        const NODE_HEIGHT: f32 = 26.0;
         if self.is_folder() {
             builder.node(
                 NodeBuilder::dir(self.get_base().metadata.id.clone())
-                    .height(node_height)
+                    .height(NODE_HEIGHT)
                     .label(&self.get_base().metadata.name),
             );
 
@@ -31,7 +32,7 @@ impl dyn FileObject {
         } else {
             builder.node(
                 NodeBuilder::leaf(self.get_base().metadata.id.clone())
-                    .height(node_height)
+                    .height(NODE_HEIGHT)
                     .label(&self.get_base().metadata.name),
             );
         }
@@ -61,6 +62,10 @@ impl ProjectEditor {
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
             self.draw_tree(ui);
         });
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.ui(ui);
+        });
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) {}
@@ -76,9 +81,20 @@ impl ProjectEditor {
             match action {
                 Action::SetSelected(nodes) => {
                     println!("nodes: {nodes:?}");
+
+                    // We only allow for one node at a time to be selected, so this is fine
+                    self.open_scene = nodes.get(0).map(|id| id.clone());
                 }
+                Action::Drag(drag) => println!("drag: {:?}", drag.source),
                 _ => {}
             }
+        }
+    }
+
+    pub fn new(project: Project) -> Self {
+        Self {
+            project,
+            open_scene: None,
         }
     }
 }

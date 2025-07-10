@@ -105,6 +105,7 @@ impl ProjectEditor {
         // render the tab view
         DockArea::new(&mut self.dock_state)
             .allowed_splits(egui_dock::AllowedSplits::None)
+            .show_leaf_collapse_buttons(false)
             .show(
                 ctx,
                 &mut TabViewer {
@@ -125,7 +126,13 @@ impl ProjectEditor {
                 Action::SetSelected(selected_file_ids) => {
                     // Open nodes when they're selected
                     if let Some(file_id) = selected_file_ids.get(0) {
-                        self.dock_state.push_to_first_leaf(file_id.clone());
+                        if let Some(tab_position) = self.dock_state.find_tab(file_id) {
+                            // We've already opened this, just select it
+                            self.dock_state.set_active_tab(tab_position);
+                        } else {
+                            // New file object, open it for editing
+                            self.dock_state.push_to_first_leaf(file_id.clone());
+                        }
                     }
                 }
                 Action::Move(drag_and_drop) => {

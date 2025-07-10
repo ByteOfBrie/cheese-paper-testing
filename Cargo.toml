@@ -26,3 +26,4 @@ env_logger = { version = "0.10", default-features = false, features = [
 ] }
 
 egui_ltreeview = { git = "https://github.com/ByteOfBrie/egui_ltreeview.git", rev="4f2b4938", features = ["persistence"]}
+egui_dock = "0.16.0"

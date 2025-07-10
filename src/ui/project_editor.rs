@@ -3,13 +3,14 @@ use crate::components::file_objects::{
     FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
 };
 use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
-use egui::{Response, Widget};
+use egui::Widget;
+use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, NodeBuilder, TreeView};
 
 #[derive(Debug)]
 pub struct ProjectEditor {
     pub project: Project,
-    open_scene: Option<String>,
+    dock_state: DockState<String>,
 }
 
 impl dyn FileObject {
@@ -61,31 +62,55 @@ impl Project {
     }
 }
 
+struct TabViewer<'a> {
+    project: &'a mut Project,
+}
+
+impl egui_dock::TabViewer for TabViewer<'_> {
+    type Tab = String;
+
+    fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
+        self.project
+            .objects
+            .get(tab)
+            .unwrap()
+            .get_base()
+            .metadata
+            .name
+            .clone()
+            .into()
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+        let file_object = self.project.objects.get_mut(tab).unwrap();
+        match file_object.get_file_type_mut() {
+            MutFileObjectTypeInterface::Scene(obj) => SceneEditor { scene: obj }.ui(ui),
+            MutFileObjectTypeInterface::Character(obj) => CharacterEditor { character: obj }.ui(ui),
+            MutFileObjectTypeInterface::Folder(obj) => FolderEditor { folder: obj }.ui(ui),
+            MutFileObjectTypeInterface::Place(obj) => PlaceEditor { place: obj }.ui(ui),
+        };
+    }
+
+    fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
+        false
+    }
+}
+
 impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
             self.draw_tree(ui);
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.ui(ui);
-        });
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui) -> Response {
-        if let Some(open_scene) = &self.open_scene {
-            let file_object = self.project.objects.get_mut(open_scene).unwrap();
-            match file_object.get_file_type_mut() {
-                MutFileObjectTypeInterface::Scene(obj) => SceneEditor { scene: obj }.ui(ui),
-                MutFileObjectTypeInterface::Character(obj) => {
-                    CharacterEditor { character: obj }.ui(ui)
-                }
-                MutFileObjectTypeInterface::Folder(obj) => FolderEditor { folder: obj }.ui(ui),
-                MutFileObjectTypeInterface::Place(obj) => PlaceEditor { place: obj }.ui(ui),
-            }
-        } else {
-            ui.response()
-        }
+        // render the tab view
+        DockArea::new(&mut self.dock_state)
+            .allowed_splits(egui_dock::AllowedSplits::None)
+            .show(
+                ctx,
+                &mut TabViewer {
+                    project: &mut self.project,
+                },
+            )
     }
 
     fn draw_tree(&mut self, ui: &mut egui::Ui) {
@@ -97,11 +122,11 @@ impl ProjectEditor {
 
         for action in actions {
             match action {
-                Action::SetSelected(nodes) => {
-                    println!("nodes: {nodes:?}");
-
-                    // We only allow for one node at a time to be selected, so this is fine
-                    self.open_scene = nodes.get(0).map(|id| id.clone());
+                Action::SetSelected(selected_file_ids) => {
+                    // Open nodes when they're selected
+                    if let Some(file_id) = selected_file_ids.get(0) {
+                        self.dock_state.push_to_first_leaf(file_id.clone());
+                    }
                 }
                 Action::Move(drag_and_drop) => {
                     if let Some(source) = drag_and_drop.source.get(0) {
@@ -170,7 +195,7 @@ impl ProjectEditor {
     pub fn new(project: Project) -> Self {
         Self {
             project,
-            open_scene: None,
+            dock_state: DockState::new(vec![]),
         }
     }
 

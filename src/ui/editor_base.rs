@@ -1,5 +1,5 @@
 use egui::{FontFamily, FontId, TextStyle};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 use crate::ui::project_editor::ProjectEditor;
 
@@ -13,17 +13,17 @@ pub struct CheesePaperApp {
     ///  Shockingly, it actually makes some amount of sense to keep the logic here (instead of in
     ///`ProjectEditor`), since we'll eventually want to save editor configs as well, and it's better
     /// to propagate the event downwards
-    last_write: SystemTime,
+    last_save: Instant,
 }
 
 impl eframe::App for CheesePaperApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.project_editor.panels(ctx);
 
-        let current_time = SystemTime::now();
-        if current_time.duration_since(self.last_write).unwrap() > Duration::from_secs(5) {
+        let current_time = Instant::now();
+        if current_time.duration_since(self.last_save) > Duration::from_secs(5) {
             self.project_editor.save();
-            self.last_write = current_time;
+            self.last_save = current_time;
         }
     }
 }
@@ -56,7 +56,7 @@ impl CheesePaperApp {
 
         Self {
             project_editor: ProjectEditor::new(project),
-            last_write: SystemTime::now(),
+            last_save: Instant::now(),
         }
     }
 }

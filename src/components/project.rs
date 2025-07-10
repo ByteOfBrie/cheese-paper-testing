@@ -38,6 +38,7 @@ pub struct ProjectMetadata {
     email: String,
 }
 
+#[allow(non_camel_case_types)]
 pub enum ProjectFolder {
     text,
     characters,

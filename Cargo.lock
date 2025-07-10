@@ -1070,7 +1070,7 @@ dependencies = [
 [[package]]
 name = "egui_ltreeview"
 version = "0.4.1"
-source = "git+https://github.com/ByteOfBrie/egui_ltreeview.git?rev=4f2b4938#4f2b49389211c8779cee9d73e9be0810980872a8"
+source = "git+https://github.com/ByteOfBrie/egui_ltreeview.git?rev=a30f3fb#a30f3fb7424c88c8707d37ab68045df8afed8b9e"
 dependencies = [
  "egui",
  "indexmap",
@@ -1848,7 +1848,7 @@ checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 [[package]]
 name = "make_table_of_contents"
 version = "0.1.0"
-source = "git+https://github.com/ByteOfBrie/egui_ltreeview.git?rev=4f2b4938#4f2b49389211c8779cee9d73e9be0810980872a8"
+source = "git+https://github.com/ByteOfBrie/egui_ltreeview.git?rev=a30f3fb#a30f3fb7424c88c8707d37ab68045df8afed8b9e"
 dependencies = [
  "quote",
  "syn",

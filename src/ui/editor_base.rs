@@ -1,12 +1,231 @@
-use egui::{FontFamily, FontId, TextStyle};
-use std::time::{Duration, Instant};
-
 use crate::ui::project_editor::ProjectEditor;
+use directories::ProjectDirs;
+use egui::{FontFamily, FontId, TextStyle};
+use std::fs::read_to_string;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+use toml_edit::{DocumentMut, value};
 
 use crate::components::Project;
+use crate::components::file_objects::from_file;
+
+#[derive(Debug)]
+pub struct Settings {
+    font_size: f32,
+    reopen_last: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            font_size: 18.0,
+            reopen_last: true,
+        }
+    }
+}
+
+impl Settings {
+    fn load(&mut self, table: &DocumentMut) -> bool {
+        let mut modified = false;
+
+        match table.get("font_size").and_then(|val| val.as_float()) {
+            Some(font_size) => self.font_size = font_size as f32,
+            None => modified = true,
+        }
+
+        match table.get("reopen_last").and_then(|val| val.as_bool()) {
+            Some(reopen_last) => self.reopen_last = reopen_last,
+            None => modified = true,
+        }
+
+        modified
+    }
+
+    fn save(&self, table: &mut DocumentMut) {
+        table.insert("font_size", value(self.font_size as f64));
+        table.insert("reopen_last", value(self.reopen_last));
+    }
+}
+
+#[derive(Debug)]
+struct Data {
+    recent_projects: Vec<String>,
+    last_project_parent_folder: PathBuf,
+    last_export_folder: PathBuf,
+    last_open_file_ids: HashMap<String, Vec<String>>,
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Self {
+            recent_projects: Vec::new(),
+            last_project_parent_folder: directories::UserDirs::new()
+                .unwrap()
+                .home_dir()
+                .to_path_buf(),
+            last_export_folder: directories::UserDirs::new()
+                .unwrap()
+                .home_dir()
+                .to_path_buf(),
+            last_open_file_ids: HashMap::new(),
+        }
+    }
+}
+
+impl Data {
+    fn load(&mut self, table: &DocumentMut) {
+        if let Some(recent_projects_array) =
+            table.get("recent_projects").and_then(|val| val.as_array())
+        {
+            self.recent_projects = recent_projects_array
+                .iter()
+                .map(|val| val.as_str())
+                .flatten()
+                .map(|val| val.to_string())
+                .collect();
+        }
+
+        if let Some(last_project_parent_folder_value) = table.get("last_project_parent_folder") {
+            if let Some(last_export_folder) = last_project_parent_folder_value.as_str() {
+                self.last_project_parent_folder = PathBuf::from(last_export_folder)
+            }
+        }
+
+        if let Some(last_export_folder_value) = table.get("last_export_folder") {
+            if let Some(last_export_folder) = last_export_folder_value.as_str() {
+                self.last_export_folder = PathBuf::from(last_export_folder)
+            }
+        }
+
+        if let Some(last_open_file_ids) = table
+            .get("last_open_file_ids")
+            .and_then(|val| val.as_inline_table())
+        {
+            for (key, val) in last_open_file_ids.iter() {
+                if let Some(file_id_list) = val.as_array() {
+                    self.last_open_file_ids.insert(
+                        key.to_string(),
+                        file_id_list
+                            .iter()
+                            .map(|val| val.as_str())
+                            .flatten()
+                            .map(|val| val.to_string())
+                            .collect(),
+                    );
+                }
+            }
+        }
+    }
+
+    fn save(&self, table: &mut DocumentMut) {
+        let mut recent_projects = toml_edit::Array::new();
+        for project in self.recent_projects.iter() {
+            recent_projects.push(project);
+        }
+        table.insert("recent_projects", value(recent_projects));
+
+        table.insert(
+            "last_project_parent_folder",
+            value(
+                self.last_project_parent_folder
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+        );
+
+        table.insert(
+            "last_export_folder",
+            value(self.last_export_folder.to_string_lossy().to_string()),
+        );
+
+        let mut last_open_file_ids = toml_edit::InlineTable::new();
+        for (project_id, open_file_ids) in self.last_open_file_ids.iter() {
+            let mut open_file_ids_arr = toml_edit::Array::new();
+            for file_id in open_file_ids.iter() {
+                open_file_ids_arr.push(file_id);
+            }
+            last_open_file_ids.insert(project_id, value(open_file_ids_arr).into_value().unwrap());
+        }
+        table.insert("last_open_file_ids", value(last_open_file_ids));
+    }
+}
+
+struct EditorState {
+    settings: Settings,
+    settings_toml: DocumentMut,
+    data: Data,
+    data_toml: DocumentMut,
+    modified: bool,
+    project_dirs: ProjectDirs,
+}
+
+impl std::fmt::Debug for EditorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditorState")
+            .field("settings", &self.settings)
+            .field("data", &self.data)
+            .field("modified", &self.data)
+            .field("project_dirs", &self.project_dirs)
+            .finish()
+    }
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        let project_dirs = ProjectDirs::from("", "", "cheese-paper")
+            .expect("it should be possible to write to system dirs");
+
+        let mut settings = Settings::default();
+
+        let settings_toml = match read_to_string(project_dirs.config_dir().join("settings.toml")) {
+            Ok(config) => config
+                .parse::<DocumentMut>()
+                .expect("invalid toml settings file"),
+            Err(err) => match err.kind() {
+                // It's perfectly normal for there not to be a file, but any other IO error is a problem
+                std::io::ErrorKind::NotFound => DocumentMut::new(),
+                _ => {
+                    log::error!("Unknown error while reading editor settings: {err}");
+                    panic!("Unknown error while reading editor settings: {err}");
+                }
+            },
+        };
+
+        let modified = settings.load(&settings_toml);
+
+        let mut data = Data::default();
+
+        let data_toml = match read_to_string(project_dirs.data_dir().join("data.toml")) {
+            Ok(config) => config
+                .parse::<DocumentMut>()
+                .expect("invalid toml data file"),
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::NotFound => DocumentMut::new(),
+                _ => {
+                    log::error!("Unknown error while reading editor settings: {err}");
+                    panic!("Unknown error while reading editor settings: {err}");
+                }
+            },
+        };
+
+        data.load(&data_toml);
+
+        Self {
+            settings,
+            settings_toml,
+            data,
+            data_toml,
+            modified,
+            project_dirs,
+        }
+    }
+}
 
 pub struct CheesePaperApp {
-    pub project_editor: ProjectEditor,
+    pub project_editor: Option<ProjectEditor>,
 
     /// Time for autosaves
     ///
@@ -18,19 +237,26 @@ pub struct CheesePaperApp {
 
 impl eframe::App for CheesePaperApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.project_editor.panels(ctx);
+        match &mut self.project_editor {
+            Some(project_editor) => {
+                project_editor.panels(ctx);
 
-        let current_time = Instant::now();
-        if current_time.duration_since(self.last_save) > Duration::from_secs(5) {
-            self.project_editor.save();
-            self.last_save = current_time;
+                let current_time = Instant::now();
+                if current_time.duration_since(self.last_save) > Duration::from_secs(5) {
+                    project_editor.save();
+                    self.last_save = current_time;
+                }
+            }
+            None => {}
         }
     }
 }
 
 impl Drop for CheesePaperApp {
     fn drop(&mut self) {
-        self.project_editor.save();
+        if let Some(project_editor) = &mut self.project_editor {
+            project_editor.save();
+        }
     }
 }
 
@@ -51,12 +277,35 @@ fn configure_text_styles(ctx: &egui::Context) {
 }
 
 impl CheesePaperApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, project: Project) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         configure_text_styles(&cc.egui_ctx);
 
-        Self {
-            project_editor: ProjectEditor::new(project),
+        let mut state = EditorState::default();
+
+        println!("{:#?}", state);
+
+        let mut app = Self {
+            project_editor: None,
             last_save: Instant::now(),
+        };
+
+        if state.settings.reopen_last {
+            if let Some(last_open_project) = state.data.recent_projects.get(0) {
+                app.load_project(PathBuf::from(last_open_project));
+            }
         }
+
+        app
+    }
+
+    fn choose_project_ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        unimplemented!()
+    }
+
+    fn load_project(&mut self, project_path: PathBuf) {
+        match Project::load(project_path) {
+            Ok(project) => self.project_editor = Some(ProjectEditor::new(project)),
+            Err(err) => log::error!("encountered error while trying to load project: {err}"),
+        };
     }
 }

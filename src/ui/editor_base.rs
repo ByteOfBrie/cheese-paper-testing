@@ -1,16 +1,17 @@
+use crate::components::Project;
+use crate::components::file_objects::from_file;
 use crate::ui::project_editor::ProjectEditor;
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
-use std::fs::read_to_string;
+use rfd::FileDialog;
 use std::{
     collections::HashMap,
+    fs::read_to_string,
+    io::Result,
     path::PathBuf,
     time::{Duration, Instant},
 };
 use toml_edit::{DocumentMut, value};
-
-use crate::components::Project;
-use crate::components::file_objects::from_file;
 
 #[derive(Debug)]
 pub struct Settings {
@@ -179,6 +180,7 @@ struct EditorState {
     data_toml: DocumentMut,
     modified: bool,
     project_dirs: ProjectDirs,
+    error_message: Option<(String, Instant)>,
 }
 
 impl std::fmt::Debug for EditorState {
@@ -239,6 +241,7 @@ impl Default for EditorState {
             data_toml,
             modified,
             project_dirs,
+            error_message: None,
         }
     }
 }
@@ -303,19 +306,24 @@ impl CheesePaperApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         configure_text_styles(&cc.egui_ctx);
 
-        let mut state = EditorState::default();
+        let state = EditorState::default();
 
         println!("{:#?}", state);
 
         let mut app = Self {
             project_editor: None,
-            state: EditorState::default(),
+            state: state,
             last_save: Instant::now(),
         };
 
-        if state.settings.reopen_last {
-            if let Some(last_open_project) = state.data.recent_projects.get(0) {
-                app.load_project(PathBuf::from(last_open_project));
+        if app.state.settings.reopen_last {
+            if let Some(last_open_project) = app.state.data.recent_projects.get(0) {
+                let last_open_project = last_open_project.clone();
+                if let Err(err) = app.load_project(PathBuf::from(&last_open_project)) {
+                    log::error!(
+                        "error while trying to open most recent project: {last_open_project:?}: {err}"
+                    );
+                }
             }
         }
 
@@ -323,6 +331,12 @@ impl CheesePaperApp {
     }
 
     fn choose_project_ui(&mut self, ctx: &egui::Context) {
+        if let Some((_message, time)) = &self.state.error_message {
+            if time.elapsed().as_secs() > 7 {
+                self.state.error_message = None;
+            }
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered_justified(|ui| {
                 ScrollArea::vertical()
@@ -332,14 +346,31 @@ impl CheesePaperApp {
                             let projects = self.state.data.recent_projects.clone();
                             for project in projects {
                                 if ui.button(&project.to_string_lossy().to_string()).clicked() {
-                                    self.load_project(project.to_path_buf());
+                                    if let Err(err) = self.load_project(project.clone()) {
+                                        log::error!(
+                                            "Error while attempting to load {project:?}: {err}"
+                                        );
+                                    }
                                 }
                             }
                         })
                     });
             });
 
-            ui.add_space(100.0);
+            ui.add_space(50.0);
+
+            let label_size = match &self.state.error_message {
+                Some((message, _time)) => {
+                    let response = ui.vertical_centered(|ui| {
+                        ui.label(message);
+                    });
+
+                    response.response.rect.height()
+                }
+                None => 0.0,
+            };
+
+            ui.add_space(80.0 - label_size);
 
             ui.horizontal_centered(|ui| {
                 ui.columns(5, |cols| {
@@ -352,7 +383,17 @@ impl CheesePaperApp {
                     cols[2].vertical_centered_justified(|_ui| {});
                     cols[3].vertical_centered_justified(|ui| {
                         if ui.button("load project").clicked() {
-                            unimplemented!();
+                            let project_dir = FileDialog::new()
+                                .set_directory(&self.state.data.last_project_parent_folder)
+                                .pick_folder();
+
+                            if let Some(project_dir) = project_dir {
+                                if let Err(err) = self.load_project(project_dir.clone()) {
+                                    log::error!(
+                                        "Error while attempting to load {project_dir:?}: {err}"
+                                    );
+                                }
+                            }
                         }
                     });
                     cols[4].vertical_centered_justified(|_ui| {});
@@ -361,10 +402,18 @@ impl CheesePaperApp {
         });
     }
 
-    fn load_project(&mut self, project_path: PathBuf) {
+    fn load_project(&mut self, project_path: PathBuf) -> Result<()> {
         match Project::load(project_path) {
-            Ok(project) => self.project_editor = Some(ProjectEditor::new(project)),
-            Err(err) => log::error!("encountered error while trying to load project: {err}"),
-        };
+            Ok(project) => {
+                self.project_editor = Some(ProjectEditor::new(project));
+                Ok(())
+            }
+            Err(err) => {
+                log::error!("encountered error while trying to load project: {err}");
+                let error_message = format!("unable to load project: {err}");
+                self.state.error_message = Some((error_message, Instant::now()));
+                Err(err)
+            }
+        }
     }
 }

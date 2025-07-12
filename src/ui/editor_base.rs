@@ -377,13 +377,45 @@ impl CheesePaperApp {
                     cols[0].vertical_centered_justified(|_ui| {});
                     cols[1].vertical_centered_justified(|ui| {
                         if ui.button("new project").clicked() {
-                            unimplemented!();
+                            let folder_dir = FileDialog::new()
+                                .set_title("New Project Parent Folder")
+                                .set_directory(&self.state.data.last_project_parent_folder)
+                                .pick_folder();
+
+                            let mut project_name = String::new();
+
+                            if let Some(folder_dir) = folder_dir {
+                                let modal = egui::Modal::new(egui::Id::new("new project name"))
+                                    .show(ui.ctx(), |ui| {
+                                        ui.heading("New Project");
+                                        ui.label("Project Name:");
+                                        ui.text_edit_singleline(&mut project_name);
+                                    });
+
+                                ui.separator();
+
+                                egui::Sides::new().show(
+                                    ui,
+                                    |_ui| {},
+                                    |ui| {
+                                        if ui.button("Save").clicked() {
+                                            Project::new(folder_dir, project_name);
+                                        }
+                                        if ui.button("Cancel").clicked() {
+                                            // You can call `ui.close()` to close the modal.
+                                            // (This causes the current modals `should_close` to return true)
+                                            // ui.close();
+                                        }
+                                    },
+                                );
+                            }
                         }
                     });
                     cols[2].vertical_centered_justified(|_ui| {});
                     cols[3].vertical_centered_justified(|ui| {
                         if ui.button("load project").clicked() {
                             let project_dir = FileDialog::new()
+                                .set_title("Load Folder")
                                 .set_directory(&self.state.data.last_project_parent_folder)
                                 .pick_folder();
 

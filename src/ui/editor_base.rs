@@ -31,8 +31,16 @@ impl Settings {
     fn load(&mut self, table: &DocumentMut) -> bool {
         let mut modified = false;
 
-        match table.get("font_size").and_then(|val| val.as_float()) {
-            Some(font_size) => self.font_size = font_size as f32,
+        match table.get("font_size") {
+            Some(font_size_item) => {
+                if let Some(font_size) = font_size_item.as_float() {
+                    self.font_size = font_size as f32;
+                } else if let Some(font_size) = font_size_item.as_integer() {
+                    self.font_size = font_size as f32;
+                } else {
+                    modified = true;
+                }
+            }
             None => modified = true,
         }
 
@@ -102,7 +110,7 @@ impl Data {
 
         if let Some(last_open_file_ids) = table
             .get("last_open_file_ids")
-            .and_then(|val| val.as_inline_table())
+            .and_then(|val| val.as_table_like())
         {
             for (key, val) in last_open_file_ids.iter() {
                 if let Some(file_id_list) = val.as_array() {
@@ -167,7 +175,7 @@ impl std::fmt::Debug for EditorState {
         f.debug_struct("EditorState")
             .field("settings", &self.settings)
             .field("data", &self.data)
-            .field("modified", &self.data)
+            .field("modified", &self.modified)
             .field("project_dirs", &self.project_dirs)
             .finish()
     }

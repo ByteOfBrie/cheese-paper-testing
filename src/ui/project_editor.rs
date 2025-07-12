@@ -1,4 +1,5 @@
 use crate::components::Project;
+use crate::components::file_objects::utils::truncate_name;
 use crate::components::file_objects::{
     FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
 };
@@ -20,11 +21,20 @@ impl dyn FileObject {
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
     ) {
         const NODE_HEIGHT: f32 = 26.0;
+        let name_in_tree = if self.get_base().metadata.name.len() <= 30 {
+            self.get_base().metadata.name.clone()
+        } else {
+            let truncated = truncate_name(&self.get_base().metadata.name, 30);
+            let mut final_name = truncated.to_string();
+            final_name.push_str("...");
+            final_name
+        };
+
         if self.is_folder() {
             builder.node(
                 NodeBuilder::dir(self.get_base().metadata.id.clone())
                     .height(NODE_HEIGHT)
-                    .label(&self.get_base().metadata.name),
+                    .label(name_in_tree),
             );
 
             for child_id in self.get_base().children.iter() {
@@ -38,7 +48,7 @@ impl dyn FileObject {
             builder.node(
                 NodeBuilder::leaf(self.get_base().metadata.id.clone())
                     .height(NODE_HEIGHT)
-                    .label(&self.get_base().metadata.name),
+                    .label(name_in_tree),
             );
         }
     }
@@ -103,7 +113,11 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
-            self.draw_tree(ui);
+            egui::ScrollArea::vertical()
+                .id_salt("tree scroll")
+                .show(ui, |ui| {
+                    self.draw_tree(ui);
+                });
         });
 
         // render the tab view

@@ -1,6 +1,6 @@
 use crate::ui::project_editor::ProjectEditor;
 use directories::ProjectDirs;
-use egui::{FontFamily, FontId, TextStyle};
+use egui::{FontFamily, FontId, ScrollArea, TextStyle};
 use std::fs::read_to_string;
 use std::{
     collections::HashMap,
@@ -246,6 +246,8 @@ impl Default for EditorState {
 pub struct CheesePaperApp {
     pub project_editor: Option<ProjectEditor>,
 
+    state: EditorState,
+
     /// Time for autosaves
     ///
     ///  Shockingly, it actually makes some amount of sense to keep the logic here (instead of in
@@ -266,7 +268,9 @@ impl eframe::App for CheesePaperApp {
                     self.last_save = current_time;
                 }
             }
-            None => {}
+            None => {
+                self.choose_project_ui(ctx);
+            }
         }
     }
 }
@@ -305,6 +309,7 @@ impl CheesePaperApp {
 
         let mut app = Self {
             project_editor: None,
+            state: EditorState::default(),
             last_save: Instant::now(),
         };
 
@@ -317,8 +322,43 @@ impl CheesePaperApp {
         app
     }
 
-    fn choose_project_ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        unimplemented!()
+    fn choose_project_ui(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered_justified(|ui| {
+                ScrollArea::vertical()
+                    .id_salt("recent projects")
+                    .show(ui, |ui| {
+                        ui.vertical_centered(|ui| {
+                            let projects = self.state.data.recent_projects.clone();
+                            for project in projects {
+                                if ui.button(&project.to_string_lossy().to_string()).clicked() {
+                                    self.load_project(project.to_path_buf());
+                                }
+                            }
+                        })
+                    });
+            });
+
+            ui.add_space(100.0);
+
+            ui.horizontal_centered(|ui| {
+                ui.columns(5, |cols| {
+                    cols[0].vertical_centered_justified(|_ui| {});
+                    cols[1].vertical_centered_justified(|ui| {
+                        if ui.button("new project").clicked() {
+                            unimplemented!();
+                        }
+                    });
+                    cols[2].vertical_centered_justified(|_ui| {});
+                    cols[3].vertical_centered_justified(|ui| {
+                        if ui.button("load project").clicked() {
+                            unimplemented!();
+                        }
+                    });
+                    cols[4].vertical_centered_justified(|_ui| {});
+                });
+            });
+        });
     }
 
     fn load_project(&mut self, project_path: PathBuf) {

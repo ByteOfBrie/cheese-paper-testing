@@ -60,7 +60,7 @@ impl Settings {
 
 #[derive(Debug)]
 struct Data {
-    recent_projects: Vec<String>,
+    recent_projects: Vec<PathBuf>,
     last_project_parent_folder: PathBuf,
     last_export_folder: PathBuf,
     last_open_file_ids: HashMap<String, Vec<String>>,
@@ -88,12 +88,23 @@ impl Data {
         if let Some(recent_projects_array) =
             table.get("recent_projects").and_then(|val| val.as_array())
         {
-            self.recent_projects = recent_projects_array
+            let recent_projects_str: Vec<_> = recent_projects_array
                 .iter()
                 .map(|val| val.as_str())
                 .flatten()
                 .map(|val| val.to_string())
                 .collect();
+
+            let mut recent_projects = Vec::new();
+
+            for project in recent_projects_str {
+                let project_path = PathBuf::from(project);
+                if project_path.exists() {
+                    recent_projects.push(project_path);
+                }
+            }
+
+            self.recent_projects = recent_projects;
         }
 
         if let Some(last_project_parent_folder_value) = table.get("last_project_parent_folder") {
@@ -131,7 +142,7 @@ impl Data {
     fn save(&self, table: &mut DocumentMut) {
         let mut recent_projects = toml_edit::Array::new();
         for project in self.recent_projects.iter() {
-            recent_projects.push(project);
+            recent_projects.push(project.to_string_lossy().to_string());
         }
         table.insert("recent_projects", value(recent_projects));
 

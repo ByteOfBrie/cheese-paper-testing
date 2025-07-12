@@ -69,6 +69,10 @@ struct TabViewer<'a> {
 impl egui_dock::TabViewer for TabViewer<'_> {
     type Tab = String;
 
+    fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
+        egui::Id::from(tab.clone())
+    }
+
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         self.project
             .objects

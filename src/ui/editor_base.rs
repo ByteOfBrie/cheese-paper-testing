@@ -475,7 +475,13 @@ impl CheesePaperApp {
                                 self.state.new_project_name.clone(),
                             ) {
                                 Ok(project) => {
-                                    self.state.data.recent_projects.insert(0, owned_folder_dir);
+                                    self.state.data.last_project_parent_folder =
+                                        owned_folder_dir.clone();
+                                    self.state
+                                        .data
+                                        .recent_projects
+                                        .insert(0, project.get_path());
+                                    self.state.modified = true;
                                     self.project_editor = Some(ProjectEditor::new(project));
                                 }
                                 Err(err) => {
@@ -503,6 +509,15 @@ impl CheesePaperApp {
         match Project::load(project_path) {
             Ok(project) => {
                 let project_path = project.get_path();
+
+                if project_path.parent()
+                    != Some(self.state.data.last_project_parent_folder.as_path())
+                {
+                    if let Some(path) = project_path.parent() {
+                        self.state.data.last_project_parent_folder = path.to_path_buf();
+                        self.state.modified = true;
+                    }
+                }
 
                 let project_path_position = self
                     .state

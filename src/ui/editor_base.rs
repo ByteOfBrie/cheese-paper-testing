@@ -1,5 +1,4 @@
-use crate::components::Project;
-use crate::components::file_objects::from_file;
+use crate::components::{Project, file_objects::write_with_temp_file};
 use crate::ui::project_editor::ProjectEditor;
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
@@ -56,6 +55,10 @@ impl Settings {
     fn save(&self, table: &mut DocumentMut) {
         table.insert("font_size", value(self.font_size as f64));
         table.insert("reopen_last", value(self.reopen_last));
+    }
+
+    fn get_path(project_dirs: &ProjectDirs) -> PathBuf {
+        project_dirs.config_dir().join("settings.toml")
     }
 }
 
@@ -171,6 +174,10 @@ impl Data {
         }
         table.insert("last_open_file_ids", value(last_open_file_ids));
     }
+
+    fn get_path(project_dirs: &ProjectDirs) -> PathBuf {
+        project_dirs.data_dir().join("data.toml")
+    }
 }
 
 struct EditorState {
@@ -203,7 +210,7 @@ impl Default for EditorState {
 
         let mut settings = Settings::default();
 
-        let settings_toml = match read_to_string(project_dirs.config_dir().join("settings.toml")) {
+        let settings_toml = match read_to_string(Settings::get_path(&project_dirs)) {
             Ok(config) => config
                 .parse::<DocumentMut>()
                 .expect("invalid toml settings file"),
@@ -221,7 +228,7 @@ impl Default for EditorState {
 
         let mut data = Data::default();
 
-        let data_toml = match read_to_string(project_dirs.data_dir().join("data.toml")) {
+        let data_toml = match read_to_string(Data::get_path(&project_dirs)) {
             Ok(config) => config
                 .parse::<DocumentMut>()
                 .expect("invalid toml data file"),
@@ -247,6 +254,22 @@ impl Default for EditorState {
             new_project_dir: None,
             new_project_name: String::new(),
         }
+    }
+}
+
+impl EditorState {
+    fn save(&mut self) -> std::io::Result<()> {
+        self.data.save(&mut self.data_toml);
+        write_with_temp_file(
+            &Data::get_path(&self.project_dirs),
+            self.data_toml.to_string().as_bytes(),
+        )?;
+
+        self.settings.save(&mut self.settings_toml);
+        write_with_temp_file(
+            &Settings::get_path(&self.project_dirs),
+            self.settings_toml.to_string().as_bytes(),
+        )
     }
 }
 
@@ -288,6 +311,7 @@ impl Drop for CheesePaperApp {
         if let Some(project_editor) = &mut self.project_editor {
             project_editor.save();
         }
+        self.save();
     }
 }
 
@@ -386,6 +410,16 @@ impl CheesePaperApp {
 
             ui.add_space(80.0 - label_size);
 
+            ui.vertical_centered(|ui| {
+                let checkbox_response = ui.checkbox(
+                    &mut self.state.settings.reopen_last,
+                    "Automatically reopen project",
+                );
+                if checkbox_response.clicked() {
+                    self.state.modified = true;
+                }
+            });
+
             ui.horizontal_centered(|ui| {
                 ui.columns(5, |cols| {
                     cols[0].vertical_centered_justified(|_ui| {});
@@ -435,12 +469,13 @@ impl CheesePaperApp {
                     ui,
                     |_ui| {},
                     |ui| {
-                        if ui.button("Create").clicked() {
+                        if ui.button("Ok").clicked() {
                             match Project::new(
                                 owned_folder_dir.clone(),
                                 self.state.new_project_name.clone(),
                             ) {
                                 Ok(project) => {
+                                    self.state.data.recent_projects.insert(0, owned_folder_dir);
                                     self.project_editor = Some(ProjectEditor::new(project));
                                 }
                                 Err(err) => {
@@ -452,6 +487,9 @@ impl CheesePaperApp {
                             }
                             self.state.new_project_dir = None;
                         }
+
+                        ui.add_space(10.0);
+
                         if ui.button("Cancel").clicked() {
                             self.state.new_project_dir = None;
                         }
@@ -464,7 +502,34 @@ impl CheesePaperApp {
     fn load_project(&mut self, project_path: PathBuf) -> Result<()> {
         match Project::load(project_path) {
             Ok(project) => {
+                let project_path = project.get_path();
+
+                let project_path_position = self
+                    .state
+                    .data
+                    .recent_projects
+                    .iter()
+                    .position(|id| id == &project_path);
+
+                match project_path_position {
+                    Some(position) => {
+                        if position != 0 {
+                            let project_pathbuf = self.state.data.recent_projects.remove(position);
+                            self.state.data.recent_projects.insert(0, project_pathbuf);
+                            self.state.modified = true;
+                        }
+                    }
+                    None => {
+                        self.state
+                            .data
+                            .recent_projects
+                            .insert(0, project_path.clone());
+                        self.state.modified = true;
+                    }
+                }
+
                 self.project_editor = Some(ProjectEditor::new(project));
+
                 Ok(())
             }
             Err(err) => {
@@ -472,6 +537,14 @@ impl CheesePaperApp {
                 let error_message = format!("unable to load project: {err}");
                 self.state.error_message = Some((error_message, Instant::now()));
                 Err(err)
+            }
+        }
+    }
+
+    fn save(&mut self) {
+        if self.state.modified {
+            if let Err(err) = self.state.save() {
+                log::error!("Error while attempting to save editor state: {err}")
             }
         }
     }

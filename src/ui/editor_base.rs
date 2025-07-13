@@ -181,6 +181,8 @@ struct EditorState {
     modified: bool,
     project_dirs: ProjectDirs,
     error_message: Option<(String, Instant)>,
+    new_project_dir: Option<PathBuf>,
+    new_project_name: String,
 }
 
 impl std::fmt::Debug for EditorState {
@@ -242,6 +244,8 @@ impl Default for EditorState {
             modified,
             project_dirs,
             error_message: None,
+            new_project_dir: None,
+            new_project_name: String::new(),
         }
     }
 }
@@ -271,9 +275,10 @@ impl eframe::App for CheesePaperApp {
                     self.last_save = current_time;
                 }
             }
-            None => {
-                self.choose_project_ui(ctx);
-            }
+            None => match self.state.new_project_dir.is_none() {
+                true => self.choose_project_ui(ctx),
+                false => self.new_project_name_ui(ctx),
+            },
         }
     }
 }
@@ -377,38 +382,10 @@ impl CheesePaperApp {
                     cols[0].vertical_centered_justified(|_ui| {});
                     cols[1].vertical_centered_justified(|ui| {
                         if ui.button("new project").clicked() {
-                            let folder_dir = FileDialog::new()
+                            self.state.new_project_dir = FileDialog::new()
                                 .set_title("New Project Parent Folder")
                                 .set_directory(&self.state.data.last_project_parent_folder)
                                 .pick_folder();
-
-                            let mut project_name = String::new();
-
-                            if let Some(folder_dir) = folder_dir {
-                                let modal = egui::Modal::new(egui::Id::new("new project name"))
-                                    .show(ui.ctx(), |ui| {
-                                        ui.heading("New Project");
-                                        ui.label("Project Name:");
-                                        ui.text_edit_singleline(&mut project_name);
-                                    });
-
-                                ui.separator();
-
-                                egui::Sides::new().show(
-                                    ui,
-                                    |_ui| {},
-                                    |ui| {
-                                        if ui.button("Save").clicked() {
-                                            Project::new(folder_dir, project_name);
-                                        }
-                                        if ui.button("Cancel").clicked() {
-                                            // You can call `ui.close()` to close the modal.
-                                            // (This causes the current modals `should_close` to return true)
-                                            // ui.close();
-                                        }
-                                    },
-                                );
-                            }
                         }
                     });
                     cols[2].vertical_centered_justified(|_ui| {});
@@ -430,6 +407,47 @@ impl CheesePaperApp {
                     });
                     cols[4].vertical_centered_justified(|_ui| {});
                 });
+            });
+        });
+    }
+
+    fn new_project_name_ui(&mut self, ctx: &egui::Context) {
+        let owned_folder_dir = self.state.new_project_dir.as_mut().unwrap().clone();
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::Modal::new(egui::Id::new("new project name")).show(ui.ctx(), |ui| {
+                ui.heading("New Project");
+                ui.label("Project Name:");
+                ui.text_edit_singleline(&mut self.state.new_project_name);
+
+                ui.separator();
+
+                egui::Sides::new().show(
+                    ui,
+                    |_ui| {},
+                    |ui| {
+                        if ui.button("Create").clicked() {
+                            match Project::new(
+                                owned_folder_dir.clone(),
+                                self.state.new_project_name.clone(),
+                            ) {
+                                Ok(project) => {
+                                    self.project_editor = Some(ProjectEditor::new(project));
+                                }
+                                Err(err) => {
+                                    log::error!("Error while attempting to create project: {err}");
+                                    let error_message = format!("unable to create project: {err}");
+                                    self.state.error_message =
+                                        Some((error_message, Instant::now()));
+                                }
+                            }
+                            self.state.new_project_dir = None;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.state.new_project_dir = None;
+                        }
+                    },
+                );
             });
         });
     }

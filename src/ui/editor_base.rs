@@ -291,29 +291,38 @@ impl Drop for CheesePaperApp {
     }
 }
 
-fn configure_text_styles(ctx: &egui::Context) {
+fn configure_text_styles(ctx: &egui::Context, font_size: f32) {
     use FontFamily::{Monospace, Proportional};
 
-    // TODO: when configs are read, scale all of these off of the configured font size
-    let text_styles: std::collections::BTreeMap<TextStyle, FontId> = [
-        (TextStyle::Heading, FontId::new(28.0, Proportional)),
-        (TextStyle::Body, FontId::new(24.0, Proportional)),
-        (TextStyle::Monospace, FontId::new(24.0, Monospace)),
-        (TextStyle::Button, FontId::new(20.0, Proportional)),
-        (TextStyle::Small, FontId::new(20.0, Proportional)),
+    let scalar = (font_size / 10.0).ceil();
+
+    let mut style = (*ctx.style()).clone();
+    style.text_styles = [
+        (
+            TextStyle::Heading,
+            FontId::new(font_size + 2.0 * scalar, Proportional),
+        ),
+        (TextStyle::Body, FontId::new(font_size, Proportional)),
+        (TextStyle::Monospace, FontId::new(font_size, Monospace)),
+        (
+            TextStyle::Button,
+            FontId::new(font_size - scalar, Proportional),
+        ),
+        (
+            TextStyle::Small,
+            FontId::new(font_size - 2.0 * scalar, Proportional),
+        ),
     ]
     .into();
 
-    ctx.all_styles_mut(move |style| style.text_styles = text_styles.clone());
+    ctx.set_style(style);
 }
 
 impl CheesePaperApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        configure_text_styles(&cc.egui_ctx);
-
         let state = EditorState::default();
 
-        println!("{:#?}", state);
+        configure_text_styles(&cc.egui_ctx, state.settings.font_size);
 
         let mut app = Self {
             project_editor: None,

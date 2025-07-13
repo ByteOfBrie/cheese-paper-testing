@@ -46,6 +46,7 @@ impl<'a> SceneEditor<'a> {
                 egui::TextEdit::singleline(&mut self.scene.get_base_mut().metadata.name)
                     .char_limit(50)
                     .id_salt("name")
+                    .hint_text("Scene Name")
                     .desired_width(f32::INFINITY),
             );
             self.process_response(response);

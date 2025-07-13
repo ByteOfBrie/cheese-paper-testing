@@ -259,17 +259,21 @@ impl Default for EditorState {
 
 impl EditorState {
     fn save(&mut self) -> std::io::Result<()> {
-        self.data.save(&mut self.data_toml);
-        write_with_temp_file(
-            &Data::get_path(&self.project_dirs),
-            self.data_toml.to_string().as_bytes(),
-        )?;
+        if self.modified {
+            self.data.save(&mut self.data_toml);
+            write_with_temp_file(
+                &Data::get_path(&self.project_dirs),
+                self.data_toml.to_string().as_bytes(),
+            )?;
 
-        self.settings.save(&mut self.settings_toml);
-        write_with_temp_file(
-            &Settings::get_path(&self.project_dirs),
-            self.settings_toml.to_string().as_bytes(),
-        )
+            self.settings.save(&mut self.settings_toml);
+            write_with_temp_file(
+                &Settings::get_path(&self.project_dirs),
+                self.settings_toml.to_string().as_bytes(),
+            )?;
+        }
+
+        Ok(())
     }
 }
 
@@ -482,7 +486,8 @@ impl CheesePaperApp {
                                         .recent_projects
                                         .insert(0, project.get_path());
                                     self.state.modified = true;
-                                    self.project_editor = Some(ProjectEditor::new(project));
+                                    self.project_editor =
+                                        Some(ProjectEditor::new(project, Vec::new()));
                                 }
                                 Err(err) => {
                                     log::error!("Error while attempting to create project: {err}");
@@ -508,8 +513,10 @@ impl CheesePaperApp {
     fn load_project(&mut self, project_path: PathBuf) -> Result<()> {
         match Project::load(project_path) {
             Ok(project) => {
+                // open the project
                 let project_path = project.get_path();
 
+                // update recent projects
                 if project_path.parent()
                     != Some(self.state.data.last_project_parent_folder.as_path())
                 {
@@ -541,9 +548,18 @@ impl CheesePaperApp {
                             .insert(0, project_path.clone());
                         self.state.modified = true;
                     }
-                }
+                };
 
-                self.project_editor = Some(ProjectEditor::new(project));
+                // load tabs
+                self.project_editor = match self
+                    .state
+                    .data
+                    .last_open_file_ids
+                    .get(&project.base_metadata.id)
+                {
+                    Some(open_tabs) => Some(ProjectEditor::new(project, open_tabs.clone())),
+                    None => Some(ProjectEditor::new(project, Vec::new())),
+                };
 
                 Ok(())
             }
@@ -556,11 +572,32 @@ impl CheesePaperApp {
         }
     }
 
-    fn save(&mut self) {
-        if self.state.modified {
-            if let Err(err) = self.state.save() {
-                log::error!("Error while attempting to save editor state: {err}")
+    fn update_open_tabs(&mut self) {
+        if let Some(project_editor) = &self.project_editor {
+            let open_tabs = project_editor.get_open_tabs();
+
+            if Some(&open_tabs)
+                != self
+                    .state
+                    .data
+                    .last_open_file_ids
+                    .get(&project_editor.project.base_metadata.id)
+            {
+                self.state
+                    .data
+                    .last_open_file_ids
+                    .insert(project_editor.project.base_metadata.id.clone(), open_tabs);
+
+                self.state.modified = true;
             }
+        }
+    }
+
+    fn save(&mut self) {
+        self.update_open_tabs();
+
+        if let Err(err) = self.state.save() {
+            log::error!("Error while attempting to save editor state: {err}")
         }
     }
 }

@@ -218,11 +218,20 @@ impl ProjectEditor {
         }
     }
 
-    pub fn new(project: Project) -> Self {
+    pub fn new(project: Project, open_tabs: Vec<String>) -> Self {
         Self {
             project,
-            dock_state: DockState::new(vec![]),
+            dock_state: DockState::new(open_tabs),
         }
+    }
+
+    pub fn get_open_tabs(&self) -> Vec<String> {
+        // the indexes provided to use are meaningless (I think), just put all the tabs in the
+        // order it gave us.
+        self.dock_state
+            .iter_all_tabs()
+            .map(|((_, _), tab_id)| (*tab_id).clone())
+            .collect()
     }
 
     pub fn save(&mut self) {

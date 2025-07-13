@@ -346,33 +346,57 @@ pub fn move_child(
 
     // We know it's a valid move (or at least think we do), go ahead with the move
 
+    // From this point until the call to fix indexing, we have state that we can't safely recover
+    // from with an error, so we should always panic instead
+    create_index_and_move_on_disk(
+        moving_file_id,
+        source_file_id,
+        dest_file_id,
+        new_index,
+        objects,
+    );
+
+    // if we're moving within an object, we already fixed indexing a few lines above
+    if source_file_id != dest_file_id {
+        // We just need to clean up and re-index the source to fill in the gap we left
+        run_with_file_object(source_file_id, objects, |source, objects| {
+            source.fix_indexing(objects)
+        });
+    }
+
+    Ok(())
+}
+
+/// Helper function called by move_child for the parts that are not safe to return early (including
+/// errors). If something goes wrong, it will panic
+fn create_index_and_move_on_disk(
+    moving_file_id: &str,
+    source_file_id: &str,
+    dest_file_id: &str,
+    new_index: usize,
+    objects: &mut FileObjectStore,
+) {
     // Create index "gap" in destination (helpful to do first in case we're moving "up" and this
     // changes the path of the object being moved)
-    create_index_gap(dest_file_id, new_index, objects)?;
+    create_index_gap(dest_file_id, new_index, objects).unwrap();
 
     // Remove the moving object from it's current parent
     let source = objects
         .get_mut(source_file_id)
         .expect("objects should contain source file id");
 
-    let child_id_position = match source
+    let child_id_position = source
         .get_base()
         .children
         .iter()
         .position(|val| moving_file_id == val)
-    {
-        Some(child_starting_index) => child_starting_index,
-        None => {
-            // This should be impossible but we check anyway
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!(
-                    "Attempted to remove a child from an element that doesn't contain it: \
-                        child id: {moving_file_id}, parent: {source_file_id}",
-                ),
-            ));
-        }
-    };
+        .expect(
+            format!(
+                "Children should only be removed from their parents. child id: {moving_file_id}, \
+                 parent: {source_file_id}"
+            )
+            .as_str(),
+        );
 
     let child_id_string = source.get_base_mut().children.remove(child_id_position);
 
@@ -390,27 +414,17 @@ pub fn move_child(
         run_with_file_object(&moving_file_id, objects, |child, objects| {
             // Move the actual child on disk
             if let Err(err) = child.move_object(insertion_index, dest.get_path(), objects) {
-                // be as graceful as possible, put the children back, the current state is still likely
-                // sorta broken :/
+                // We don't pass enough information around to meaninfully recover here
                 log::error!("Encountered error while trying to move {moving_file_id}");
-                return Err(err);
+                panic!(
+                    "Encountered unrecoverable error while trying to move {moving_file_id}: {err}"
+                );
             }
-            Ok(())
-        })?;
+        });
 
         // Fix indexing in the destination (now that it has the child)
-        dest.fix_indexing(objects)
-    })?;
-
-    // if we're moving within an object, we already fixed indexing a few lines above
-    if source_file_id != dest_file_id {
-        // We just need to clean up and re-index the source to fill in the gap we left
-        run_with_file_object(source_file_id, objects, |source, objects| {
-            source.fix_indexing(objects)
-        })?
-    }
-
-    Ok(())
+        dest.fix_indexing(objects);
+    });
 }
 
 /// Load an arbitrary file object from a file on disk
@@ -682,7 +696,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         FileType::Folder => {
             let mut folder = Folder::from_base(base)?;
 
-            folder.fix_indexing(&mut objects)?;
+            folder.fix_indexing(&mut objects);
 
             Ok(FileObjectCreation::Folder(folder, objects))
         }
@@ -690,7 +704,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         FileType::Place => {
             let mut place = Place::from_base(base)?;
 
-            place.fix_indexing(&mut objects)?;
+            place.fix_indexing(&mut objects);
 
             Ok(FileObjectCreation::Place(place, objects))
         }
@@ -1027,8 +1041,6 @@ pub trait FileObject: Debug {
     fn create_child(&mut self, file_type: FileType) -> Result<Box<dyn FileObject>> {
         assert!(self.is_folder());
 
-        // TODO: add a check to ensure that we don't have any indexing gaps when running this
-        // maybe a bool somewhere that gets set in `create_indexing_gap` and removed in `fix_indexing`
         let new_index = self.get_base().children.len();
 
         let new_object: Box<dyn FileObject> = match file_type {
@@ -1079,7 +1091,7 @@ pub trait FileObject: Debug {
             std::fs::remove_dir(child.get_path())?;
         }
 
-        self.fix_indexing(objects)?;
+        self.fix_indexing(objects);
 
         // If we had any errors earlier, return them
         match errors.pop() {
@@ -1090,7 +1102,7 @@ pub trait FileObject: Debug {
 
     /// For ease of calling, `objects` can contain arbitrary objects, only values contained
     /// in `children` will actually be sorted.
-    fn fix_indexing(&mut self, objects: &mut FileObjectStore) -> Result<()> {
+    fn fix_indexing(&mut self, objects: &mut FileObjectStore) {
         for (count, child_id) in self.get_base().children.iter().enumerate() {
             match run_with_file_object(child_id, objects, |child, objects| {
                 child.set_index(count, objects)
@@ -1101,12 +1113,12 @@ pub trait FileObject: Debug {
                 Ok(false) => {}
                 Err(err) => {
                     log::error!("Error while trying to fix indexing of child {child_id}: {err}");
-                    return Err(err);
+                    panic!(
+                        "Error during fix_indexing, cannot be sure if we have valid indexes anymore"
+                    );
                 }
             }
         }
-
-        Ok(())
     }
 
     /// Allow for downcasting this as a reference, useful for creating the editors

@@ -124,6 +124,7 @@ impl ProjectEditor {
         DockArea::new(&mut self.dock_state)
             .allowed_splits(egui_dock::AllowedSplits::None)
             .show_leaf_collapse_buttons(false)
+            .show_leaf_close_all_buttons(false)
             .show(
                 ctx,
                 &mut TabViewer {

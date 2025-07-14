@@ -190,6 +190,8 @@ struct EditorState {
     error_message: Option<(String, Instant)>,
     new_project_dir: Option<PathBuf>,
     new_project_name: String,
+    /// Hacky (?) variable to get around borrows (set in the state rather than close directly)
+    closing_project: bool,
 }
 
 impl std::fmt::Debug for EditorState {
@@ -253,6 +255,7 @@ impl Default for EditorState {
             error_message: None,
             new_project_dir: None,
             new_project_name: String::new(),
+            closing_project: false,
         }
     }
 }
@@ -292,8 +295,28 @@ pub struct CheesePaperApp {
 
 impl eframe::App for CheesePaperApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.state.closing_project {
+            self.project_editor = None;
+            self.state.closing_project = false;
+        }
+
         match &mut self.project_editor {
             Some(project_editor) => {
+                egui::TopBottomPanel::top("menu_bar_panel")
+                    .show_separator_line(false)
+                    .show(ctx, |ui| {
+                        egui::MenuBar::new().ui(ui, |ui| {
+                            ui.menu_button("File", |ui| {
+                                if ui.button("Close Project").clicked() {
+                                    self.state.closing_project = true;
+                                }
+                                if ui.button("Quit").clicked() {
+                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                            });
+                        });
+                    });
+
                 project_editor.panels(ctx);
 
                 let current_time = Instant::now();

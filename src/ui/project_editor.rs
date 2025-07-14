@@ -12,6 +12,9 @@ use egui_ltreeview::{Action, NodeBuilder, TreeView};
 pub struct ProjectEditor {
     pub project: Project,
     dock_state: DockState<String>,
+    /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
+    /// in the project metadata editor as well
+    title_needs_update: bool,
 }
 
 impl dyn FileObject {
@@ -112,6 +115,15 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
 impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context) {
+        if self.title_needs_update {
+            // Set the window title properly
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
+                "Cheese Paper - {}",
+                self.project.base_metadata.name
+            )));
+            self.title_needs_update = false;
+        }
+
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
             egui::ScrollArea::vertical()
                 .id_salt("tree scroll")
@@ -222,6 +234,7 @@ impl ProjectEditor {
         Self {
             project,
             dock_state: DockState::new(open_tabs),
+            title_needs_update: true,
         }
     }
 

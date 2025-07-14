@@ -23,21 +23,14 @@ impl dyn FileObject {
         objects: &mut FileObjectStore,
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
     ) {
+        // TODO: scale off of font size
         const NODE_HEIGHT: f32 = 26.0;
-        let name_in_tree = if self.get_base().metadata.name.len() <= 30 {
-            self.get_base().metadata.name.clone()
-        } else {
-            let truncated = truncate_name(&self.get_base().metadata.name, 30);
-            let mut final_name = truncated.to_string();
-            final_name.push_str("...");
-            final_name
-        };
 
         if self.is_folder() {
             builder.node(
                 NodeBuilder::dir(self.get_base().metadata.id.clone())
                     .height(NODE_HEIGHT)
-                    .label(name_in_tree),
+                    .label(self.get_base().metadata.name.clone()),
             );
 
             for child_id in self.get_base().children.iter() {
@@ -51,7 +44,7 @@ impl dyn FileObject {
             builder.node(
                 NodeBuilder::leaf(self.get_base().metadata.id.clone())
                     .height(NODE_HEIGHT)
-                    .label(name_in_tree),
+                    .label(self.get_base().metadata.name.clone()),
             );
         }
     }
@@ -125,7 +118,7 @@ impl ProjectEditor {
         }
 
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::both()
                 .id_salt("tree scroll")
                 .show(ui, |ui| {
                     self.draw_tree(ui);

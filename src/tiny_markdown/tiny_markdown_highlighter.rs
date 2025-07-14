@@ -87,6 +87,7 @@ fn format_from_style(
         color,
         italics: tinymark_style.italic,
         font_id: FontId {
+            // TODO: update this based on actual font size (or figure out why it doesn't update)
             size: 24.0,
             family: FontFamily::Proportional,
         },

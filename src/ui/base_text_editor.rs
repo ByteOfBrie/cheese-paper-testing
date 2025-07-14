@@ -1,4 +1,4 @@
-use egui::{Response, Widget};
+use egui::{Response, TextBuffer, Widget};
 
 pub struct BaseTextEditor<'a> {
     text: &'a mut String,
@@ -10,8 +10,8 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let BaseTextEditor { text, highlighter } = self;
 
-        let mut layouter = |ui: &egui::Ui, tinymark: &str, wrap_width: f32| {
-            let mut layout_job = highlighter.highlight(ui.style(), tinymark);
+        let mut layouter = |ui: &egui::Ui, tinymark: &dyn TextBuffer, wrap_width: f32| {
+            let mut layout_job = highlighter.highlight(ui.style(), tinymark.as_str());
             layout_job.wrap.max_width = wrap_width;
             ui.fonts(|f| f.layout_job(layout_job))
         };

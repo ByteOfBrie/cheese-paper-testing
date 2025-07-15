@@ -8,10 +8,12 @@ For similar projects that are much more complete, check out [Manuskript](https:/
 
 # Rewrite
 
-This version is a rewrite/reimplementation of [the original cheese-paper editor](https://gitlab.com/BrieVee/cheese-paper), which is written in Python. Both editors are designed around the same file format, at present, they should be capable of sharing work. In the future, I expect this version to have features not present in the Python implementation. As of 2025-06-19, the python editor is much more complete, but I expect that to change before too long (it's easier to write things the second time).
+This version is a rewrite/reimplementation of [the original cheese-paper editor](https://gitlab.com/BrieVee/cheese-paper), which is written in Python. Both editors are designed around the same file format, at present, they should be capable of sharing work.
+
+This editor is already has much more flexible UI elements. The exact list of ["missing" features is visible in this milestone](https://codeberg.org/ByteOfBrie/cheese-paper/issues?q=&type=all&sort=&state=open&labels=&milestone=21036&project=0&assignee=0&poster=0)
 
 This isn't (primarily) about performance but instead:
 * stop using tkinter (please, it was suffering)
 * ease of distribution (spell check in particular was annoying)
 * wayland support
-* (theoretical) screen reader support
+* (eventual) screen reader support

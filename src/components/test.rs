@@ -2119,3 +2119,73 @@ fn test_place_nesting() {
     assert_eq!(place1.get_base().index, Some(0));
     assert_eq!(place2.get_base().index, Some(0));
 }
+
+#[test]
+fn test_place_loading() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let place_file_text = r#"id = "1"
+file_type = "place""#;
+    let worldbuilding_file_text = r#"id = "2"
+file_type = "worldbuilding""#;
+
+    // open and immediately drop the project (just creating the files)
+    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    std::fs::create_dir(&Path::join(
+        base_dir.path(),
+        "test_project/worldbuilding/000-place1/",
+    ))
+    .unwrap();
+
+    write_with_temp_file(
+        &Path::join(
+            base_dir.path(),
+            "test_project/worldbuilding/000-place1/metadata.toml",
+        ),
+        place_file_text.as_bytes(),
+    )
+    .unwrap();
+
+    std::fs::create_dir(&Path::join(
+        base_dir.path(),
+        "test_project/worldbuilding/001-place2/",
+    ))
+    .unwrap();
+
+    write_with_temp_file(
+        &Path::join(
+            base_dir.path(),
+            "test_project/worldbuilding/001-place2/metadata.toml",
+        ),
+        worldbuilding_file_text.as_bytes(),
+    )
+    .unwrap();
+
+    let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
+    project.save().unwrap();
+
+    let place = project.objects.get("1").unwrap();
+    match place.get_file_type() {
+        FileObjectTypeInterface::Place(_) => {}
+        _ => assert!(false),
+    }
+
+    let worldbuilding = project.objects.get("2").unwrap();
+    match worldbuilding.get_file_type() {
+        FileObjectTypeInterface::Place(_) => {}
+        _ => assert!(false),
+    }
+
+    assert!(
+        read_to_string(worldbuilding.get_file())
+            .unwrap()
+            .contains(r#"notes = """#)
+    );
+
+    assert!(
+        read_to_string(worldbuilding.get_file())
+            .unwrap()
+            .contains(r#"notes = """#)
+    );
+}

@@ -39,6 +39,11 @@ impl dyn FileObject {
     ) {
         // TODO: scale off of font size
         const NODE_HEIGHT: f32 = 26.0;
+        let node_name = if self.get_base().metadata.name.is_empty() {
+            self.empty_string_name().to_string()
+        } else {
+            self.get_base().metadata.name.clone()
+        };
 
         // first, construct the node. we avoid a lot of duplication by putting it into a variable
         // before sticking it in the nodebuilder
@@ -63,7 +68,7 @@ impl dyn FileObject {
 
         let node = base_node
             .height(NODE_HEIGHT)
-            .label(self.get_base().metadata.name.clone())
+            .label(node_name)
             .context_menu(|ui| {
                 // We can safely call unwrap on parent here because children can't be root nodes
                 if ui.button("New Scene").clicked() {
@@ -165,7 +170,12 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         if let Some(object) = self.project.objects.get(tab) {
-            object.get_base().metadata.name.clone().into()
+            if object.get_base().metadata.name.is_empty() {
+                object.empty_string_name().to_string()
+            } else {
+                object.get_base().metadata.name.clone()
+            }
+            .into()
         } else {
             "<Deleted>".into()
         }

@@ -172,13 +172,16 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        let file_object = self.project.objects.get_mut(tab).unwrap();
-        match file_object.get_file_type_mut() {
-            MutFileObjectTypeInterface::Scene(obj) => SceneEditor { scene: obj }.ui(ui),
-            MutFileObjectTypeInterface::Character(obj) => CharacterEditor { character: obj }.ui(ui),
-            MutFileObjectTypeInterface::Folder(obj) => FolderEditor { folder: obj }.ui(ui),
-            MutFileObjectTypeInterface::Place(obj) => PlaceEditor { place: obj }.ui(ui),
-        };
+        if let Some(file_object) = self.project.objects.get_mut(tab) {
+            match file_object.get_file_type_mut() {
+                MutFileObjectTypeInterface::Scene(obj) => SceneEditor { scene: obj }.ui(ui),
+                MutFileObjectTypeInterface::Character(obj) => {
+                    CharacterEditor { character: obj }.ui(ui)
+                }
+                MutFileObjectTypeInterface::Folder(obj) => FolderEditor { folder: obj }.ui(ui),
+                MutFileObjectTypeInterface::Place(obj) => PlaceEditor { place: obj }.ui(ui),
+            };
+        }
     }
 
     fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
@@ -204,6 +207,10 @@ impl ProjectEditor {
                     self.draw_tree(ui);
                 });
         });
+
+        // Before rendering the tab view, clear out any deleted scenes
+        self.dock_state
+            .retain_tabs(|tab_id| self.project.objects.contains_key(tab_id));
 
         // render the tab view
         DockArea::new(&mut self.dock_state)

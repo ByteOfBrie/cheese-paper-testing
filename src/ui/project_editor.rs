@@ -1,12 +1,12 @@
 use crate::components::Project;
-use crate::components::file_objects::utils::truncate_name;
+use crate::components::file_objects::base::FileType;
 use crate::components::file_objects::{
     FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
 };
 use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 use egui::Widget;
 use egui_dock::{DockArea, DockState};
-use egui_ltreeview::{Action, NodeBuilder, TreeView};
+use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 
 #[derive(Debug)]
 pub struct ProjectEditor {
@@ -17,53 +17,137 @@ pub struct ProjectEditor {
     title_needs_update: bool,
 }
 
+enum ContextMenuActions {
+    Delete {
+        parent: String,
+        deleting: String,
+    },
+    Add {
+        parent: String,
+        position: DirPosition<String>,
+        file_type: FileType,
+    },
+}
+
 impl dyn FileObject {
     fn build_tree(
         &self,
         objects: &mut FileObjectStore,
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
+        actions: &mut Vec<ContextMenuActions>,
+        parent_id: Option<&str>,
     ) {
         // TODO: scale off of font size
         const NODE_HEIGHT: f32 = 26.0;
 
-        if self.is_folder() {
-            builder.node(
-                NodeBuilder::dir(self.get_base().metadata.id.clone())
-                    .height(NODE_HEIGHT)
-                    .label(self.get_base().metadata.name.clone()),
-            );
+        // first, construct the node. we avoid a lot of duplication by putting it into a variable
+        // before sticking it in the nodebuilder
+        let base_node = if self.is_folder() {
+            NodeBuilder::dir(self.get_base().metadata.id.clone())
+        } else {
+            NodeBuilder::leaf(self.get_base().metadata.id.clone())
+        };
 
+        // compute some stuff for our context menu:
+        let (parent, position) = if self.is_folder() {
+            (
+                Some(self.get_base().metadata.id.as_str()),
+                DirPosition::Last,
+            )
+        } else {
+            (
+                parent_id,
+                DirPosition::After(self.get_base().metadata.id.clone()),
+            )
+        };
+
+        let node = base_node
+            .height(NODE_HEIGHT)
+            .label(self.get_base().metadata.name.clone())
+            .context_menu(|ui| {
+                // We can safely call unwrap on parent here because children can't be root nodes
+                if ui.button("New Scene").clicked() {
+                    actions.push(ContextMenuActions::Add {
+                        parent: parent.unwrap().to_string(),
+                        position: position.clone(),
+                        file_type: FileType::Scene,
+                    });
+                    ui.close();
+                }
+                if ui.button("New Character").clicked() {
+                    actions.push(ContextMenuActions::Add {
+                        parent: parent.unwrap().to_string(),
+                        position: position.clone(),
+                        file_type: FileType::Character,
+                    });
+                    ui.close();
+                }
+                if ui.button("New Folder").clicked() {
+                    actions.push(ContextMenuActions::Add {
+                        parent: parent.unwrap().to_string(),
+                        position: position.clone(),
+                        file_type: FileType::Folder,
+                    });
+                    ui.close();
+                }
+                if ui.button("New Place").clicked() {
+                    actions.push(ContextMenuActions::Add {
+                        parent: parent.unwrap().to_string(),
+                        position: position.clone(),
+                        file_type: FileType::Place,
+                    });
+                    ui.close();
+                }
+
+                ui.separator();
+
+                if let Some(parent) = parent {
+                    if ui.button("Delete").clicked() {
+                        actions.push(ContextMenuActions::Delete {
+                            parent: parent.to_string(),
+                            deleting: self.get_base().metadata.id.clone(),
+                        });
+                    }
+                }
+            });
+
+        builder.node(node);
+
+        if self.is_folder() {
             for child_id in self.get_base().children.iter() {
                 run_with_file_object(&child_id, objects, |child, objects| {
-                    child.build_tree(objects, builder);
+                    child.build_tree(
+                        objects,
+                        builder,
+                        actions,
+                        Some(self.get_base().metadata.id.as_str()),
+                    );
                 });
             }
 
             builder.close_dir();
-        } else {
-            builder.node(
-                NodeBuilder::leaf(self.get_base().metadata.id.clone())
-                    .height(NODE_HEIGHT)
-                    .label(self.get_base().metadata.name.clone()),
-            );
         }
     }
 }
 
 impl Project {
-    fn build_tree(&mut self, builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>) {
+    fn build_tree(
+        &mut self,
+        builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
+        actions: &mut Vec<ContextMenuActions>,
+    ) {
         run_with_file_object(&self.text_id, &mut self.objects, |text, objects| {
-            text.build_tree(objects, builder)
+            text.build_tree(objects, builder, actions, None)
         });
         run_with_file_object(
             &self.characters_id,
             &mut self.objects,
-            |characters, objects| characters.build_tree(objects, builder),
+            |characters, objects| characters.build_tree(objects, builder, actions, None),
         );
         run_with_file_object(
             &self.worldbuilding_id,
             &mut self.objects,
-            |worldbuilding, objects| worldbuilding.build_tree(objects, builder),
+            |worldbuilding, objects| worldbuilding.build_tree(objects, builder, actions, None),
         );
     }
 }
@@ -80,15 +164,11 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        self.project
-            .objects
-            .get(tab)
-            .unwrap()
-            .get_base()
-            .metadata
-            .name
-            .clone()
-            .into()
+        if let Some(object) = self.project.objects.get(tab) {
+            object.get_base().metadata.name.clone().into()
+        } else {
+            "<Deleted>".into()
+        }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
@@ -139,10 +219,11 @@ impl ProjectEditor {
     }
 
     fn draw_tree(&mut self, ui: &mut egui::Ui) {
+        let mut context_menu_actions: Vec<ContextMenuActions> = Vec::new();
         let (_response, actions) = TreeView::new(ui.make_persistent_id("project tree"))
             .allow_multi_selection(false)
             .show(ui, |builder| {
-                self.project.build_tree(builder);
+                self.project.build_tree(builder, &mut context_menu_actions);
             });
 
         for action in actions {
@@ -219,6 +300,44 @@ impl ProjectEditor {
                     }
                 }
                 _ => {}
+            }
+        }
+
+        for action in context_menu_actions {
+            match action {
+                ContextMenuActions::Delete { parent, deleting } => {
+                    // TODO: find better way of doing this, prune elements before calling the viewer?
+                    if let Some(tab_position) = self.dock_state.find_tab(&deleting) {
+                        self.dock_state.remove_tab(tab_position);
+                    }
+                    run_with_file_object(
+                        parent.as_str(),
+                        &mut self.project.objects,
+                        |parent, objects| {
+                            if let Err(err) = parent.remove_child(&deleting, objects) {
+                                log::error!(
+                                    "Encountered error while trying to delete element: {deleting}: {err}"
+                                );
+                            }
+                        },
+                    )
+                }
+                ContextMenuActions::Add {
+                    parent,
+                    position,
+                    file_type,
+                } => {
+                    match run_with_file_object(
+                        &parent,
+                        &mut self.project.objects,
+                        |parent, objects| parent.create_child(file_type, position, objects),
+                    ) {
+                        Ok(new_child) => self.project.add_object(new_child),
+                        Err(err) => {
+                            log::error!("Encountered error while trying to add child: {err}")
+                        }
+                    }
+                }
             }
         }
     }

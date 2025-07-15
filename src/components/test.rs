@@ -193,22 +193,22 @@ fn test_create_child() {
     // create the scenes
     let scene = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     let character = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Character)
+            text.create_child_at_end(FileType::Character)
         })
         .unwrap();
     let folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     let place = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Place)
+            text.create_child_at_end(FileType::Place)
         })
         .unwrap();
 
@@ -238,12 +238,16 @@ fn test_set_index_folders() {
 
     let mut top_level_folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
 
-    let mut mid_level_folder = top_level_folder.create_child(FileType::Folder).unwrap();
-    let child_scene = mid_level_folder.create_child(FileType::Scene).unwrap();
+    let mut mid_level_folder = top_level_folder
+        .create_child_at_end(FileType::Folder)
+        .unwrap();
+    let child_scene = mid_level_folder
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
     let child_scene_id = child_scene.get_base().metadata.id.clone();
 
     assert!(child_scene.get_file().exists());
@@ -293,7 +297,7 @@ fn test_save_in_folder() {
     let sample_text = "sample body";
 
     let mut folder = Folder::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let mut scene = folder.create_child(FileType::Scene).unwrap();
+    let mut scene = folder.create_child_at_end(FileType::Scene).unwrap();
 
     match scene.get_file_type_mut() {
         MutFileObjectTypeInterface::Scene(scene) => {
@@ -334,28 +338,28 @@ fn test_reload_project() {
 
     let mut scene = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     let scene_id = scene.get_base().metadata.id.clone();
 
     let mut character = project
         .run_with_folder(ProjectFolder::characters, |text, _| {
-            text.create_child(FileType::Character)
+            text.create_child_at_end(FileType::Character)
         })
         .unwrap();
     let character_id = character.get_base().metadata.id.clone();
 
     let mut folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     let folder_id = folder.get_base().metadata.id.clone();
 
     let mut place = project
         .run_with_folder(ProjectFolder::worldbuilding, |text, _| {
-            text.create_child(FileType::Place)
+            text.create_child_at_end(FileType::Place)
         })
         .unwrap();
     let place_id = place.get_base().metadata.id.clone();
@@ -654,17 +658,17 @@ fn test_delete() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
     folder1.get_base_mut().file.modified = true;
 
-    let mut scene1 = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene1 = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene1.get_base_mut().metadata.name = "scene1".to_string();
     scene1.get_base_mut().file.modified = true;
 
-    let mut scene2 = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene2 = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene2.get_base_mut().metadata.name = "scene2".to_string();
     scene2.get_base_mut().file.modified = true;
 
@@ -785,19 +789,19 @@ fn test_delete_middle() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
     folder1.get_base_mut().file.modified = true;
 
-    let mut scene1 = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene1 = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene1.get_base_mut().metadata.name = "scene1".to_string();
     scene1.get_base_mut().file.modified = true;
 
     let mut scene2 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     scene2.get_base_mut().metadata.name = "scene2".to_string();
@@ -845,7 +849,7 @@ fn test_move_simple() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
@@ -853,13 +857,13 @@ fn test_move_simple() {
 
     let mut folder2 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder2.get_base_mut().metadata.name = "folder2".to_string();
     folder2.get_base_mut().file.modified = true;
 
-    let mut scene_to_move = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene_to_move = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
     scene_to_move.get_base_mut().file.modified = true;
 
@@ -919,7 +923,7 @@ fn test_move_multiple_times() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
@@ -927,13 +931,13 @@ fn test_move_multiple_times() {
 
     let mut folder2 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder2.get_base_mut().metadata.name = "folder2".to_string();
     folder2.get_base_mut().file.modified = true;
 
-    let mut scene_to_move = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene_to_move = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
     scene_to_move.get_base_mut().file.modified = true;
 
@@ -1025,7 +1029,7 @@ fn test_move_folder_contents() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
@@ -1033,13 +1037,13 @@ fn test_move_folder_contents() {
 
     let mut folder2 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder2.get_base_mut().metadata.name = "folder2".to_string();
     folder2.get_base_mut().file.modified = true;
 
-    let mut scene = folder2.create_child(FileType::Scene).unwrap();
+    let mut scene = folder2.create_child_at_end(FileType::Scene).unwrap();
     scene.get_base_mut().metadata.name = "scene1".to_string();
     scene.get_base_mut().file.modified = true;
 
@@ -1143,7 +1147,7 @@ fn test_move_within_folder_backwards() {
 
     let mut folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder.get_base_mut().metadata.name = "folder1".to_string();
@@ -1151,7 +1155,7 @@ fn test_move_within_folder_backwards() {
 
     let mut scene = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     scene.get_base_mut().metadata.name = "scene1".to_string();
@@ -1223,7 +1227,7 @@ fn test_move_within_folder_forwards() {
 
     let mut folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder.get_base_mut().metadata.name = "folder1".to_string();
@@ -1231,7 +1235,7 @@ fn test_move_within_folder_forwards() {
 
     let mut scene = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     scene.get_base_mut().metadata.name = "scene1".to_string();
@@ -1321,7 +1325,7 @@ fn test_move_between_folder_contents() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
@@ -1329,21 +1333,21 @@ fn test_move_between_folder_contents() {
 
     let mut folder2 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder2.get_base_mut().metadata.name = "folder2".to_string();
     folder2.get_base_mut().file.modified = true;
 
-    let mut scene_a = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene_a = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene_a.get_base_mut().metadata.name = "a".to_string();
     scene_a.get_base_mut().file.modified = true;
 
-    let mut scene_b = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene_b = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene_b.get_base_mut().metadata.name = "b".to_string();
     scene_b.get_base_mut().file.modified = true;
 
-    let mut scene_c = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene_c = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene_c.get_base_mut().metadata.name = "c".to_string();
     scene_c.get_base_mut().file.modified = true;
 
@@ -1616,13 +1620,13 @@ fn test_move_to_parent() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
     folder1.get_base_mut().file.modified = true;
 
-    let mut scene = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene.get_base_mut().metadata.name = "scene1".to_string();
     scene.get_base_mut().file.modified = true;
 
@@ -1710,13 +1714,13 @@ fn test_move_to_parent_current_position() {
 
     let mut folder1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder1.get_base_mut().metadata.name = "folder1".to_string();
     folder1.get_base_mut().file.modified = true;
 
-    let mut scene = folder1.create_child(FileType::Scene).unwrap();
+    let mut scene = folder1.create_child_at_end(FileType::Scene).unwrap();
     scene.get_base_mut().metadata.name = "scene1".to_string();
     scene.get_base_mut().file.modified = true;
 
@@ -1804,7 +1808,7 @@ fn test_move_to_self() {
 
     let mut folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     folder.get_base_mut().metadata.name = "folder1".to_string();
@@ -1812,7 +1816,7 @@ fn test_move_to_self() {
 
     let mut scene = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     scene.get_base_mut().metadata.name = "scene1".to_string();
@@ -1903,19 +1907,23 @@ fn test_move_to_child() {
 
     let mut top_level_folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Folder)
+            text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     let top_level_folder_id = top_level_folder.get_base().metadata.id.clone();
     top_level_folder.get_base_mut().metadata.name = String::from("top");
     top_level_folder.get_base_mut().file.modified = true;
 
-    let mut mid_level_folder = top_level_folder.create_child(FileType::Folder).unwrap();
+    let mut mid_level_folder = top_level_folder
+        .create_child_at_end(FileType::Folder)
+        .unwrap();
     let mid_level_folder_id = mid_level_folder.get_base().metadata.id.clone();
     mid_level_folder.get_base_mut().metadata.name = String::from("mid");
     mid_level_folder.get_base_mut().file.modified = true;
 
-    let mut child_folder = mid_level_folder.create_child(FileType::Scene).unwrap();
+    let mut child_folder = mid_level_folder
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
     let child_folder_id = child_folder.get_base().metadata.id.clone();
     child_folder.get_base_mut().metadata.name = String::from("child");
     child_folder.get_base_mut().file.modified = true;
@@ -2008,7 +2016,7 @@ fn test_move_no_clobber() {
 
     let mut scene1 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     scene1.get_base_mut().metadata.name = "a".to_string();
@@ -2016,7 +2024,7 @@ fn test_move_no_clobber() {
 
     let mut scene2 = project
         .run_with_folder(ProjectFolder::text, |text, _| {
-            text.create_child(FileType::Scene)
+            text.create_child_at_end(FileType::Scene)
         })
         .unwrap();
     scene2.get_base_mut().metadata.name = "a".to_string();
@@ -2103,9 +2111,9 @@ fn test_place_nesting() {
     let mut text =
         Folder::new_top_level(base_dir.path().to_path_buf(), "text".to_string()).unwrap();
 
-    let mut place1 = text.create_child(FileType::Place).unwrap();
+    let mut place1 = text.create_child_at_end(FileType::Place).unwrap();
 
-    let place2 = place1.create_child(FileType::Place).unwrap();
+    let place2 = place1.create_child_at_end(FileType::Place).unwrap();
 
     assert!(place2.get_file().exists());
     assert_eq!(place1.get_base().index, Some(0));

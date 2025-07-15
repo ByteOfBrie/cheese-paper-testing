@@ -1,3 +1,4 @@
+use egui_ltreeview::DirPosition;
 use log::warn;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -277,33 +278,6 @@ fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectS
     })
 }
 
-/// Creates a gap in the indexes, to be called immediately before a move
-fn create_index_gap(parent_id: &str, index: usize, objects: &mut FileObjectStore) -> Result<()> {
-    run_with_file_object(&parent_id, objects, |parent, objects| {
-        let children = &parent.get_base().children;
-
-        // Ensure we have to do the work
-        if index < children.len() {
-            // Go backwards from the end of the list to the place where the gap is being created
-            // to ensure that we don't have collisions with names
-            for i in (index..children.len()).rev() {
-                let child_id = children[i].as_str();
-
-                run_with_file_object(&child_id, objects, |child, objects| {
-                    // Try to increase the index of the child
-                    child.set_index(i + 1, objects)
-                })?;
-            }
-
-            log::debug!("created indexing gap in {parent_id} at {index}");
-            Ok(())
-        } else {
-            log::debug!("indexing gap requested at the end of {parent_id}, nothing to do");
-            Ok(())
-        }
-    })
-}
-
 /// Move a child between two folders, `source_file_id` and `dest_file_id`
 ///
 /// This can't be part of the FileObject trait because ownership is complicated between
@@ -378,7 +352,9 @@ fn create_index_and_move_on_disk(
 ) {
     // Create index "gap" in destination (helpful to do first in case we're moving "up" and this
     // changes the path of the object being moved)
-    create_index_gap(dest_file_id, new_index, objects).unwrap();
+    run_with_file_object(dest_file_id, objects, |dest, objects| {
+        dest.create_index_gap(new_index, objects).unwrap();
+    });
 
     // Remove the moving object from it's current parent
     let source = objects
@@ -1037,12 +1013,45 @@ pub trait FileObject: Debug {
         }
     }
 
-    /// Creates a child in this folder, returning it to be added to the list
-    fn create_child(&mut self, file_type: FileType) -> Result<Box<dyn FileObject>> {
+    // Helper function to create a child at the end of a directory, which is much simpler
+    #[cfg(test)]
+    fn create_child_at_end(&mut self, file_type: FileType) -> Result<Box<dyn FileObject>> {
         assert!(self.is_folder());
 
-        let new_index = self.get_base().children.len();
+        // We know it's at the end, and thus we know that there aren't any children
+        self.create_child(file_type, DirPosition::Last, &mut HashMap::new())
+    }
+    /// Creates a child in this folder, returning it to be added to the list
+    fn create_child(
+        &mut self,
+        file_type: FileType,
+        position: DirPosition<String>,
+        objects: &mut FileObjectStore,
+    ) -> Result<Box<dyn FileObject>> {
+        let new_index = match position {
+            DirPosition::After(child) => {
+                self.get_base()
+                    .children
+                    .iter()
+                    .position(|id| *id == child)
+                    .unwrap()
+                    + 1
+            }
+            DirPosition::Before(child) => self
+                .get_base()
+                .children
+                .iter()
+                .position(|id| *id == child)
+                .unwrap(),
+            DirPosition::First => 0,
+            DirPosition::Last => self.get_base().children.len(),
+        };
 
+        self.create_index_gap(new_index, objects)?;
+
+        // It might not be the best behavior to recover from an error *after* a file is created on
+        // disk, but that might not even be possible, and is kinda okay since we should only ever
+        // overwrite that file by accident, even in the worst case
         let new_object: Box<dyn FileObject> = match file_type {
             FileType::Scene => Box::new(Scene::new(self.get_path(), new_index)?),
             FileType::Character => Box::new(Character::new(self.get_path(), new_index)?),
@@ -1052,7 +1061,7 @@ pub trait FileObject: Debug {
 
         self.get_base_mut()
             .children
-            .push(new_object.get_base().metadata.id.clone());
+            .insert(new_index, new_object.get_base().metadata.id.clone());
 
         Ok(new_object)
     }
@@ -1098,6 +1107,38 @@ pub trait FileObject: Debug {
             Some(err) => Err(err),
             None => Ok(()),
         }
+    }
+
+    /// Creates a gap in the indexes, to be called immediately before a move
+    fn create_index_gap(&mut self, index: usize, objects: &mut FileObjectStore) -> Result<()> {
+        assert!(self.is_folder());
+
+        let children = &self.get_base().children;
+
+        // Ensure we have to do the work
+        if index < children.len() {
+            // Go backwards from the end of the list to the place where the gap is being created
+            // to ensure that we don't have collisions with names
+            for i in (index..children.len()).rev() {
+                let child_id = children[i].as_str();
+
+                run_with_file_object(&child_id, objects, |child, objects| {
+                    // Try to increase the index of the child
+                    child.set_index(i + 1, objects)
+                })?;
+            }
+
+            log::debug!(
+                "created indexing gap in {} at {index}",
+                &self.get_base().metadata.id
+            );
+        } else {
+            log::debug!(
+                "indexing gap requested at the end of {}, nothing to do",
+                &self.get_base().metadata.id
+            );
+        }
+        Ok(())
     }
 
     /// For ease of calling, `objects` can contain arbitrary objects, only values contained

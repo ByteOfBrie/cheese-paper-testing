@@ -1068,6 +1068,11 @@ pub trait FileObject: Debug {
 
     fn remove_child(&mut self, child_id: &str, objects: &mut FileObjectStore) -> Result<()> {
         let mut errors = Vec::new();
+        log::debug!(
+            "Removing child {} from {}",
+            child_id,
+            self.get_base().metadata.id
+        );
         let mut child = objects
             .remove(child_id)
             .expect("all children should be in objects");

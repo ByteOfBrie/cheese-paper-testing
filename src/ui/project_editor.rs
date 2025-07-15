@@ -49,7 +49,7 @@ impl dyn FileObject {
         };
 
         // compute some stuff for our context menu:
-        let (parent, position) = if self.is_folder() {
+        let (add_parent, position) = if self.is_folder() {
             (
                 Some(self.get_base().metadata.id.as_str()),
                 DirPosition::Last,
@@ -68,7 +68,7 @@ impl dyn FileObject {
                 // We can safely call unwrap on parent here because children can't be root nodes
                 if ui.button("New Scene").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: parent.unwrap().to_string(),
+                        parent: add_parent.unwrap().to_string(),
                         position: position.clone(),
                         file_type: FileType::Scene,
                     });
@@ -76,7 +76,7 @@ impl dyn FileObject {
                 }
                 if ui.button("New Character").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: parent.unwrap().to_string(),
+                        parent: add_parent.unwrap().to_string(),
                         position: position.clone(),
                         file_type: FileType::Character,
                     });
@@ -84,7 +84,7 @@ impl dyn FileObject {
                 }
                 if ui.button("New Folder").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: parent.unwrap().to_string(),
+                        parent: add_parent.unwrap().to_string(),
                         position: position.clone(),
                         file_type: FileType::Folder,
                     });
@@ -92,7 +92,7 @@ impl dyn FileObject {
                 }
                 if ui.button("New Place").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: parent.unwrap().to_string(),
+                        parent: add_parent.unwrap().to_string(),
                         position: position.clone(),
                         file_type: FileType::Place,
                     });
@@ -101,7 +101,7 @@ impl dyn FileObject {
 
                 ui.separator();
 
-                if let Some(parent) = parent {
+                if let Some(parent) = parent_id {
                     if ui.button("Delete").clicked() {
                         actions.push(ContextMenuActions::Delete {
                             parent: parent.to_string(),

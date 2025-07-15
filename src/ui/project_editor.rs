@@ -248,12 +248,17 @@ impl ProjectEditor {
                 Action::SetSelected(selected_file_ids) => {
                     // Open nodes when they're selected
                     if let Some(file_id) = selected_file_ids.get(0) {
-                        if let Some(tab_position) = self.dock_state.find_tab(file_id) {
-                            // We've already opened this, just select it
-                            self.dock_state.set_active_tab(tab_position);
-                        } else {
-                            // New file object, open it for editing
-                            self.dock_state.push_to_first_leaf(file_id.clone());
+                        if *file_id != self.project.text_id
+                            && *file_id != self.project.characters_id
+                            && *file_id != self.project.worldbuilding_id
+                        {
+                            if let Some(tab_position) = self.dock_state.find_tab(file_id) {
+                                // We've already opened this, just select it
+                                self.dock_state.set_active_tab(tab_position);
+                            } else {
+                                // New file object, open it for editing
+                                self.dock_state.push_to_first_leaf(file_id.clone());
+                            }
                         }
                     }
                 }

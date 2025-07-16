@@ -11,7 +11,7 @@ use egui::ScrollArea;
 pub struct FolderEditor<'a> {
     pub folder: &'a mut Folder,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub cursor_pos: &'a mut usize,
+    pub current_selected_word: &'a mut String,
 }
 
 impl<'a> Widget for &mut FolderEditor<'a> {
@@ -40,7 +40,7 @@ impl<'a> FolderEditor<'a> {
                     let response = ui.add(&mut BaseTextEditor::new(
                         &mut self.folder.metadata.summary,
                         self.dictionary,
-                        self.cursor_pos,
+                        self.current_selected_word,
                     ));
                     self.process_response(response);
                 });
@@ -51,7 +51,7 @@ impl<'a> FolderEditor<'a> {
                     let response = ui.add(&mut BaseTextEditor::new(
                         &mut self.folder.metadata.notes,
                         self.dictionary,
-                        self.cursor_pos,
+                        self.current_selected_word,
                     ));
                     self.process_response(response);
                 });

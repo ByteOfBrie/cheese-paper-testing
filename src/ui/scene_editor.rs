@@ -11,7 +11,7 @@ use egui::ScrollArea;
 pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub cursor_pos: &'a mut usize,
+    pub current_selected_word: &'a mut String,
 }
 
 impl<'a> Widget for &mut SceneEditor<'a> {
@@ -39,7 +39,7 @@ impl<'a> SceneEditor<'a> {
                     &mut BaseTextEditor::new(
                         &mut self.scene.text,
                         self.dictionary,
-                        self.cursor_pos,
+                        self.current_selected_word,
                     ),
                 );
 
@@ -80,7 +80,7 @@ impl<'a> SceneEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.scene.metadata.summary,
                             self.dictionary,
-                            self.cursor_pos,
+                            self.current_selected_word,
                         ),
                     );
                     self.process_response(response);
@@ -94,7 +94,7 @@ impl<'a> SceneEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.scene.metadata.notes,
                             self.dictionary,
-                            self.cursor_pos,
+                            self.current_selected_word,
                         ),
                     );
                     self.process_response(response);

@@ -11,7 +11,7 @@ use egui::ScrollArea;
 pub struct PlaceEditor<'a> {
     pub place: &'a mut Place,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub cursor_pos: &'a mut usize,
+    pub current_selected_word: &'a mut String,
 }
 
 impl<'a> Widget for &mut PlaceEditor<'a> {
@@ -48,7 +48,7 @@ impl<'a> PlaceEditor<'a> {
                     &mut BaseTextEditor::new(
                         &mut self.place.metadata.notes,
                         self.dictionary,
-                        self.cursor_pos,
+                        self.current_selected_word,
                     ),
                 );
                 self.process_response(response);
@@ -63,7 +63,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.connection,
                     self.dictionary,
-                    self.cursor_pos,
+                    self.current_selected_word,
                 ));
                 self.process_response(response);
 
@@ -71,7 +71,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.description,
                     self.dictionary,
-                    self.cursor_pos,
+                    self.current_selected_word,
                 ));
                 self.process_response(response);
 
@@ -79,7 +79,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.appearance,
                     self.dictionary,
-                    self.cursor_pos,
+                    self.current_selected_word,
                 ));
                 self.process_response(response);
 
@@ -87,7 +87,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.other_senses,
                     self.dictionary,
-                    self.cursor_pos,
+                    self.current_selected_word,
                 ));
                 self.process_response(response);
             });

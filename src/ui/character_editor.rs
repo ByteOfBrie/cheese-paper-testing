@@ -11,7 +11,7 @@ use egui::ScrollArea;
 pub struct CharacterEditor<'a> {
     pub character: &'a mut Character,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub cursor_pos: &'a mut usize,
+    pub current_selected_word: &'a mut String,
 }
 
 impl<'a> Widget for &mut CharacterEditor<'a> {
@@ -53,7 +53,7 @@ impl<'a> CharacterEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.character.metadata.summary,
                             self.dictionary,
-                            self.cursor_pos,
+                            self.current_selected_word,
                         ),
                     );
                     self.process_response(response);
@@ -67,7 +67,7 @@ impl<'a> CharacterEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.character.metadata.notes,
                             self.dictionary,
-                            self.cursor_pos,
+                            self.current_selected_word,
                         ),
                     );
                     self.process_response(response);
@@ -81,7 +81,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.appearance,
                 self.dictionary,
-                self.cursor_pos,
+                self.current_selected_word,
             ));
             self.process_response(response);
 
@@ -89,7 +89,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.appearance,
                 self.dictionary,
-                self.cursor_pos,
+                self.current_selected_word,
             ));
             self.process_response(response);
 
@@ -97,7 +97,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.personality,
                 self.dictionary,
-                self.cursor_pos,
+                self.current_selected_word,
             ));
             self.process_response(response);
 
@@ -105,7 +105,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.goal,
                 self.dictionary,
-                self.cursor_pos,
+                self.current_selected_word,
             ));
             self.process_response(response);
 
@@ -113,7 +113,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.conflict,
                 self.dictionary,
-                self.cursor_pos,
+                self.current_selected_word,
             ));
             self.process_response(response);
 
@@ -121,7 +121,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.habits,
                 self.dictionary,
-                self.cursor_pos,
+                self.current_selected_word,
             ));
             self.process_response(response);
         });

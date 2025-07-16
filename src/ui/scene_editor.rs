@@ -1,6 +1,7 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
 use egui::{Response, Widget};
+use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
@@ -9,6 +10,7 @@ use egui::ScrollArea;
 #[derive(Debug)]
 pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
+    pub dictionary: &'a Option<&'a mut Dictionary>,
 }
 
 impl<'a> Widget for &mut SceneEditor<'a> {
@@ -33,7 +35,7 @@ impl<'a> SceneEditor<'a> {
             .show(ui, |ui| {
                 let response = ui.add_sized(
                     ui.available_size(),
-                    &mut BaseTextEditor::new(&mut self.scene.text),
+                    &mut BaseTextEditor::new_with_dict(&mut self.scene.text, self.dictionary),
                 );
 
                 self.process_response(response);

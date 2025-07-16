@@ -7,6 +7,7 @@ use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 use egui::Widget;
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
+use spellbook::Dictionary;
 
 #[derive(Debug)]
 pub struct ProjectEditor {
@@ -15,6 +16,7 @@ pub struct ProjectEditor {
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
     title_needs_update: bool,
+    dictionary: Option<Dictionary>,
 }
 
 enum ContextMenuActions {
@@ -159,6 +161,7 @@ impl Project {
 
 struct TabViewer<'a> {
     project: &'a mut Project,
+    dictionary: Option<&'a mut Dictionary>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -184,7 +187,11 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         if let Some(file_object) = self.project.objects.get_mut(tab) {
             match file_object.get_file_type_mut() {
-                MutFileObjectTypeInterface::Scene(obj) => SceneEditor { scene: obj }.ui(ui),
+                MutFileObjectTypeInterface::Scene(obj) => SceneEditor {
+                    scene: obj,
+                    dictionary: &self.dictionary,
+                }
+                .ui(ui),
                 MutFileObjectTypeInterface::Character(obj) => {
                     CharacterEditor { character: obj }.ui(ui)
                 }
@@ -231,6 +238,7 @@ impl ProjectEditor {
                 ctx,
                 &mut TabViewer {
                     project: &mut self.project,
+                    dictionary: self.dictionary.as_mut(),
                 },
             )
     }
@@ -364,11 +372,12 @@ impl ProjectEditor {
         }
     }
 
-    pub fn new(project: Project, open_tabs: Vec<String>) -> Self {
+    pub fn new(project: Project, open_tabs: Vec<String>, dictionary: Option<Dictionary>) -> Self {
         Self {
             project,
             dock_state: DockState::new(open_tabs),
             title_needs_update: true,
+            dictionary,
         }
     }
 

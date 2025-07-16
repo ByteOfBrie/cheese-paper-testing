@@ -28,3 +28,4 @@ egui_ltreeview = { git = "https://github.com/ByteOfBrie/egui_ltreeview.git", rev
 egui_dock = "0.17"
 directories = "5.0"
 rfd = "0.15.4"
+spellbook = "0.3.4"

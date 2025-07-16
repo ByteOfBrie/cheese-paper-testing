@@ -628,6 +628,7 @@ dependencies = [
  "regex",
  "rfd",
  "serde",
+ "spellbook",
  "tempfile",
  "toml",
  "toml_edit",
@@ -2721,6 +2722,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "spellbook"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbdce107bc05c50362cd2ac1611b41221c15af30fb0fbf0e23bcb3d258ffcdfb"
+dependencies = [
+ "foldhash",
+ "hashbrown",
 ]
 
 [[package]]

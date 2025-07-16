@@ -3,6 +3,7 @@ use crate::ui::project_editor::ProjectEditor;
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
 use rfd::FileDialog;
+use spellbook::Dictionary;
 use std::{
     collections::HashMap,
     fs::read_to_string,
@@ -16,6 +17,7 @@ use toml_edit::{DocumentMut, value};
 pub struct Settings {
     font_size: f32,
     reopen_last: bool,
+    dictionary_location: PathBuf,
 }
 
 impl Default for Settings {
@@ -23,6 +25,7 @@ impl Default for Settings {
         Self {
             font_size: 18.0,
             reopen_last: true,
+            dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
         }
     }
 }
@@ -47,6 +50,13 @@ impl Settings {
         match table.get("reopen_last").and_then(|val| val.as_bool()) {
             Some(reopen_last) => self.reopen_last = reopen_last,
             None => modified = true,
+        }
+
+        if let Some(dictionary_location) = table
+            .get("dictionary_location")
+            .and_then(|location| location.as_str())
+        {
+            self.dictionary_location = PathBuf::from(dictionary_location);
         }
 
         modified
@@ -291,6 +301,9 @@ pub struct CheesePaperApp {
     ///`ProjectEditor`), since we'll eventually want to save editor configs as well, and it's better
     /// to propagate the event downwards
     last_save: Instant,
+
+    /// Dictionary for spellchecking, if we managed to load it
+    dictionary: Option<Dictionary>,
 }
 
 impl eframe::App for CheesePaperApp {
@@ -375,10 +388,52 @@ impl CheesePaperApp {
 
         configure_text_styles(&cc.egui_ctx, state.settings.font_size);
 
+        let mut dictionary = None;
+
+        // Attempt to load dictionary:
+        let mut aff_path = state.settings.dictionary_location.clone();
+        aff_path.set_extension("aff");
+        let mut dic_path = state.settings.dictionary_location.clone();
+        dic_path.set_extension("dic");
+
+        if aff_path.exists() && dic_path.exists() {
+            match (
+                std::fs::read_to_string(aff_path),
+                std::fs::read_to_string(dic_path),
+            ) {
+                (Ok(aff), Ok(dic)) => match Dictionary::new(&aff, &dic) {
+                    Ok(dict) => dictionary = Some(dict),
+                    Err(err) => {
+                        log::warn!("Encountered error while trying to load dictionary: {err}")
+                    }
+                },
+                (Err(aff_err), _) => {
+                    log::warn!(
+                        "Error while trying to read aff in {:?}: {aff_err}",
+                        state.settings.dictionary_location
+                    )
+                }
+                (_, Err(dic_err)) => {
+                    log::warn!(
+                        "Error while trying to read dic in {:?}: {dic_err}",
+                        state.settings.dictionary_location
+                    )
+                }
+            }
+        } else {
+            log::info!(
+                "Unable to load at least one dictionary file ({aff_path:?}, {dic_path:?}, set \
+                `dictionary_location` in settings to a path that contains the dictionary files or \
+                put the files in the proper location."
+            );
+        }
+
+        // Load the actual app
         let mut app = Self {
             project_editor: None,
-            state: state,
+            state,
             last_save: Instant::now(),
+            dictionary,
         };
 
         if app.state.settings.reopen_last {
@@ -509,8 +564,11 @@ impl CheesePaperApp {
                                         .recent_projects
                                         .insert(0, project.get_path());
                                     self.state.modified = true;
-                                    self.project_editor =
-                                        Some(ProjectEditor::new(project, Vec::new()));
+                                    self.project_editor = Some(ProjectEditor::new(
+                                        project,
+                                        Vec::new(),
+                                        self.dictionary.clone(),
+                                    ));
                                 }
                                 Err(err) => {
                                     log::error!("Error while attempting to create project: {err}");
@@ -580,8 +638,16 @@ impl CheesePaperApp {
                     .last_open_file_ids
                     .get(&project.base_metadata.id)
                 {
-                    Some(open_tabs) => Some(ProjectEditor::new(project, open_tabs.clone())),
-                    None => Some(ProjectEditor::new(project, Vec::new())),
+                    Some(open_tabs) => Some(ProjectEditor::new(
+                        project,
+                        open_tabs.clone(),
+                        self.dictionary.clone(),
+                    )),
+                    None => Some(ProjectEditor::new(
+                        project,
+                        Vec::new(),
+                        self.dictionary.clone(),
+                    )),
                 };
 
                 Ok(())

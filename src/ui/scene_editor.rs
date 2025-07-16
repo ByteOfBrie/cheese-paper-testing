@@ -11,6 +11,7 @@ use egui::ScrollArea;
 pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
     pub dictionary: &'a Option<&'a mut Dictionary>,
+    pub cursor_pos: &'a mut usize,
 }
 
 impl<'a> Widget for &mut SceneEditor<'a> {
@@ -35,7 +36,11 @@ impl<'a> SceneEditor<'a> {
             .show(ui, |ui| {
                 let response = ui.add_sized(
                     ui.available_size(),
-                    &mut BaseTextEditor::new_with_dict(&mut self.scene.text, self.dictionary),
+                    &mut BaseTextEditor::new(
+                        &mut self.scene.text,
+                        self.dictionary,
+                        self.cursor_pos,
+                    ),
                 );
 
                 self.process_response(response);
@@ -72,7 +77,11 @@ impl<'a> SceneEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(&mut self.scene.metadata.summary),
+                        &mut BaseTextEditor::new(
+                            &mut self.scene.metadata.summary,
+                            self.dictionary,
+                            self.cursor_pos,
+                        ),
                     );
                     self.process_response(response);
                 });
@@ -82,7 +91,11 @@ impl<'a> SceneEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(&mut self.scene.metadata.notes),
+                        &mut BaseTextEditor::new(
+                            &mut self.scene.metadata.notes,
+                            self.dictionary,
+                            self.cursor_pos,
+                        ),
                     );
                     self.process_response(response);
                 });

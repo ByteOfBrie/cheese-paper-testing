@@ -1,6 +1,7 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Folder;
 use egui::{Response, Widget};
+use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
@@ -9,6 +10,8 @@ use egui::ScrollArea;
 #[derive(Debug)]
 pub struct FolderEditor<'a> {
     pub folder: &'a mut Folder,
+    pub dictionary: &'a Option<&'a mut Dictionary>,
+    pub cursor_pos: &'a mut usize,
 }
 
 impl<'a> Widget for &mut FolderEditor<'a> {
@@ -34,16 +37,22 @@ impl<'a> FolderEditor<'a> {
             egui::CollapsingHeader::new("Summary")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let response =
-                        ui.add(&mut BaseTextEditor::new(&mut self.folder.metadata.summary));
+                    let response = ui.add(&mut BaseTextEditor::new(
+                        &mut self.folder.metadata.summary,
+                        self.dictionary,
+                        self.cursor_pos,
+                    ));
                     self.process_response(response);
                 });
 
             egui::CollapsingHeader::new("Notes")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let response =
-                        ui.add(&mut BaseTextEditor::new(&mut self.folder.metadata.notes));
+                    let response = ui.add(&mut BaseTextEditor::new(
+                        &mut self.folder.metadata.notes,
+                        self.dictionary,
+                        self.cursor_pos,
+                    ));
                     self.process_response(response);
                 });
         });

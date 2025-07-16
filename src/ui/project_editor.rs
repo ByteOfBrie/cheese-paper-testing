@@ -17,6 +17,7 @@ pub struct ProjectEditor {
     /// in the project metadata editor as well
     title_needs_update: bool,
     dictionary: Option<Dictionary>,
+    cursor_pos: usize,
 }
 
 enum ContextMenuActions {
@@ -162,6 +163,7 @@ impl Project {
 struct TabViewer<'a> {
     project: &'a mut Project,
     dictionary: Option<&'a mut Dictionary>,
+    cursor_pos: &'a mut usize,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -190,13 +192,27 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 MutFileObjectTypeInterface::Scene(obj) => SceneEditor {
                     scene: obj,
                     dictionary: &self.dictionary,
+                    cursor_pos: self.cursor_pos,
                 }
                 .ui(ui),
-                MutFileObjectTypeInterface::Character(obj) => {
-                    CharacterEditor { character: obj }.ui(ui)
+                MutFileObjectTypeInterface::Character(obj) => CharacterEditor {
+                    character: obj,
+                    dictionary: &self.dictionary,
+                    cursor_pos: self.cursor_pos,
                 }
-                MutFileObjectTypeInterface::Folder(obj) => FolderEditor { folder: obj }.ui(ui),
-                MutFileObjectTypeInterface::Place(obj) => PlaceEditor { place: obj }.ui(ui),
+                .ui(ui),
+                MutFileObjectTypeInterface::Folder(obj) => FolderEditor {
+                    folder: obj,
+                    dictionary: &self.dictionary,
+                    cursor_pos: self.cursor_pos,
+                }
+                .ui(ui),
+                MutFileObjectTypeInterface::Place(obj) => PlaceEditor {
+                    place: obj,
+                    dictionary: &self.dictionary,
+                    cursor_pos: self.cursor_pos,
+                }
+                .ui(ui),
             };
         }
     }
@@ -239,6 +255,7 @@ impl ProjectEditor {
                 &mut TabViewer {
                     project: &mut self.project,
                     dictionary: self.dictionary.as_mut(),
+                    cursor_pos: &mut self.cursor_pos,
                 },
             )
     }
@@ -378,6 +395,7 @@ impl ProjectEditor {
             dock_state: DockState::new(open_tabs),
             title_needs_update: true,
             dictionary,
+            cursor_pos: 0,
         }
     }
 

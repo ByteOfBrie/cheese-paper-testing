@@ -1,6 +1,7 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Place;
 use egui::{Response, Widget};
+use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
@@ -9,6 +10,8 @@ use egui::ScrollArea;
 #[derive(Debug)]
 pub struct PlaceEditor<'a> {
     pub place: &'a mut Place,
+    pub dictionary: &'a Option<&'a mut Dictionary>,
+    pub cursor_pos: &'a mut usize,
 }
 
 impl<'a> Widget for &mut PlaceEditor<'a> {
@@ -42,7 +45,11 @@ impl<'a> PlaceEditor<'a> {
                 ui.label("Notes");
                 let response = ui.add_sized(
                     ui.available_size(),
-                    &mut BaseTextEditor::new(&mut self.place.metadata.notes),
+                    &mut BaseTextEditor::new(
+                        &mut self.place.metadata.notes,
+                        self.dictionary,
+                        self.cursor_pos,
+                    ),
                 );
                 self.process_response(response);
             });
@@ -55,24 +62,32 @@ impl<'a> PlaceEditor<'a> {
                 ui.label("Connection To Story");
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.connection,
+                    self.dictionary,
+                    self.cursor_pos,
                 ));
                 self.process_response(response);
 
                 ui.label("Description");
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.description,
+                    self.dictionary,
+                    self.cursor_pos,
                 ));
                 self.process_response(response);
 
                 ui.label("Appearance");
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.appearance,
+                    self.dictionary,
+                    self.cursor_pos,
                 ));
                 self.process_response(response);
 
                 ui.label("Other Senses");
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.other_senses,
+                    self.dictionary,
+                    self.cursor_pos,
                 ));
                 self.process_response(response);
             });

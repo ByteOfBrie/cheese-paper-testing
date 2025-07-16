@@ -1,6 +1,7 @@
 use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
 use egui::{Response, Widget};
+use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
@@ -9,6 +10,8 @@ use egui::ScrollArea;
 #[derive(Debug)]
 pub struct CharacterEditor<'a> {
     pub character: &'a mut Character,
+    pub dictionary: &'a Option<&'a mut Dictionary>,
+    pub cursor_pos: &'a mut usize,
 }
 
 impl<'a> Widget for &mut CharacterEditor<'a> {
@@ -47,7 +50,11 @@ impl<'a> CharacterEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(&mut self.character.metadata.summary),
+                        &mut BaseTextEditor::new(
+                            &mut self.character.metadata.summary,
+                            self.dictionary,
+                            self.cursor_pos,
+                        ),
                     );
                     self.process_response(response);
                 });
@@ -57,7 +64,11 @@ impl<'a> CharacterEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(&mut self.character.metadata.notes),
+                        &mut BaseTextEditor::new(
+                            &mut self.character.metadata.notes,
+                            self.dictionary,
+                            self.cursor_pos,
+                        ),
                     );
                     self.process_response(response);
                 });
@@ -69,35 +80,48 @@ impl<'a> CharacterEditor<'a> {
             ui.label("Appearance");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.appearance,
+                self.dictionary,
+                self.cursor_pos,
             ));
             self.process_response(response);
 
             ui.label("Appearance");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.appearance,
+                self.dictionary,
+                self.cursor_pos,
             ));
             self.process_response(response);
 
             ui.label("Personality");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.personality,
+                self.dictionary,
+                self.cursor_pos,
             ));
             self.process_response(response);
 
             ui.label("Goals");
-            let response: egui::Response =
-                ui.add(&mut BaseTextEditor::new(&mut self.character.metadata.goal));
+            let response: egui::Response = ui.add(&mut BaseTextEditor::new(
+                &mut self.character.metadata.goal,
+                self.dictionary,
+                self.cursor_pos,
+            ));
             self.process_response(response);
 
             ui.label("Conflicts");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.conflict,
+                self.dictionary,
+                self.cursor_pos,
             ));
             self.process_response(response);
 
             ui.label("Habits");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.habits,
+                self.dictionary,
+                self.cursor_pos,
             ));
             self.process_response(response);
         });

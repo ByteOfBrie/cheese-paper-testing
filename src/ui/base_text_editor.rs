@@ -1,6 +1,8 @@
 use egui::{Response, TextBuffer, Widget};
 use spellbook::Dictionary;
 
+use crate::ui::project_editor::SpellCheckStatus;
+
 pub struct BaseTextEditor<'a> {
     text: &'a mut String,
 
@@ -9,7 +11,7 @@ pub struct BaseTextEditor<'a> {
     dictionary: &'a Option<&'a mut Dictionary>,
 
     // shitty hack for persistence
-    current_selected_word: &'a mut String,
+    spellcheck_status: &'a mut SpellCheckStatus,
 }
 
 impl<'a> Widget for &mut BaseTextEditor<'a> {
@@ -44,31 +46,43 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
 
                 let word = &self.text[clicked_pos - begin_offset..clicked_pos + end_offset];
 
-                *self.current_selected_word = word.to_string();
+                self.spellcheck_status.selected_word = word.to_string();
+
+                if let Some(dictionary) = self.dictionary {
+                    if dictionary.check(&self.spellcheck_status.selected_word) {
+                        self.spellcheck_status.correct = true;
+                    } else {
+                        self.spellcheck_status.correct = false;
+                        self.spellcheck_status.suggestions.clear();
+                        dictionary.suggest(
+                            &self.spellcheck_status.selected_word,
+                            &mut self.spellcheck_status.suggestions,
+                        );
+                    }
+                }
             }
         }
 
         output.response.context_menu(|ui| {
-            if self.current_selected_word.is_empty() {
+            if self.spellcheck_status.selected_word.is_empty() {
                 ui.close();
             }
 
-            if let Some(dictionary) = self.dictionary {
-                if dictionary.check(self.current_selected_word) {
-                    ui.label(format!(
-                        "spelled {:?} correctly",
-                        self.current_selected_word
-                    ));
-                } else {
-                    let mut suggestions = Vec::new();
-                    dictionary.suggest(self.current_selected_word, &mut suggestions);
-                    ui.label(format!("misspelled {:?}", self.current_selected_word));
+            if self.spellcheck_status.correct {
+                ui.label(format!(
+                    "spelled {:?} correctly",
+                    self.spellcheck_status.selected_word
+                ));
+            } else {
+                ui.label(format!(
+                    "misspelled {:?}",
+                    self.spellcheck_status.selected_word
+                ));
 
-                    for suggestion in suggestions {
-                        if ui.button(&suggestion).clicked() {
-                            // TODO: implement replacement
-                            println!("clicked {suggestion}");
-                        }
+                for suggestion in self.spellcheck_status.suggestions.iter() {
+                    if ui.button(suggestion).clicked() {
+                        // TODO: implement replacement
+                        println!("clicked {suggestion}");
                     }
                 }
             }
@@ -82,13 +96,13 @@ impl<'a> BaseTextEditor<'a> {
     pub fn new(
         text: &'a mut String,
         dictionary: &'a Option<&'a mut Dictionary>,
-        current_selected_word: &'a mut String,
+        spellcheck_status: &'a mut SpellCheckStatus,
     ) -> Self {
         Self {
             text,
             highlighter: Default::default(),
             dictionary,
-            current_selected_word,
+            spellcheck_status,
         }
     }
 

@@ -9,6 +9,13 @@ use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 use spellbook::Dictionary;
 
+#[derive(Debug, Default)]
+pub struct SpellCheckStatus {
+    pub selected_word: String,
+    pub correct: bool,
+    pub suggestions: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct ProjectEditor {
     pub project: Project,
@@ -17,7 +24,7 @@ pub struct ProjectEditor {
     /// in the project metadata editor as well
     title_needs_update: bool,
     dictionary: Option<Dictionary>,
-    current_selected_word: String,
+    spellcheck_status: SpellCheckStatus,
 }
 
 enum ContextMenuActions {
@@ -163,7 +170,7 @@ impl Project {
 struct TabViewer<'a> {
     project: &'a mut Project,
     dictionary: Option<&'a mut Dictionary>,
-    current_selected_word: &'a mut String,
+    spellcheck_status: &'a mut SpellCheckStatus,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -192,25 +199,25 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 MutFileObjectTypeInterface::Scene(obj) => SceneEditor {
                     scene: obj,
                     dictionary: &self.dictionary,
-                    current_selected_word: self.current_selected_word,
+                    spellcheck_status: self.spellcheck_status,
                 }
                 .ui(ui),
                 MutFileObjectTypeInterface::Character(obj) => CharacterEditor {
                     character: obj,
                     dictionary: &self.dictionary,
-                    current_selected_word: self.current_selected_word,
+                    spellcheck_status: self.spellcheck_status,
                 }
                 .ui(ui),
                 MutFileObjectTypeInterface::Folder(obj) => FolderEditor {
                     folder: obj,
                     dictionary: &self.dictionary,
-                    current_selected_word: self.current_selected_word,
+                    spellcheck_status: self.spellcheck_status,
                 }
                 .ui(ui),
                 MutFileObjectTypeInterface::Place(obj) => PlaceEditor {
                     place: obj,
                     dictionary: &self.dictionary,
-                    current_selected_word: self.current_selected_word,
+                    spellcheck_status: self.spellcheck_status,
                 }
                 .ui(ui),
             };
@@ -255,7 +262,7 @@ impl ProjectEditor {
                 &mut TabViewer {
                     project: &mut self.project,
                     dictionary: self.dictionary.as_mut(),
-                    current_selected_word: &mut self.current_selected_word,
+                    spellcheck_status: &mut self.spellcheck_status,
                 },
             )
     }
@@ -395,7 +402,7 @@ impl ProjectEditor {
             dock_state: DockState::new(open_tabs),
             title_needs_update: true,
             dictionary,
-            current_selected_word: String::new(),
+            spellcheck_status: SpellCheckStatus::default(),
         }
     }
 

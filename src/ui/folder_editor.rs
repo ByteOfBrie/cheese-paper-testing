@@ -1,5 +1,6 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Folder;
+use crate::ui::project_editor::SpellCheckStatus;
 use egui::{Response, Widget};
 use spellbook::Dictionary;
 
@@ -11,7 +12,7 @@ use egui::ScrollArea;
 pub struct FolderEditor<'a> {
     pub folder: &'a mut Folder,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub current_selected_word: &'a mut String,
+    pub spellcheck_status: &'a mut SpellCheckStatus,
 }
 
 impl<'a> Widget for &mut FolderEditor<'a> {
@@ -40,7 +41,7 @@ impl<'a> FolderEditor<'a> {
                     let response = ui.add(&mut BaseTextEditor::new(
                         &mut self.folder.metadata.summary,
                         self.dictionary,
-                        self.current_selected_word,
+                        self.spellcheck_status,
                     ));
                     self.process_response(response);
                 });
@@ -51,7 +52,7 @@ impl<'a> FolderEditor<'a> {
                     let response = ui.add(&mut BaseTextEditor::new(
                         &mut self.folder.metadata.notes,
                         self.dictionary,
-                        self.current_selected_word,
+                        self.spellcheck_status,
                     ));
                     self.process_response(response);
                 });

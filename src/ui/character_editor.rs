@@ -1,5 +1,6 @@
 use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
+use crate::ui::project_editor::SpellCheckStatus;
 use egui::{Response, Widget};
 use spellbook::Dictionary;
 
@@ -11,7 +12,7 @@ use egui::ScrollArea;
 pub struct CharacterEditor<'a> {
     pub character: &'a mut Character,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub current_selected_word: &'a mut String,
+    pub spellcheck_status: &'a mut SpellCheckStatus,
 }
 
 impl<'a> Widget for &mut CharacterEditor<'a> {
@@ -53,7 +54,7 @@ impl<'a> CharacterEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.character.metadata.summary,
                             self.dictionary,
-                            self.current_selected_word,
+                            self.spellcheck_status,
                         ),
                     );
                     self.process_response(response);
@@ -67,7 +68,7 @@ impl<'a> CharacterEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.character.metadata.notes,
                             self.dictionary,
-                            self.current_selected_word,
+                            self.spellcheck_status,
                         ),
                     );
                     self.process_response(response);
@@ -81,7 +82,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.appearance,
                 self.dictionary,
-                self.current_selected_word,
+                self.spellcheck_status,
             ));
             self.process_response(response);
 
@@ -89,7 +90,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.appearance,
                 self.dictionary,
-                self.current_selected_word,
+                self.spellcheck_status,
             ));
             self.process_response(response);
 
@@ -97,7 +98,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.personality,
                 self.dictionary,
-                self.current_selected_word,
+                self.spellcheck_status,
             ));
             self.process_response(response);
 
@@ -105,7 +106,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.goal,
                 self.dictionary,
-                self.current_selected_word,
+                self.spellcheck_status,
             ));
             self.process_response(response);
 
@@ -113,7 +114,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.conflict,
                 self.dictionary,
-                self.current_selected_word,
+                self.spellcheck_status,
             ));
             self.process_response(response);
 
@@ -121,7 +122,7 @@ impl<'a> CharacterEditor<'a> {
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.character.metadata.habits,
                 self.dictionary,
-                self.current_selected_word,
+                self.spellcheck_status,
             ));
             self.process_response(response);
         });

@@ -1,5 +1,6 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Place;
+use crate::ui::project_editor::SpellCheckStatus;
 use egui::{Response, Widget};
 use spellbook::Dictionary;
 
@@ -11,7 +12,7 @@ use egui::ScrollArea;
 pub struct PlaceEditor<'a> {
     pub place: &'a mut Place,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub current_selected_word: &'a mut String,
+    pub spellcheck_status: &'a mut SpellCheckStatus,
 }
 
 impl<'a> Widget for &mut PlaceEditor<'a> {
@@ -48,7 +49,7 @@ impl<'a> PlaceEditor<'a> {
                     &mut BaseTextEditor::new(
                         &mut self.place.metadata.notes,
                         self.dictionary,
-                        self.current_selected_word,
+                        self.spellcheck_status,
                     ),
                 );
                 self.process_response(response);
@@ -63,7 +64,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.connection,
                     self.dictionary,
-                    self.current_selected_word,
+                    self.spellcheck_status,
                 ));
                 self.process_response(response);
 
@@ -71,7 +72,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.description,
                     self.dictionary,
-                    self.current_selected_word,
+                    self.spellcheck_status,
                 ));
                 self.process_response(response);
 
@@ -79,7 +80,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.appearance,
                     self.dictionary,
-                    self.current_selected_word,
+                    self.spellcheck_status,
                 ));
                 self.process_response(response);
 
@@ -87,7 +88,7 @@ impl<'a> PlaceEditor<'a> {
                 let response = ui.add(&mut BaseTextEditor::new(
                     &mut self.place.metadata.other_senses,
                     self.dictionary,
-                    self.current_selected_word,
+                    self.spellcheck_status,
                 ));
                 self.process_response(response);
             });

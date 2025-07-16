@@ -1,5 +1,6 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
+use crate::ui::project_editor::SpellCheckStatus;
 use egui::{Response, Widget};
 use spellbook::Dictionary;
 
@@ -11,7 +12,7 @@ use egui::ScrollArea;
 pub struct SceneEditor<'a> {
     pub scene: &'a mut Scene,
     pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub current_selected_word: &'a mut String,
+    pub spellcheck_status: &'a mut SpellCheckStatus,
 }
 
 impl<'a> Widget for &mut SceneEditor<'a> {
@@ -39,7 +40,7 @@ impl<'a> SceneEditor<'a> {
                     &mut BaseTextEditor::new(
                         &mut self.scene.text,
                         self.dictionary,
-                        self.current_selected_word,
+                        self.spellcheck_status,
                     ),
                 );
 
@@ -80,7 +81,7 @@ impl<'a> SceneEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.scene.metadata.summary,
                             self.dictionary,
-                            self.current_selected_word,
+                            self.spellcheck_status,
                         ),
                     );
                     self.process_response(response);
@@ -94,7 +95,7 @@ impl<'a> SceneEditor<'a> {
                         &mut BaseTextEditor::new(
                             &mut self.scene.metadata.notes,
                             self.dictionary,
-                            self.current_selected_word,
+                            self.spellcheck_status,
                         ),
                     );
                     self.process_response(response);

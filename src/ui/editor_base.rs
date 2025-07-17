@@ -333,6 +333,7 @@ impl eframe::App for CheesePaperApp {
                                 ui.menu_button("Recent Projects", |ui| {
                                     for project in self.state.data.recent_projects.iter() {
                                         if ui.button(project.to_string_lossy()).clicked() {
+                                            self.state.closing_project = true;
                                             self.state.next_project = Some(project.clone());
                                         }
                                     }

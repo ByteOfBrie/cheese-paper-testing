@@ -292,7 +292,7 @@ impl ProjectEditor {
             self.title_needs_update = false;
         }
 
-        while let Ok(response) = self.file_event_rx.try_next() {
+        if let Ok(response) = self.file_event_rx.try_next() {
             if let Some(result) = response {
                 match result {
                     Ok(event) => println!("changed: {:?}", event),

@@ -202,6 +202,7 @@ struct EditorState {
     new_project_name: String,
     /// Hacky (?) variable to get around borrows (set in the state rather than close directly)
     closing_project: bool,
+    next_project: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for EditorState {
@@ -266,6 +267,7 @@ impl Default for EditorState {
             new_project_dir: None,
             new_project_name: String::new(),
             closing_project: false,
+            next_project: None,
         }
     }
 }
@@ -311,6 +313,11 @@ impl eframe::App for CheesePaperApp {
         if self.state.closing_project {
             self.project_editor = None;
             self.state.closing_project = false;
+            if let Some(new_project_path) = self.state.next_project.take() {
+                if let Err(err) = self.load_project(new_project_path) {
+                    log::error!("Could not load project: {err}");
+                };
+            }
         }
 
         match &mut self.project_editor {
@@ -323,6 +330,13 @@ impl eframe::App for CheesePaperApp {
                                 if ui.button("Close Project").clicked() {
                                     self.state.closing_project = true;
                                 }
+                                ui.menu_button("Recent Projects", |ui| {
+                                    for project in self.state.data.recent_projects.iter() {
+                                        if ui.button(project.to_string_lossy()).clicked() {
+                                            self.state.next_project = Some(project.clone());
+                                        }
+                                    }
+                                });
                                 if ui.button("Quit").clicked() {
                                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                                 }

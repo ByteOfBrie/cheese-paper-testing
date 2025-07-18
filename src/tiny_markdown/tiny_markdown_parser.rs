@@ -1,3 +1,5 @@
+use spellbook::Dictionary;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Item<'a> {
     Newline,
@@ -8,19 +10,23 @@ pub enum Item<'a> {
 pub struct Style {
     pub strong: bool,
     pub italic: bool,
+    pub misspelled: bool,
 }
 
 pub struct Parser<'a> {
     s: &'a str,
+
+    dictionary: Option<&'a mut Dictionary>,
 
     style: Style,
 }
 
 #[cfg(test)]
 impl<'a> Parser<'a> {
-    pub fn new(s: &'a str) -> Self {
+    pub fn new(s: &'a str, dictionary: Option<&'a mut Dictionary>) -> Self {
         Self {
             s,
+            dictionary,
             style: Style::default(),
         }
     }
@@ -53,9 +59,19 @@ impl<'a> Iterator for Parser<'a> {
                 continue;
             }
 
+            if let Some(rest) = self.s.strip_prefix(' ') {
+                if let Some((word, _)) = rest.split_once(' ') {
+                    let punctuation: &[_] = &['.', '\'', '"', ',', '-'];
+                    let trimmed_word = word.trim_matches(punctuation);
+                    if let Some(dict) = &self.dictionary {
+                        self.style.misspelled = dict.check(trimmed_word);
+                    }
+                }
+            }
+
             let end = self
                 .s
-                .find(&['*', '\n'][..])
+                .find(&['*', '\n', ' '][..])
                 .map_or_else(|| self.s.len(), |special| special.max(1));
 
             let item = Item::Text(self.style, &self.s[..end]);
@@ -67,7 +83,7 @@ impl<'a> Iterator for Parser<'a> {
 
 #[test]
 fn test_basic_text_parser() {
-    let items: Vec<_> = Parser::new("*italic* **bold**").collect();
+    let items: Vec<_> = Parser::new("*italic* **bold**", None).collect();
     assert_eq!(
         items,
         vec![
@@ -100,6 +116,7 @@ fn test_complex_markdown() {
     let items: Vec<_> = Parser::new(
         r#"none**bold*both**
 *italic***bold"#,
+        None,
     )
     .collect();
     assert_eq!(

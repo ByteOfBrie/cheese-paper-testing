@@ -31,6 +31,9 @@ pub struct ProjectEditor {
     dictionary: Option<Dictionary>,
     spellcheck_status: SpellCheckStatus,
     file_event_rx: Receiver<notify::Result<Event>>,
+    /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
+    #[allow(dead_code)]
+    watcher: RecommendedWatcher,
 }
 
 enum ContextMenuActions {
@@ -447,6 +450,7 @@ impl ProjectEditor {
             dictionary,
             spellcheck_status: SpellCheckStatus::default(),
             file_event_rx,
+            watcher,
         }
     }
 

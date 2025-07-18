@@ -1,5 +1,6 @@
 use crate::tiny_markdown::tiny_markdown_parser;
 use egui::{FontFamily, FontId};
+use spellbook::Dictionary;
 
 #[derive(Default)]
 pub struct MemoizedMarkdownHighlighter {
@@ -9,17 +10,26 @@ pub struct MemoizedMarkdownHighlighter {
 }
 
 impl MemoizedMarkdownHighlighter {
-    pub fn highlight(&mut self, egui_style: &egui::Style, text: &str) -> egui::text::LayoutJob {
+    pub fn highlight(
+        &mut self,
+        egui_style: &egui::Style,
+        text: &str,
+        dictionary: &Option<&mut Dictionary>,
+    ) -> egui::text::LayoutJob {
         if (&self.style, self.text.as_str()) != (egui_style, text) {
             self.style = egui_style.clone();
             text.clone_into(&mut self.text);
-            self.output = highlight_tinymark(egui_style, text);
+            self.output = highlight_tinymark(egui_style, text, dictionary);
         }
         self.output.clone()
     }
 }
 
-pub fn highlight_tinymark(egui_style: &egui::Style, mut text: &str) -> egui::text::LayoutJob {
+pub fn highlight_tinymark(
+    egui_style: &egui::Style,
+    mut text: &str,
+    dictionary: &Option<&mut Dictionary>,
+) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let mut style = tiny_markdown_parser::Style::default();
 
@@ -42,6 +52,40 @@ pub fn highlight_tinymark(egui_style: &egui::Style, mut text: &str) -> egui::tex
                 skip = 0;
             }
             style.italic ^= true;
+        } else if text.starts_with(' ') {
+            skip = 1;
+            if let Some(word_end) = text[skip..].find(&[' ', '\n'][..]) {
+                let word_pre_strip = &text[skip..word_end + skip];
+                let punctuation: &[_] = &['.', '\'', '"', ',', '-', '!', '*'];
+                let trimmed_word = word_pre_strip.trim_matches(punctuation);
+                if let Some(dict) = &dictionary {
+                    if !dict.check(trimmed_word) {
+                        job.append(&text[..skip], 0.0, format_from_style(egui_style, &style));
+
+                        style.misspelled = true;
+                        // try to compute the length of the word and apend early
+                        // super fucking hacky but it might work
+                        //
+                        // if this does work, it'll prioritize highlighting over other text formatting
+                        // and also will break the ending of formatting for stuff like
+                        // `*correct inncorrect* other`
+                        // "other" will still be italicized because the incorrect will consume that `*`
+                        // thankfully it'll probably won't work at all and so there won't be any problems
+                        //
+                        // I probably need to do something where I separate out the words in the line and
+                        // keep track of those positions or something?
+                        let word_length = word_pre_strip.len();
+                        job.append(
+                            &text[skip..skip + word_length],
+                            0.0,
+                            format_from_style(egui_style, &style),
+                        );
+                        text = &text[skip + word_length..];
+                        style.misspelled = false;
+                        skip = 0;
+                    }
+                }
+            }
         } else {
             skip = 0;
         }
@@ -52,7 +96,8 @@ pub fn highlight_tinymark(egui_style: &egui::Style, mut text: &str) -> egui::tex
             .map_or_else(|| text.len(), |i| (skip + i + 1));
 
         let end = text[skip..]
-            .find("*")
+            // .find("*")
+            .find(&['*', ' '][..])
             .map_or_else(|| text.len(), |i| (skip + i).max(1));
 
         if line_end < end {
@@ -79,6 +124,8 @@ fn format_from_style(
 ) -> egui::text::TextFormat {
     let color = if tinymark_style.strong {
         egui_style.visuals.strong_text_color()
+    } else if tinymark_style.misspelled {
+        egui_style.visuals.error_fg_color
     } else {
         egui_style.visuals.text_color()
     };

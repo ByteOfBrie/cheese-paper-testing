@@ -17,7 +17,9 @@ pub struct BaseTextEditor<'a> {
 impl<'a> Widget for &mut BaseTextEditor<'a> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let mut layouter = |ui: &egui::Ui, tinymark: &dyn TextBuffer, wrap_width: f32| {
-            let mut layout_job = self.highlighter.highlight(ui.style(), tinymark.as_str());
+            let mut layout_job =
+                self.highlighter
+                    .highlight(ui.style(), tinymark.as_str(), self.dictionary);
             layout_job.wrap.max_width = wrap_width;
             ui.fonts(|f| f.layout_job(layout_job))
         };

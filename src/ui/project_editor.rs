@@ -7,11 +7,8 @@ use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 use egui::Widget;
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
-use futures::{
-    SinkExt,
-    channel::mpsc::{Receiver, channel},
-};
-use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecommendedWatcher, RecursiveMode};
+use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use spellbook::Dictionary;
 
 #[derive(Debug, Default)]
@@ -30,10 +27,10 @@ pub struct ProjectEditor {
     title_needs_update: bool,
     dictionary: Option<Dictionary>,
     spellcheck_status: SpellCheckStatus,
-    file_event_rx: Receiver<notify::Result<Event>>,
+    file_event_rx: std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>,
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
     #[allow(dead_code)]
-    watcher: RecommendedWatcher,
+    watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
 }
 
 enum ContextMenuActions {
@@ -238,18 +235,15 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 }
 
-fn create_watcher() -> notify::Result<(RecommendedWatcher, Receiver<notify::Result<Event>>)> {
-    let (mut tx, rx) = channel(1);
+fn create_watcher() -> notify::Result<(
+    Debouncer<RecommendedWatcher, RecommendedCache>,
+    std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>,
+)> {
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    // Should maybe be using a debouncer here but this is fine to start with
-    let watcher = RecommendedWatcher::new(
-        move |res| {
-            futures::executor::block_on(async {
-                tx.send(res).await.unwrap();
-            })
-        },
-        Config::default(),
-    )?;
+    let watcher = new_debouncer(std::time::Duration::from_secs(2), None, move |res| {
+        tx.send(res).unwrap();
+    })?;
 
     Ok((watcher, rx))
 }
@@ -295,12 +289,12 @@ impl ProjectEditor {
             self.title_needs_update = false;
         }
 
-        if let Ok(response) = self.file_event_rx.try_next() {
-            if let Some(result) = response {
-                match result {
-                    Ok(event) => println!("changed: {:?}", event),
-                    Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
+        if let Ok(response) = self.file_event_rx.try_recv() {
+            match response {
+                Ok(events) => {
+                    println!("events: {events:?}");
                 }
+                Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
             }
         }
     }

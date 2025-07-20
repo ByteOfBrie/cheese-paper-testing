@@ -292,7 +292,42 @@ impl ProjectEditor {
         if let Ok(response) = self.file_event_rx.try_recv() {
             match response {
                 Ok(events) => {
-                    println!("events: {events:?}");
+                    for event in events {
+                        use notify::EventKind;
+                        match event.kind {
+                            EventKind::Create(create_kind) => {
+                                // Somewhat tricky, we probably need to rescan that part
+                                // entire part of the tree. We don't necessarily know which
+                                // parents exist, and I can't trust that the events happened
+                                // in order.
+
+                                // For other solutions, we could scan every element in the
+                                // tree and find the longest path that matches, then do a
+                                // `from_file` one level below that. That's the least amount
+                                // of code, but also requires the most allocations
+
+                                // For a middle-ish ground, I could keep track of all of the
+                                // know files in a list and match against that. That saves
+                                // having to do a bunch of allocations but I don't know if it
+                                // matters enough to bother keeping track of another thing,
+                                // especially considering I have to remove from it at the same
+                                // time
+                            }
+                            EventKind::Modify(modify_kind) => {
+                                // Try to read the file, if it has an ID, look up that ID
+                                // and call reload file, otherwise give up (it might come in as
+                                // a different event, but we don't care about modifications
+                                // to files we don't know)
+                            }
+                            EventKind::Remove(remove_kind) => {
+                                // Search for file_objects by looking through all of their
+                                // paths, we can't do better.
+                                // Might need to update remove_child function to check for
+                                // existence before deleting
+                            }
+                            _ => {}
+                        }
+                    }
                 }
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
             }

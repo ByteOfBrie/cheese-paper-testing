@@ -386,7 +386,7 @@ impl Project {
         Ok(true)
     }
 
-    fn reload_file(&mut self) -> Result<()> {
+    pub fn reload_file(&mut self) -> Result<()> {
         let file_to_read = self.get_project_info_file();
 
         if !self.should_load(&file_to_read)? {

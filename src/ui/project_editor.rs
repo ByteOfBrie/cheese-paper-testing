@@ -327,50 +327,64 @@ impl ProjectEditor {
                                     }
                                 };
 
-                                let header = match read_file_contents(&modify_path) {
-                                    Ok((header, _contents)) => header,
-                                    Err(_) => {
-                                        log::warn!("Could not read modified file: {event:?}");
-                                        continue;
+                                if *modify_path == self.project.get_path() {
+                                    match self.project.reload_file() {
+                                        Ok(_) => {}
+                                        Err(err) => {
+                                            log::warn!("Could not reload project info file: {err}")
+                                        }
                                     }
-                                };
-
-                                let header_toml = match header.parse::<DocumentMut>() {
-                                    Ok(header_toml) => header_toml,
-                                    Err(err) => {
-                                        log::debug!("Could not read modified file: {err}");
-                                        continue;
-                                    }
-                                };
-
-                                let id = match header_toml.get("id").and_then(|val| val.as_str()) {
-                                    Some(id) => id,
-                                    None => {
-                                        log::debug!(
-                                            "File event: {event:?} does not contain ID (for modify), skipping"
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                if !self.project.objects.contains_key(id) {
-                                    log::debug! {"File event: {event:?} contains a key not in the file, skipping"};
-                                    continue;
-                                }
-
-                                run_with_file_object(
-                                    id,
-                                    &mut self.project.objects,
-                                    |file_object, _objects| match file_object.reload_file() {
-                                        Ok(()) => {}
+                                } else {
+                                    let header = match read_file_contents(&modify_path) {
+                                        Ok((header, _contents)) => header,
                                         Err(err) => {
                                             log::warn!(
-                                                "Error loading file {}: {err}",
-                                                file_object.get_base().metadata.id
+                                                "Could not read modified file: {event:?}: {err}"
                                             );
+                                            continue;
                                         }
-                                    },
-                                )
+                                    };
+
+                                    let header_toml = match header.parse::<DocumentMut>() {
+                                        Ok(header_toml) => header_toml,
+                                        Err(err) => {
+                                            log::debug!("Could not read modified file: {err}");
+                                            continue;
+                                        }
+                                    };
+
+                                    let id = match header_toml
+                                        .get("id")
+                                        .and_then(|val| val.as_str())
+                                    {
+                                        Some(id) => id,
+                                        None => {
+                                            log::debug!(
+                                                "File event: {event:?} does not contain ID (for modify), skipping"
+                                            );
+                                            continue;
+                                        }
+                                    };
+
+                                    if !self.project.objects.contains_key(id) {
+                                        log::debug! {"File event: {event:?} contains a key not in the file, skipping"};
+                                        continue;
+                                    }
+
+                                    run_with_file_object(
+                                        id,
+                                        &mut self.project.objects,
+                                        |file_object, _objects| match file_object.reload_file() {
+                                            Ok(()) => {}
+                                            Err(err) => {
+                                                log::warn!(
+                                                    "Error loading file {}: {err}",
+                                                    file_object.get_base().metadata.id
+                                                );
+                                            }
+                                        },
+                                    )
+                                }
                             }
                             EventKind::Remove(_remove_kind) => {
                                 // Search for file_objects by looking through all of their

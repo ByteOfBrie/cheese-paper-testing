@@ -189,7 +189,7 @@ pub fn metadata_extract_bool(table: &DocumentMut, field_name: &str) -> Result<Op
 }
 
 /// Reads the contents of a file from disk
-fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
+pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
     let extension = match file_to_read.extension() {
         Some(val) => val,
         None => return Err(Error::new(ErrorKind::InvalidData, "value was not string")),

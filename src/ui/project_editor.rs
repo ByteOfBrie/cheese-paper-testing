@@ -1,5 +1,5 @@
 use crate::components::Project;
-use crate::components::file_objects::base::FileType;
+use crate::components::file_objects::base::{FileType, read_file_contents};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
 };
@@ -10,6 +10,7 @@ use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use spellbook::Dictionary;
+use toml_edit::DocumentMut;
 
 #[derive(Debug, Default)]
 pub struct SpellCheckStatus {
@@ -295,7 +296,7 @@ impl ProjectEditor {
                     for event in events {
                         use notify::EventKind;
                         match event.kind {
-                            EventKind::Create(create_kind) => {
+                            EventKind::Create(_create_kind) => {
                                 // Somewhat tricky, we probably need to rescan that part
                                 // entire part of the tree. We don't necessarily know which
                                 // parents exist, and I can't trust that the events happened
@@ -313,13 +314,65 @@ impl ProjectEditor {
                                 // especially considering I have to remove from it at the same
                                 // time
                             }
-                            EventKind::Modify(modify_kind) => {
+                            EventKind::Modify(_modify_kind) => {
                                 // Try to read the file, if it has an ID, look up that ID
                                 // and call reload file, otherwise give up (it might come in as
                                 // a different event, but we don't care about modifications
                                 // to files we don't know)
+                                let modify_path = match event.paths.get(0) {
+                                    Some(path) => path,
+                                    None => {
+                                        log::warn!("No path from modify event: {event:?}");
+                                        continue;
+                                    }
+                                };
+
+                                let header = match read_file_contents(&modify_path) {
+                                    Ok((header, _contents)) => header,
+                                    Err(_) => {
+                                        log::warn!("Could not read modified file: {event:?}");
+                                        continue;
+                                    }
+                                };
+
+                                let header_toml = match header.parse::<DocumentMut>() {
+                                    Ok(header_toml) => header_toml,
+                                    Err(err) => {
+                                        log::debug!("Could not read modified file: {err}");
+                                        continue;
+                                    }
+                                };
+
+                                let id = match header_toml.get("id").and_then(|val| val.as_str()) {
+                                    Some(id) => id,
+                                    None => {
+                                        log::debug!(
+                                            "File event: {event:?} does not contain ID (for modify), skipping"
+                                        );
+                                        continue;
+                                    }
+                                };
+
+                                if !self.project.objects.contains_key(id) {
+                                    log::debug! {"File event: {event:?} contains a key not in the file, skipping"};
+                                    continue;
+                                }
+
+                                run_with_file_object(
+                                    id,
+                                    &mut self.project.objects,
+                                    |file_object, _objects| match file_object.reload_file() {
+                                        Ok(()) => {}
+                                        Err(err) => {
+                                            log::warn!(
+                                                "Error loading file {}: {err}",
+                                                file_object.get_base().metadata.id
+                                            );
+                                        }
+                                    },
+                                )
                             }
-                            EventKind::Remove(remove_kind) => {
+                            EventKind::Remove(_remove_kind) => {
                                 // Search for file_objects by looking through all of their
                                 // paths, we can't do better.
                                 // Might need to update remove_child function to check for

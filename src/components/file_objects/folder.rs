@@ -136,11 +136,11 @@ impl FileObject for Folder {
         &mut self.base
     }
 
-    fn get_file_type(&self) -> super::FileObjectTypeInterface {
+    fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
         super::FileObjectTypeInterface::Folder(self)
     }
 
-    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
+    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
         super::MutFileObjectTypeInterface::Folder(self)
     }
 

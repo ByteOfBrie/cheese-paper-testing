@@ -452,9 +452,13 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
 
     let mut metadata = FileObjectMetadata::default();
 
-    let toml_header = metadata_str
-        .parse::<DocumentMut>()
-        .expect("invalid file metadata header");
+    let toml_header = match metadata_str.parse::<DocumentMut>() {
+        Ok(toml_header) => toml_header,
+        Err(err) => {
+            log::error!("Error parsing {underlying_file:?}: {err}");
+            return Err(Error::new(ErrorKind::InvalidData, err));
+        }
+    };
 
     if !toml_header.contains_key("name") {
         let file_name = PathBuf::from(&file_info.basename)
@@ -595,6 +599,16 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                     // There may still be gaps at this point, but they'll get filled in at the end
                     // by `fix_indexing`
                     for (index, file) in indexed_files.drain(..) {
+                        // We process every dir but only some files
+                        if !file.is_dir() {
+                            // Check for extension
+                            if file.extension().unwrap_or_default() != OsString::from("toml")
+                                && file.extension().unwrap_or_default() != OsString::from("md")
+                            {
+                                log::debug!("skipping regular {file:?} with unknown extension");
+                                continue;
+                            }
+                        }
                         match from_file(&file, Some(index)) {
                             Ok(created_files) => {
                                 let (object, mut descendents): (

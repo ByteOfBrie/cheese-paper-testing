@@ -1,6 +1,7 @@
 mod base_text_editor;
 mod editor_base;
 mod file_object_editor;
+mod tiny_markdown_highlighter;
 
 // File Object specific editors
 mod character_editor;
@@ -16,5 +17,6 @@ use character_editor::CharacterEditor;
 use folder_editor::FolderEditor;
 use place_editor::PlaceEditor;
 use scene_editor::SceneEditor;
+use tiny_markdown_highlighter::MemoizedMarkdownHighlighter;
 
 pub use editor_base::CheesePaperApp;

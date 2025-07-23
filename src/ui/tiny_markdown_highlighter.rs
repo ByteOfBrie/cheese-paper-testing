@@ -1,6 +1,12 @@
-use crate::tiny_markdown::tiny_markdown_parser;
 use egui::{FontFamily, FontId};
 use spellbook::Dictionary;
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct Style {
+    pub strong: bool,
+    pub italic: bool,
+    pub misspelled: bool,
+}
 
 #[derive(Default)]
 pub struct MemoizedMarkdownHighlighter {
@@ -31,7 +37,7 @@ pub fn highlight_tinymark(
     dictionary: &Option<&mut Dictionary>,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
-    let mut style = tiny_markdown_parser::Style::default();
+    let mut style = Style::default();
 
     while !text.is_empty() {
         let mut skip: usize;
@@ -118,10 +124,7 @@ pub fn highlight_tinymark(
     job
 }
 
-fn format_from_style(
-    egui_style: &egui::Style,
-    tinymark_style: &tiny_markdown_parser::Style,
-) -> egui::text::TextFormat {
+fn format_from_style(egui_style: &egui::Style, tinymark_style: &Style) -> egui::text::TextFormat {
     let color = if tinymark_style.strong {
         egui_style.visuals.strong_text_color()
     } else if tinymark_style.misspelled {

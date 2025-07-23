@@ -6,7 +6,7 @@ use crate::ui::project_editor::SpellCheckStatus;
 pub struct BaseTextEditor<'a> {
     text: &'a mut String,
 
-    highlighter: crate::tiny_markdown::MemoizedMarkdownHighlighter,
+    highlighter: crate::ui::MemoizedMarkdownHighlighter,
 
     dictionary: &'a Option<&'a mut Dictionary>,
 

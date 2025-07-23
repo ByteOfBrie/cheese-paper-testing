@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod components;
-mod tiny_markdown;
 mod ui;
 
 use crate::ui::CheesePaperApp;

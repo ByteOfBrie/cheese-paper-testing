@@ -144,11 +144,11 @@ impl FileObject for Character {
         &mut self.base
     }
 
-    fn get_file_type(&self) -> super::FileObjectTypeInterface {
+    fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
         super::FileObjectTypeInterface::Character(self)
     }
 
-    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface {
+    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
         super::MutFileObjectTypeInterface::Character(self)
     }
 

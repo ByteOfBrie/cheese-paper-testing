@@ -1183,7 +1183,7 @@ pub trait FileObject: Debug {
 
     /// Allow for downcasting this as a reference, useful for creating the editors
     #[allow(dead_code)]
-    fn get_file_type(&self) -> FileObjectTypeInterface;
+    fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
     /// Allow for downcasting this as a mutable reference, useful for creating the editors
-    fn get_file_type_mut(&mut self) -> MutFileObjectTypeInterface;
+    fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
 }

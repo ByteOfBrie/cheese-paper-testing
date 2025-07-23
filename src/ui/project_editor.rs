@@ -29,8 +29,7 @@ pub struct ProjectEditor {
     spellcheck_status: SpellCheckStatus,
     file_event_rx: std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>,
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
-    #[allow(dead_code)]
-    watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
+    _watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
 }
 
 enum ContextMenuActions {
@@ -241,9 +240,7 @@ fn create_watcher() -> notify::Result<(
 )> {
     let (tx, rx) = std::sync::mpsc::channel();
 
-    let watcher = new_debouncer(std::time::Duration::from_secs(2), None, move |res| {
-        tx.send(res).unwrap();
-    })?;
+    let watcher = new_debouncer(std::time::Duration::from_secs(2), None, tx)?;
 
     Ok((watcher, rx))
 }
@@ -519,7 +516,7 @@ impl ProjectEditor {
             dictionary,
             spellcheck_status: SpellCheckStatus::default(),
             file_event_rx,
-            watcher,
+            _watcher: watcher,
         }
     }
 

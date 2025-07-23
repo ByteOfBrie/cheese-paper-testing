@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 # file components
 serde = { version = "1.0", features=["derive"]}
-toml = "0.8"
-toml_edit = "0.22.27"
+toml = "0.9"
+toml_edit = "0.23"
 regex = "1.11.1"
 uuid = { version = "1.17.0", features = ["v4"] }
 log = "0.4.27"
@@ -19,14 +19,14 @@ eframe = { version = "0.32", features = [
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 
-env_logger = { version = "0.10", default-features = false, features = [
+env_logger = { version = "0.11", default-features = false, features = [
     "auto-color",
     "humantime",
 ] }
 
 egui_ltreeview = { version = "0.5.3", features = ["persistence"] }
 egui_dock = "0.17"
-directories = "5.0"
+directories = "6"
 rfd = "0.15.4"
 spellbook = "0.3.4"
 notify = "8.1.0"

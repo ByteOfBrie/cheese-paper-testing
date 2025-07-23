@@ -1,5 +1,5 @@
 use crate::components::Project;
-use crate::components::file_objects::base::{FileType, read_file_contents};
+use crate::components::file_objects::base::FileType;
 use crate::components::file_objects::{
     FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
 };
@@ -10,7 +10,6 @@ use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use spellbook::Dictionary;
-use toml_edit::DocumentMut;
 
 #[derive(Debug, Default)]
 pub struct SpellCheckStatus {
@@ -356,46 +355,22 @@ impl ProjectEditor {
             }
         } else {
             // TODO: verify that it's within the project tree (i.e., in `text/`)
-            let header = match read_file_contents(&modify_path) {
-                Ok((header, _contents)) => header,
-                Err(err) => {
-                    log::warn!("Could not read modified file: {event:?}: {err}");
-                    return;
+            match self.project.find_object_by_path(modify_path) {
+                Some(id) => {
+                    run_with_file_object(&id, &mut self.project.objects, |file_object, _objects| {
+                        if let Err(err) = file_object.reload_file() {
+                            log::warn!(
+                                "Error loading file {}: {err}",
+                                file_object.get_base().metadata.id
+                            );
+                        }
+                    })
                 }
-            };
-
-            let header_toml = match header.parse::<DocumentMut>() {
-                Ok(header_toml) => header_toml,
-                Err(err) => {
-                    log::debug!("Could not read modified file: {err}");
-                    return;
-                }
-            };
-
-            let id = match header_toml.get("id").and_then(|val| val.as_str()) {
-                Some(id) => id,
                 None => {
-                    log::debug!("File event: {event:?} does not contain ID (for modify), skipping");
-                    return;
+                    // TODO: file doesn't seem to exist, process create event
+                    // (or unknown file modify, maybe updating path after ID)
                 }
             };
-
-            if !self.project.objects.contains_key(id) {
-                log::debug! {"File event: {event:?} contains a key not in the file, skipping"};
-                return;
-            }
-
-            run_with_file_object(id, &mut self.project.objects, |file_object, _objects| {
-                match file_object.reload_file() {
-                    Ok(()) => {}
-                    Err(err) => {
-                        log::warn!(
-                            "Error loading file {}: {err}",
-                            file_object.get_base().metadata.id
-                        );
-                    }
-                }
-            })
         }
     }
 

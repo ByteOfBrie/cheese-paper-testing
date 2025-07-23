@@ -406,4 +406,17 @@ impl Project {
 
         Ok(())
     }
+
+    /// Given a path, find the file ID. Right now, this is a pretty dumb algorithm that
+    /// just visits every file object, gets its path, and compares it. This means it's
+    /// O(n) path allocations, but it should be reliable.
+    pub fn find_object_by_path(&self, object_path: &Path) -> Option<String> {
+        for (id, file_object) in self.objects.iter() {
+            if file_object.get_path() == object_path {
+                return Some(id.clone());
+            }
+        }
+
+        None
+    }
 }

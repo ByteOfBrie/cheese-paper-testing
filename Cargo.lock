@@ -986,12 +986,11 @@ dependencies = [
 
 [[package]]
 name = "egui_ltreeview"
-version = "0.4.1"
-source = "git+https://github.com/ByteOfBrie/egui_ltreeview.git?rev=8b655c6#8b655c672ae943ec90e3cc6cfde8dbd736230e8e"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49b0d47a25b8c98bf01f4281f7d516c6e6631817c2b367319d5b239fd3db1ec7"
 dependencies = [
  "egui",
- "indexmap",
- "make_table_of_contents",
  "serde",
 ]
 
@@ -1763,15 +1762,6 @@ name = "log"
 version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
-
-[[package]]
-name = "make_table_of_contents"
-version = "0.1.0"
-source = "git+https://github.com/ByteOfBrie/egui_ltreeview.git?rev=8b655c6#8b655c672ae943ec90e3cc6cfde8dbd736230e8e"
-dependencies = [
- "quote",
- "syn",
-]
 
 [[package]]
 name = "memchr"

@@ -24,7 +24,7 @@ env_logger = { version = "0.10", default-features = false, features = [
     "humantime",
 ] }
 
-egui_ltreeview = { git = "https://github.com/ByteOfBrie/egui_ltreeview.git", rev="8b655c6", features = ["persistence"]}
+egui_ltreeview = { version = "0.5.3", features = ["persistence"] }
 egui_dock = "0.17"
 directories = "5.0"
 rfd = "0.15.4"

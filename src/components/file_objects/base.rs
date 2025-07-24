@@ -88,6 +88,9 @@ impl Default for FileObjectMetadata {
     }
 }
 
+// We have to we can safely convert from FileType to str, but not the reverse
+// (which has a TryFrom) implementation
+#[allow(clippy::from_over_into)]
 impl Into<&str> for FileType {
     fn into(self) -> &'static str {
         match self {
@@ -260,7 +263,7 @@ pub enum FileObjectCreation {
 }
 
 fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectStore) -> bool {
-    run_with_file_object(&parent_id, objects, |parent, objects| {
+    run_with_file_object(parent_id, objects, |parent, objects| {
         for child_id in parent.get_base().children.iter() {
             // directly check if this is object we're looking for
             if child_id == checking_id {
@@ -268,7 +271,7 @@ fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectS
             }
 
             // check all of the children
-            if parent_contains(&child_id, checking_id, objects) {
+            if parent_contains(child_id, checking_id, objects) {
                 return true;
             }
         }
@@ -366,13 +369,12 @@ fn create_index_and_move_on_disk(
         .children
         .iter()
         .position(|val| moving_file_id == val)
-        .expect(
-            format!(
-                "Children should only be removed from their parents. child id: {moving_file_id}, \
-                 parent: {source_file_id}"
+        .unwrap_or_else(|| {
+            panic!(
+                "Children should only be removed from their parents.\
+                child id: {moving_file_id}, parent: {source_file_id}"
             )
-            .as_str(),
-        );
+        });
 
     let child_id_string = source.get_base_mut().children.remove(child_id_position);
 
@@ -387,7 +389,7 @@ fn create_index_and_move_on_disk(
             .children
             .insert(insertion_index, child_id_string);
 
-        run_with_file_object(&moving_file_id, objects, |child, objects| {
+        run_with_file_object(moving_file_id, objects, |child, objects| {
             // Move the actual child on disk
             if let Err(err) = child.move_object(insertion_index, dest.get_path(), objects) {
                 // We don't pass enough information around to meaninfully recover here
@@ -434,7 +436,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
     // If the filename is a directory, we need to look for the underlying file, otherwise
     // we already have it
     let underlying_file = match filename.is_dir() {
-        true => Path::join(&filename, FOLDER_METADATA_FILE_NAME),
+        true => Path::join(filename, FOLDER_METADATA_FILE_NAME),
         false => filename.to_path_buf(),
     };
 
@@ -533,7 +535,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
     // Load children of this file object
     if file_type.is_folder() {
         if filename.is_dir() {
-            match std::fs::read_dir(&filename) {
+            match std::fs::read_dir(filename) {
                 Ok(files) => {
                     let mut indexed_files: Vec<(usize, PathBuf)> = Vec::new();
                     let mut unindexed_files: Vec<PathBuf> = Vec::new();
@@ -602,8 +604,8 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                         // We process every dir but only some files
                         if !file.is_dir() {
                             // Check for extension
-                            if file.extension().unwrap_or_default() != OsString::from("toml")
-                                && file.extension().unwrap_or_default() != OsString::from("md")
+                            if file.extension().unwrap_or_default() != "toml"
+                                && file.extension().unwrap_or_default() != "md"
                             {
                                 log::debug!("skipping regular {file:?} with unknown extension");
                                 continue;
@@ -786,7 +788,7 @@ pub trait FileObject: Debug {
 
         if !self.is_folder() {
             basename.push(".");
-            basename.push(&self.extension());
+            basename.push(self.extension());
         }
 
         basename
@@ -903,11 +905,11 @@ pub trait FileObject: Debug {
     /// operations on this object
     fn get_file(&self) -> PathBuf {
         let base_path = self.get_path();
-        let path = match self.is_folder() {
-            true => Path::join(&base_path, FOLDER_METADATA_FILE_NAME),
-            false => base_path,
-        };
-        path
+        if self.is_folder() {
+            Path::join(&base_path, FOLDER_METADATA_FILE_NAME)
+        } else {
+            base_path
+        }
     }
 
     /// When the parent changes path, updates this dirname and any other children
@@ -1011,7 +1013,7 @@ pub trait FileObject: Debug {
 
         write_with_temp_file(&self.get_file(), final_str.as_bytes())?;
 
-        let new_modtime = std::fs::metadata(&self.get_file())
+        let new_modtime = std::fs::metadata(self.get_file())
             .expect("attempted to load file that does not exist")
             .modified()
             .expect("Modtime not available");
@@ -1097,7 +1099,7 @@ pub trait FileObject: Debug {
         // isn't expensive (having to do a bunch of moves)
         for descendant in children.iter().rev() {
             // save any errors for later
-            if let Err(err) = child.remove_child(&descendant, objects) {
+            if let Err(err) = child.remove_child(descendant, objects) {
                 errors.push(err);
             }
         }
@@ -1141,7 +1143,7 @@ pub trait FileObject: Debug {
             for i in (index..children.len()).rev() {
                 let child_id = children[i].as_str();
 
-                run_with_file_object(&child_id, objects, |child, objects| {
+                run_with_file_object(child_id, objects, |child, objects| {
                     // Try to increase the index of the child
                     child.set_index(i + 1, objects)
                 })?;

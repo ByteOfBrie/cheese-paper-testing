@@ -10,7 +10,7 @@ pub fn truncate_name(name: &str, max_length: usize) -> &str {
     let name = name.trim();
     // if the name is already short enough, we're done
     if name.len() <= max_length {
-        return &name;
+        return name;
     }
 
     // split by word, go with increasingly fewer words
@@ -18,7 +18,7 @@ pub fn truncate_name(name: &str, max_length: usize) -> &str {
     for number_of_words in (1..split_name.len()).rev() {
         // construct the split text into a temporary string
         let shortened = &split_name[..number_of_words].join(" ");
-        if shortened.len() < max_length && shortened != "" {
+        if shortened.len() < max_length && !shortened.is_empty() {
             // return a slice of the actual name so it retains the original lifetime
             return &name[..shortened.len()];
         }

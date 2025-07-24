@@ -2,7 +2,7 @@ use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CharacterMetadata {
     pub summary: String,
     pub notes: String,
@@ -11,20 +11,6 @@ pub struct CharacterMetadata {
     pub goal: String,
     pub conflict: String,
     pub habits: String,
-}
-
-impl Default for CharacterMetadata {
-    fn default() -> Self {
-        Self {
-            summary: String::new(),
-            notes: String::new(),
-            appearance: String::new(),
-            personality: String::new(),
-            goal: String::new(),
-            conflict: String::new(),
-            habits: String::new(),
-        }
-    }
 }
 
 #[derive(Debug)]

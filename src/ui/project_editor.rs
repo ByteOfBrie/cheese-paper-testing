@@ -135,7 +135,7 @@ impl dyn FileObject {
 
         if self.is_folder() {
             for child_id in self.get_base().children.iter() {
-                run_with_file_object(&child_id, objects, |child, objects| {
+                run_with_file_object(child_id, objects, |child, objects| {
                     child.build_tree(
                         objects,
                         builder,
@@ -335,7 +335,7 @@ impl ProjectEditor {
         // and call reload file, otherwise give up (it might come in as
         // a different event, but we don't care about modifications
         // to files we don't know)
-        let modify_path = match event.paths.get(0) {
+        let modify_path = match event.paths.first() {
             Some(path) => path,
             None => {
                 log::warn!("No path from modify event: {event:?}");
@@ -383,7 +383,7 @@ impl ProjectEditor {
             match action {
                 Action::SetSelected(selected_file_ids) => {
                     // Open nodes when they're selected
-                    if let Some(file_id) = selected_file_ids.get(0) {
+                    if let Some(file_id) = selected_file_ids.first() {
                         if *file_id != self.project.text_id
                             && *file_id != self.project.characters_id
                             && *file_id != self.project.worldbuilding_id
@@ -399,7 +399,7 @@ impl ProjectEditor {
                     }
                 }
                 Action::Move(drag_and_drop) => {
-                    if let Some(source) = drag_and_drop.source.get(0) {
+                    if let Some(source) = drag_and_drop.source.first() {
                         // Don't move one of the roots
                         if *source == self.project.text_id
                             || *source == self.project.characters_id
@@ -447,7 +447,7 @@ impl ProjectEditor {
                         }
 
                         if let Err(err) = move_child(
-                            &source,
+                            source,
                             &source_parent.expect("moving item's parent should be in tree"),
                             &drag_and_drop.target,
                             index,
@@ -506,7 +506,7 @@ impl ProjectEditor {
             create_watcher().expect("Should always be able to create a watcher");
 
         watcher
-            .watch(&project.get_path(), RecursiveMode::Recursive)
+            .watch(project.get_path(), RecursiveMode::Recursive)
             .unwrap();
 
         Self {

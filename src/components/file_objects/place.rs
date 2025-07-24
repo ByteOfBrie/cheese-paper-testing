@@ -3,25 +3,13 @@ use std::fs::create_dir;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PlaceMetadata {
     pub connection: String,
     pub description: String,
     pub appearance: String,
     pub other_senses: String,
     pub notes: String,
-}
-
-impl Default for PlaceMetadata {
-    fn default() -> Self {
-        Self {
-            connection: String::new(),
-            description: String::new(),
-            appearance: String::new(),
-            other_senses: String::new(),
-            notes: String::new(),
-        }
-    }
 }
 
 #[derive(Debug)]

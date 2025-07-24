@@ -104,8 +104,7 @@ impl Data {
         {
             let recent_projects_str: Vec<_> = recent_projects_array
                 .iter()
-                .map(|val| val.as_str())
-                .flatten()
+                .filter_map(|val| val.as_str())
                 .map(|val| val.to_string())
                 .collect();
 
@@ -143,8 +142,7 @@ impl Data {
                         key.to_string(),
                         file_id_list
                             .iter()
-                            .map(|val| val.as_str())
-                            .flatten()
+                            .filter_map(|val| val.as_str())
                             .map(|val| val.to_string())
                             .collect(),
                     );
@@ -452,7 +450,7 @@ impl CheesePaperApp {
         };
 
         if app.state.settings.reopen_last {
-            if let Some(last_open_project) = app.state.data.recent_projects.get(0) {
+            if let Some(last_open_project) = app.state.data.recent_projects.first() {
                 let last_open_project = last_open_project.clone();
                 if let Err(err) = app.load_project(PathBuf::from(&last_open_project)) {
                     log::error!(
@@ -480,7 +478,7 @@ impl CheesePaperApp {
                         ui.vertical_centered(|ui| {
                             let projects = self.state.data.recent_projects.clone();
                             for project in projects {
-                                if ui.button(&project.to_string_lossy().to_string()).clicked() {
+                                if ui.button(project.to_string_lossy().to_string()).clicked() {
                                     if let Err(err) = self.load_project(project.clone()) {
                                         log::error!(
                                             "Error while attempting to load {project:?}: {err}"

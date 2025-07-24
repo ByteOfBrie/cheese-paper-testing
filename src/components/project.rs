@@ -29,7 +29,7 @@ pub struct Project {
     toml_header: DocumentMut,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ProjectMetadata {
     summary: String,
     notes: String,
@@ -45,35 +45,21 @@ pub enum ProjectFolder {
     worldbuilding,
 }
 
-impl Default for ProjectMetadata {
-    fn default() -> Self {
-        Self {
-            summary: String::new(),
-            notes: String::new(),
-            genre: String::new(),
-            author: String::new(),
-            email: String::new(),
-        }
-    }
-}
-
 const PROJECT_INFO_NAME: &str = "project.toml";
 
 fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, FileObjectStore)> {
     if folder_path.exists() {
-        match from_file(&folder_path, None) {
+        match from_file(folder_path, None) {
             Ok(created_object) => match created_object {
                 FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
-                _ => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "somehow loaded a non-folder as a top level folder",
-                    ));
-                }
+                _ => Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "somehow loaded a non-folder as a top level folder",
+                )),
             },
             Err(err) => {
                 log::error!("failed to load top level folder {name}");
-                return Err(err);
+                Err(err)
             }
         }
     } else {
@@ -276,17 +262,18 @@ impl Project {
     pub fn save(&mut self) -> Result<()> {
         // First, try saving the children
 
-        let text_result = self.run_with_folder(ProjectFolder::text, |text, mut objects| {
-            text.save(&mut objects)
-        });
+        let text_result =
+            self.run_with_folder(ProjectFolder::text, |text, objects| text.save(objects));
+
         let characters_result = self
-            .run_with_folder(ProjectFolder::characters, |characters, mut objects| {
-                characters.save(&mut objects)
+            .run_with_folder(ProjectFolder::characters, |characters, objects| {
+                characters.save(objects)
             });
-        let worldbuilding_result = self.run_with_folder(
-            ProjectFolder::worldbuilding,
-            |worldbuilding, mut objects| worldbuilding.save(&mut objects),
-        );
+
+        let worldbuilding_result = self
+            .run_with_folder(ProjectFolder::worldbuilding, |worldbuilding, objects| {
+                worldbuilding.save(objects)
+            });
 
         // Now save the project itself
         // unlike other file objects, this one doesn't rename automatically. This might be something
@@ -299,7 +286,7 @@ impl Project {
 
             write_with_temp_file(&self.get_project_info_file(), final_str.as_bytes())?;
 
-            let new_modtime = std::fs::metadata(&self.get_project_info_file())
+            let new_modtime = std::fs::metadata(self.get_project_info_file())
                 .expect("attempted to load file that does not exist")
                 .modified()
                 .expect("Modtime not available");

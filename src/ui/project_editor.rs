@@ -1,7 +1,8 @@
 use crate::components::Project;
-use crate::components::file_objects::base::FileType;
+use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
-    FileObject, FileObjectStore, MutFileObjectTypeInterface, move_child, run_with_file_object,
+    FileObject, FileObjectStore, MutFileObjectTypeInterface, from_file, move_child,
+    run_with_file_object,
 };
 use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
 use egui::Widget;
@@ -378,8 +379,70 @@ impl ProjectEditor {
                     })
                 }
                 None => {
-                    // TODO: file doesn't seem to exist, process create event
-                    // (or unknown file modify, maybe updating path after ID)
+                    let mut ancestors = modify_path.ancestors();
+
+                    while let Some(ancestor) = ancestors.next() {
+                        // We need to check if this object can be loaded, which means
+                        // that its parent is already in the tree
+
+                        let parent_path = ancestor.parent().expect(
+                            "parents should exist and the loop should always \
+                            finish before it escapes the project tree",
+                        );
+
+                        let parent_id = match self.project.find_object_by_path(parent_path) {
+                            Some(id) => id,
+                            None => continue,
+                        };
+
+                        let parent_object = self.project.objects.get_mut(&parent_id).unwrap();
+
+                        let new_index = parent_object.get_base().children.len();
+
+                        // We've found a parent, which means that this object should
+                        // have from_file called on it
+                        let new_object = match from_file(ancestor, Some(new_index)) {
+                            Ok(file_object_creation) => file_object_creation,
+                            Err(err) => {
+                                log::warn!(
+                                    "Could not open file as part of processing modifications: {err}"
+                                );
+                                log::warn!("Giving up on processing event: {event:?}");
+                                return;
+                            }
+                        };
+
+                        let (new_object, descendents): (Box<dyn FileObject>, _) = match new_object {
+                            FileObjectCreation::Scene(parent, children) => {
+                                (Box::new(parent), children)
+                            }
+                            FileObjectCreation::Character(parent, children) => {
+                                (Box::new(parent), children)
+                            }
+                            FileObjectCreation::Folder(parent, children) => {
+                                (Box::new(parent), children)
+                            }
+                            FileObjectCreation::Place(parent, children) => {
+                                (Box::new(parent), children)
+                            }
+                        };
+
+                        // Add to the parent's list of children
+                        parent_object
+                            .get_base_mut()
+                            .children
+                            .push(new_object.get_base().metadata.id.clone());
+
+                        // Add the parent object to the object list
+                        self.project
+                            .objects
+                            .insert(new_object.get_base().metadata.id.clone(), new_object);
+
+                        // Add all of the descendents to the list
+                        for (id_string, object) in descendents {
+                            self.project.objects.insert(id_string, object);
+                        }
+                    }
                 }
             };
         }

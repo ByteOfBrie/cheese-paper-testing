@@ -398,8 +398,16 @@ impl Project {
     /// just visits every file object, gets its path, and compares it. This means it's
     /// O(n) path allocations, but it should be reliable.
     pub fn find_object_by_path(&self, object_path: &Path) -> Option<String> {
+        // If we have the metadata path, we're trying to find the object with the
+        // parent of it, so we compute that path instead
+        let compare_path = if object_path.ends_with("metadata.toml") {
+            object_path.parent().expect("path should have a parent")
+        } else {
+            object_path
+        };
+
         for (id, file_object) in self.objects.iter() {
-            if file_object.get_path() == object_path {
+            if file_object.get_path() == compare_path {
                 return Some(id.clone());
             }
         }

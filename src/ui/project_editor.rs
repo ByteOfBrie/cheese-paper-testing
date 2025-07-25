@@ -1,11 +1,8 @@
 use crate::components::Project;
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
-    FileObject, FileObjectStore, MutFileObjectTypeInterface, from_file, move_child,
-    run_with_file_object,
+    FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
-use crate::ui::{CharacterEditor, FolderEditor, PlaceEditor, SceneEditor};
-use egui::Widget;
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -201,32 +198,9 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         if let Some(file_object) = self.project.objects.get_mut(tab) {
-            match file_object.get_file_type_mut() {
-                MutFileObjectTypeInterface::Scene(obj) => SceneEditor {
-                    scene: obj,
-                    dictionary: &self.dictionary,
-                    spellcheck_status: self.spellcheck_status,
-                }
-                .ui(ui),
-                MutFileObjectTypeInterface::Character(obj) => CharacterEditor {
-                    character: obj,
-                    dictionary: &self.dictionary,
-                    spellcheck_status: self.spellcheck_status,
-                }
-                .ui(ui),
-                MutFileObjectTypeInterface::Folder(obj) => FolderEditor {
-                    folder: obj,
-                    dictionary: &self.dictionary,
-                    spellcheck_status: self.spellcheck_status,
-                }
-                .ui(ui),
-                MutFileObjectTypeInterface::Place(obj) => PlaceEditor {
-                    place: obj,
-                    dictionary: &self.dictionary,
-                    spellcheck_status: self.spellcheck_status,
-                }
-                .ui(ui),
-            };
+            file_object
+                .create_editor(&self.dictionary, self.spellcheck_status)
+                .ui(ui);
         }
     }
 

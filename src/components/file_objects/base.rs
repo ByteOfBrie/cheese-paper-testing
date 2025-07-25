@@ -1,5 +1,6 @@
 use egui_ltreeview::DirPosition;
 use log::warn;
+use spellbook::Dictionary;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -8,6 +9,7 @@ use crate::components::file_objects::utils::{
     write_with_temp_file,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
+use crate::ui::{FileObjectEditorType, SpellCheckStatus};
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result};
@@ -749,6 +751,12 @@ pub trait FileObject: Debug {
 
     /// Writes the current type-specific metadata to the BaseFileObjects toml_header
     fn write_metadata(&mut self);
+
+    fn create_editor<'a>(
+        &'a mut self,
+        dictionary: &'a Option<&'a mut Dictionary>,
+        spellcheck_status: &'a mut SpellCheckStatus,
+    ) -> Box<dyn FileObjectEditorType<'a> + 'a>;
 
     /// Sets the index to this file, doing the move if necessary
     fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<bool> {

@@ -1,7 +1,9 @@
 use crate::components::file_objects::base::{
     BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
+use crate::ui::{FileObjectEditorType, SceneEditor, SpellCheckStatus};
 use regex::Regex;
+use spellbook::Dictionary;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -111,6 +113,18 @@ impl FileObject for Scene {
         self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
         self.base.toml_header["pov"] = toml_edit::value(&self.metadata.pov);
         self.base.toml_header["compile_status"] = toml_edit::value(self.metadata.compile_status);
+    }
+
+    fn create_editor<'a>(
+        &'a mut self,
+        dictionary: &'a Option<&'a mut Dictionary>,
+        spellcheck_status: &'a mut SpellCheckStatus,
+    ) -> Box<dyn FileObjectEditorType<'a> + 'a> {
+        Box::new(SceneEditor {
+            scene: self,
+            dictionary,
+            spellcheck_status,
+        })
     }
 }
 

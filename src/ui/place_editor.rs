@@ -1,7 +1,8 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Place;
+use crate::ui::FileObjectEditorType;
 use crate::ui::project_editor::SpellCheckStatus;
-use egui::{Response, Widget};
+use egui::Response;
 use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
@@ -15,8 +16,8 @@ pub struct PlaceEditor<'a> {
     pub spellcheck_status: &'a mut SpellCheckStatus,
 }
 
-impl<'a> Widget for &mut PlaceEditor<'a> {
-    fn ui(self, ui: &mut egui::Ui) -> Response {
+impl<'a> FileObjectEditorType<'a> for PlaceEditor<'a> {
+    fn ui(&mut self, ui: &mut egui::Ui) -> Response {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)

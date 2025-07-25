@@ -1,4 +1,7 @@
+use spellbook::Dictionary;
+
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use crate::ui::{FileObjectEditorType, PlaceEditor, SpellCheckStatus};
 use std::fs::create_dir;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
@@ -135,5 +138,17 @@ impl FileObject for Place {
         self.base.toml_header["appearance"] = toml_edit::value(&self.metadata.appearance);
         self.base.toml_header["other_senses"] = toml_edit::value(&self.metadata.other_senses);
         self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+    }
+
+    fn create_editor<'a>(
+        &'a mut self,
+        dictionary: &'a Option<&'a mut Dictionary>,
+        spellcheck_status: &'a mut SpellCheckStatus,
+    ) -> Box<dyn FileObjectEditorType<'a> + 'a> {
+        Box::new(PlaceEditor {
+            place: self,
+            dictionary,
+            spellcheck_status,
+        })
     }
 }

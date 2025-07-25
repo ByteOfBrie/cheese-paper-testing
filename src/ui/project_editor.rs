@@ -351,7 +351,21 @@ impl ProjectEditor {
                 }
             }
         } else {
-            // TODO: verify that it's within the project tree (i.e., in `text/`)
+            let relative_path = match modify_path.strip_prefix(self.project.get_path()) {
+                Ok(relative_path) => relative_path,
+                Err(err) => {
+                    log::error!("invalid modify/create path not in project: {err}");
+                    return;
+                }
+            };
+
+            if !(modify_path.starts_with("text")
+                || relative_path.starts_with("characters")
+                || relative_path.starts_with("worldbuilding"))
+            {
+                log::debug!("invalid modify/create path not in project folders: {modify_path:?}");
+            }
+
             match self.project.find_object_by_path(modify_path) {
                 Some(id) => {
                     run_with_file_object(&id, &mut self.project.objects, |file_object, _objects| {

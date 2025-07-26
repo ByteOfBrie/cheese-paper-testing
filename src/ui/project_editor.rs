@@ -9,6 +9,9 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use spellbook::Dictionary;
 
+type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
+type WatcherReceiver = std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>;
+
 #[derive(Debug, Default)]
 pub struct SpellCheckStatus {
     pub selected_word: String,
@@ -25,9 +28,9 @@ pub struct ProjectEditor {
     title_needs_update: bool,
     dictionary: Option<Dictionary>,
     spellcheck_status: SpellCheckStatus,
-    file_event_rx: std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>,
+    file_event_rx: WatcherReceiver,
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
-    _watcher: Debouncer<RecommendedWatcher, RecommendedCache>,
+    _watcher: RecommendedDebouncer,
 }
 
 enum ContextMenuActions {
@@ -209,10 +212,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 }
 
-fn create_watcher() -> notify::Result<(
-    Debouncer<RecommendedWatcher, RecommendedCache>,
-    std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>,
-)> {
+fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let watcher = new_debouncer(std::time::Duration::from_secs(2), None, tx)?;
@@ -353,9 +353,9 @@ impl ProjectEditor {
                     })
                 }
                 None => {
-                    let mut ancestors = modify_path.ancestors();
+                    let ancestors = modify_path.ancestors();
 
-                    while let Some(ancestor) = ancestors.next() {
+                    for ancestor in ancestors {
                         // We need to check if this object can be loaded, which means
                         // that its parent is already in the tree
 

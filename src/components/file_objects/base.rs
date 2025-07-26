@@ -32,7 +32,6 @@ const HEADER_SPLIT: &str = "++++++++";
 /// 3. Store the rest of the file into the metadata automatically (as present)
 /// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
 ///
-
 /// Baseline metadata for all file objects
 #[derive(Debug)]
 pub struct FileObjectMetadata {

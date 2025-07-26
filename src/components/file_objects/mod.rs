@@ -6,8 +6,8 @@ mod scene;
 pub mod utils;
 
 pub use base::{
-    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, FileObjectTypeInterface,
-    MutFileObjectTypeInterface, from_file, move_child, run_with_file_object,
+    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, from_file, move_child,
+    run_with_file_object,
 };
 pub use character::Character;
 pub use folder::Folder;

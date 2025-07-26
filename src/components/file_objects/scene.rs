@@ -88,14 +88,6 @@ impl FileObject for Scene {
         &mut self.base
     }
 
-    fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-        super::FileObjectTypeInterface::Scene(self)
-    }
-
-    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-        super::MutFileObjectTypeInterface::Scene(self)
-    }
-
     fn get_body(&self) -> String {
         let mut full_text = String::new();
 

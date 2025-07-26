@@ -33,21 +33,6 @@ const HEADER_SPLIT: &str = "++++++++";
 /// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
 ///
 
-#[derive(Debug)]
-#[allow(dead_code)]
-pub enum FileObjectTypeInterface<'a> {
-    Scene(&'a Scene),
-    Folder(&'a Folder),
-    Character(&'a Character),
-    Place(&'a Place),
-}
-
-pub enum MutFileObjectTypeInterface<'a> {
-    Scene(&'a mut Scene),
-    Folder(&'a mut Folder),
-    Character(&'a mut Character),
-    Place(&'a mut Place),
-}
 /// Baseline metadata for all file objects
 #[derive(Debug)]
 pub struct FileObjectMetadata {
@@ -1190,10 +1175,4 @@ pub trait FileObject: Debug {
             }
         }
     }
-
-    /// Allow for downcasting this as a reference, useful for creating the editors
-    #[allow(dead_code)]
-    fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
-    /// Allow for downcasting this as a mutable reference, useful for creating the editors
-    fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
 }

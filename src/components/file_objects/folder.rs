@@ -139,14 +139,6 @@ impl FileObject for Folder {
         &mut self.base
     }
 
-    fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-        super::FileObjectTypeInterface::Folder(self)
-    }
-
-    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-        super::MutFileObjectTypeInterface::Folder(self)
-    }
-
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("folder");
         self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);

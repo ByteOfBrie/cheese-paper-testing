@@ -133,14 +133,6 @@ impl FileObject for Character {
         &mut self.base
     }
 
-    fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-        super::FileObjectTypeInterface::Character(self)
-    }
-
-    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-        super::MutFileObjectTypeInterface::Character(self)
-    }
-
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("character");
         self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);

@@ -123,14 +123,6 @@ impl FileObject for Place {
         &mut self.base
     }
 
-    fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-        super::FileObjectTypeInterface::Place(self)
-    }
-
-    fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-        super::MutFileObjectTypeInterface::Place(self)
-    }
-
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
         self.base.toml_header["connection"] = toml_edit::value(&self.metadata.connection);

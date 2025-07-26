@@ -2,8 +2,8 @@
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
 #[cfg(test)]
 use crate::components::file_objects::{
-    Character, FileObject, FileObjectTypeInterface, Folder, MutFileObjectTypeInterface, Place,
-    Scene, from_file, move_child, run_with_file_object, write_with_temp_file,
+    Character, FileObject, Folder, Place, Scene, from_file, move_child, run_with_file_object,
+    write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::{Project, ProjectFolder};
@@ -299,12 +299,7 @@ fn test_save_in_folder() {
     let mut folder = Folder::new(base_dir.path().to_path_buf(), 0).unwrap();
     let mut scene = folder.create_child_at_end(FileType::Scene).unwrap();
 
-    match scene.get_file_type_mut() {
-        MutFileObjectTypeInterface::Scene(scene) => {
-            scene.text.push_str(sample_text);
-        }
-        _ => panic!(),
-    }
+    scene.load_body(sample_text.to_owned());
     scene.get_base_mut().file.modified = true;
 
     let scene_id = scene.get_base().metadata.id.clone();
@@ -325,13 +320,83 @@ fn test_save_in_folder() {
 }
 
 #[test]
-fn test_reload_project() {
+fn test_reload_objects() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let sample_body = "sample body";
     let character_appearance = "tall";
     let folder_notes = "this is a folder";
     let place_description = "lots and lots of trees!";
+
+    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let mut folder = Folder::new(base_dir.path().to_path_buf(), 1).unwrap();
+    let mut character = Character::new(base_dir.path().to_path_buf(), 2).unwrap();
+    let mut place = Place::new(base_dir.path().to_path_buf(), 3).unwrap();
+
+    scene.text = sample_body.to_string();
+    scene.get_base_mut().file.modified = true;
+
+    character.metadata.appearance = character_appearance.to_string();
+    character.get_base_mut().file.modified = true;
+
+    folder.metadata.notes = folder_notes.to_string();
+    folder.get_base_mut().file.modified = true;
+
+    place.metadata.description = place_description.to_string();
+    place.get_base_mut().file.modified = true;
+
+    // Save all of the objects
+    scene.save(&mut HashMap::new()).unwrap();
+    character.save(&mut HashMap::new()).unwrap();
+    folder.save(&mut HashMap::new()).unwrap();
+    place.save(&mut HashMap::new()).unwrap();
+
+    // Keep track of paths
+    let scene_path = scene.get_path();
+    let character_path = character.get_path();
+    let folder_path = folder.get_path();
+    let place_path = place.get_path();
+
+    // Drop all of the objects (just to make sure we're reloading them)
+    drop(scene);
+    drop(character);
+    drop(folder);
+    drop(place);
+
+    match from_file(&scene_path, Some(0)).unwrap() {
+        FileObjectCreation::Scene(scene, _) => {
+            assert_eq!(scene.text, sample_body);
+        }
+        _ => panic!(),
+    }
+
+    match from_file(&character_path, Some(1)).unwrap() {
+        FileObjectCreation::Character(character, _) => {
+            assert_eq!(character.metadata.appearance, character_appearance);
+        }
+        _ => panic!(),
+    }
+
+    match from_file(&folder_path, Some(2)).unwrap() {
+        FileObjectCreation::Folder(folder, _) => {
+            assert_eq!(folder.metadata.notes, folder_notes);
+        }
+        _ => panic!(),
+    }
+
+    match from_file(&place_path, Some(3)).unwrap() {
+        FileObjectCreation::Place(place, _) => {
+            assert_eq!(place.metadata.description, place_description);
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn test_reload_project() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let sample_body = "sample body";
 
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
@@ -343,21 +408,21 @@ fn test_reload_project() {
         .unwrap();
     let scene_id = scene.get_base().metadata.id.clone();
 
-    let mut character = project
+    let character = project
         .run_with_folder(ProjectFolder::characters, |text, _| {
             text.create_child_at_end(FileType::Character)
         })
         .unwrap();
     let character_id = character.get_base().metadata.id.clone();
 
-    let mut folder = project
+    let folder = project
         .run_with_folder(ProjectFolder::text, |text, _| {
             text.create_child_at_end(FileType::Folder)
         })
         .unwrap();
     let folder_id = folder.get_base().metadata.id.clone();
 
-    let mut place = project
+    let place = project
         .run_with_folder(ProjectFolder::worldbuilding, |text, _| {
             text.create_child_at_end(FileType::Place)
         })
@@ -365,37 +430,8 @@ fn test_reload_project() {
     let place_id = place.get_base().metadata.id.clone();
 
     // modify the file objects:
-    match scene.get_file_type_mut() {
-        MutFileObjectTypeInterface::Scene(scene) => {
-            scene.text.push_str(sample_body);
-        }
-        _ => panic!(),
-    }
+    scene.load_body(sample_body.to_string());
     scene.get_base_mut().file.modified = true;
-
-    match character.get_file_type_mut() {
-        MutFileObjectTypeInterface::Character(character) => {
-            character.metadata.appearance = character_appearance.to_string();
-        }
-        _ => panic!(),
-    }
-    character.get_base_mut().file.modified = true;
-
-    match folder.get_file_type_mut() {
-        MutFileObjectTypeInterface::Folder(folder) => {
-            folder.metadata.notes = folder_notes.to_string()
-        }
-        _ => panic!(),
-    }
-    folder.get_base_mut().file.modified = true;
-
-    match place.get_file_type_mut() {
-        MutFileObjectTypeInterface::Place(place) => {
-            place.metadata.description = place_description.to_string()
-        }
-        _ => panic!(),
-    }
-    place.get_base_mut().file.modified = true;
 
     project.add_object(scene);
     project.add_object(character);
@@ -457,32 +493,14 @@ fn test_reload_project() {
 
     assert!(folder.get_file().exists());
     assert_eq!(folder.get_base().index, Some(1));
-    match folder.get_file_type() {
-        FileObjectTypeInterface::Folder(folder) => {
-            assert_eq!(folder.metadata.notes, folder_notes);
-        }
-        _ => panic!(),
-    }
 
     // Characters (character + metadata)
     assert!(character.get_file().exists());
     assert_eq!(character.get_base().index, Some(0));
-    match character.get_file_type() {
-        FileObjectTypeInterface::Character(character) => {
-            assert_eq!(character.metadata.appearance, character_appearance);
-        }
-        _ => panic!(),
-    }
 
     // Worldbuilding (place + metadata)
     assert!(place.get_file().exists());
     assert_eq!(place.get_base().index, Some(0));
-    match place.get_file_type() {
-        FileObjectTypeInterface::Place(place) => {
-            assert_eq!(place.metadata.description, place_description);
-        }
-        _ => panic!(),
-    }
 }
 
 /// Make sure that a `.md` file gets loaded without a text editor
@@ -536,10 +554,11 @@ contents1
     let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
     project.save().unwrap();
 
-    let scene = project.objects.get("1").unwrap();
-    assert_eq!(scene.get_body().trim(), "contents1");
-    match scene.get_file_type() {
-        FileObjectTypeInterface::Scene(scene) => {
+    let scene_path = project.objects.get("1").unwrap().get_path();
+
+    match from_file(&scene_path, Some(0)).unwrap() {
+        FileObjectCreation::Scene(scene, _) => {
+            assert_eq!(scene.get_body().trim(), "contents1");
             assert_eq!(
                 scene.metadata.summary,
                 "multiline block inside\nanother multiline block\n"
@@ -549,7 +568,7 @@ contents1
     }
 
     assert!(
-        read_to_string(scene.get_file())
+        read_to_string(scene_path)
             .unwrap()
             .contains(r#"notes = """#)
     );
@@ -2165,27 +2184,27 @@ file_type = "worldbuilding""#;
     let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
     project.save().unwrap();
 
-    let place = project.objects.get("1").unwrap();
-    match place.get_file_type() {
-        FileObjectTypeInterface::Place(_) => {}
+    let place_path = project.objects.get("1").unwrap().get_path();
+    match from_file(&place_path, Some(0)).unwrap() {
+        FileObjectCreation::Place(place, _) => {
+            assert!(
+                read_to_string(place.get_file())
+                    .unwrap()
+                    .contains(r#"notes = """#)
+            );
+        }
         _ => assert!(false),
     }
 
-    let worldbuilding = project.objects.get("2").unwrap();
-    match worldbuilding.get_file_type() {
-        FileObjectTypeInterface::Place(_) => {}
+    let worldbuilding_path = project.objects.get("2").unwrap().get_path();
+    match from_file(&worldbuilding_path, Some(1)).unwrap() {
+        FileObjectCreation::Place(place, _) => {
+            assert!(
+                read_to_string(place.get_file())
+                    .unwrap()
+                    .contains(r#"notes = """#)
+            );
+        }
         _ => assert!(false),
     }
-
-    assert!(
-        read_to_string(worldbuilding.get_file())
-            .unwrap()
-            .contains(r#"notes = """#)
-    );
-
-    assert!(
-        read_to_string(worldbuilding.get_file())
-            .unwrap()
-            .contains(r#"notes = """#)
-    );
 }

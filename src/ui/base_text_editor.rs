@@ -1,17 +1,12 @@
+use crate::ui::EditorContext;
 use egui::{Response, TextBuffer, Widget};
-use spellbook::Dictionary;
-
-use crate::ui::project_editor::SpellCheckStatus;
 
 pub struct BaseTextEditor<'a> {
     text: &'a mut String,
 
     highlighter: crate::ui::MemoizedMarkdownHighlighter,
 
-    dictionary: &'a Option<&'a mut Dictionary>,
-
-    // shitty hack for persistence
-    spellcheck_status: &'a mut SpellCheckStatus,
+    ctx: &'a mut EditorContext,
 }
 
 impl<'a> Widget for &mut BaseTextEditor<'a> {
@@ -19,7 +14,7 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
         let mut layouter = |ui: &egui::Ui, tinymark: &dyn TextBuffer, wrap_width: f32| {
             let mut layout_job =
                 self.highlighter
-                    .highlight(ui.style(), tinymark.as_str(), self.dictionary);
+                    .highlight(ui.style(), tinymark.as_str(), &self.ctx.dictionary);
             layout_job.wrap.max_width = wrap_width;
             ui.fonts(|f| f.layout_job(layout_job))
         };
@@ -48,17 +43,17 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
 
                 let word = &self.text[clicked_pos - begin_offset..clicked_pos + end_offset];
 
-                self.spellcheck_status.selected_word = word.to_string();
+                self.ctx.spellcheck_status.selected_word = word.to_string();
 
-                if let Some(dictionary) = self.dictionary {
-                    if dictionary.check(&self.spellcheck_status.selected_word) {
-                        self.spellcheck_status.correct = true;
+                if let Some(dictionary) = self.ctx.dictionary.as_ref() {
+                    if dictionary.check(&self.ctx.spellcheck_status.selected_word) {
+                        self.ctx.spellcheck_status.correct = true;
                     } else {
-                        self.spellcheck_status.correct = false;
-                        self.spellcheck_status.suggestions.clear();
+                        self.ctx.spellcheck_status.correct = false;
+                        self.ctx.spellcheck_status.suggestions.clear();
                         dictionary.suggest(
-                            &self.spellcheck_status.selected_word,
-                            &mut self.spellcheck_status.suggestions,
+                            &self.ctx.spellcheck_status.selected_word,
+                            &mut self.ctx.spellcheck_status.suggestions,
                         );
                     }
                 }
@@ -66,22 +61,22 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
         }
 
         output.response.context_menu(|ui| {
-            if self.spellcheck_status.selected_word.is_empty() {
+            if self.ctx.spellcheck_status.selected_word.is_empty() {
                 ui.close();
             }
 
-            if self.spellcheck_status.correct {
+            if self.ctx.spellcheck_status.correct {
                 ui.label(format!(
                     "spelled {:?} correctly",
-                    self.spellcheck_status.selected_word
+                    self.ctx.spellcheck_status.selected_word
                 ));
             } else {
                 ui.label(format!(
                     "misspelled {:?}",
-                    self.spellcheck_status.selected_word
+                    self.ctx.spellcheck_status.selected_word
                 ));
 
-                for suggestion in self.spellcheck_status.suggestions.iter() {
+                for suggestion in self.ctx.spellcheck_status.suggestions.iter() {
                     if ui.button(suggestion).clicked() {
                         // TODO: implement replacement
                         println!("clicked {suggestion}");
@@ -95,16 +90,11 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
 }
 
 impl<'a> BaseTextEditor<'a> {
-    pub fn new(
-        text: &'a mut String,
-        dictionary: &'a Option<&'a mut Dictionary>,
-        spellcheck_status: &'a mut SpellCheckStatus,
-    ) -> Self {
+    pub fn new(text: &'a mut String, ctx: &'a mut EditorContext) -> Self {
         Self {
             text,
             highlighter: Default::default(),
-            dictionary,
-            spellcheck_status,
+            ctx,
         }
     }
 

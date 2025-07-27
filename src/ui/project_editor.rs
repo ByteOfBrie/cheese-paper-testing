@@ -26,11 +26,16 @@ pub struct ProjectEditor {
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
     title_needs_update: bool,
-    dictionary: Option<Dictionary>,
-    spellcheck_status: SpellCheckStatus,
+    editor_context: EditorContext,
     file_event_rx: WatcherReceiver,
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
     _watcher: RecommendedDebouncer,
+}
+
+#[derive(Debug)]
+pub struct EditorContext {
+    pub dictionary: Option<Dictionary>,
+    pub spellcheck_status: SpellCheckStatus,
 }
 
 enum ContextMenuActions {
@@ -173,10 +178,9 @@ impl Project {
     }
 }
 
-struct TabViewer<'a> {
-    project: &'a mut Project,
-    dictionary: Option<&'a mut Dictionary>,
-    spellcheck_status: &'a mut SpellCheckStatus,
+pub struct TabViewer<'a> {
+    pub project: &'a mut Project,
+    pub editor_context: &'a mut EditorContext,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -201,9 +205,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         if let Some(file_object) = self.project.objects.get_mut(tab) {
-            file_object
-                .create_editor(&self.dictionary, self.spellcheck_status)
-                .ui(ui);
+            file_object.as_editor().ui(ui, self.editor_context);
         }
     }
 
@@ -245,8 +247,7 @@ impl ProjectEditor {
                 ctx,
                 &mut TabViewer {
                     project: &mut self.project,
-                    dictionary: self.dictionary.as_mut(),
-                    spellcheck_status: &mut self.spellcheck_status,
+                    editor_context: &mut self.editor_context,
                 },
             )
     }
@@ -564,8 +565,10 @@ impl ProjectEditor {
             project,
             dock_state: DockState::new(open_tabs),
             title_needs_update: true,
-            dictionary,
-            spellcheck_status: SpellCheckStatus::default(),
+            editor_context: EditorContext {
+                dictionary,
+                spellcheck_status: SpellCheckStatus::default(),
+            },
             file_event_rx,
             _watcher: watcher,
         }

@@ -1,40 +1,31 @@
 use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
-use crate::ui::FileObjectEditorType;
-use crate::ui::project_editor::SpellCheckStatus;
+use crate::ui::EditorContext;
+use crate::ui::FileObjectEditor;
 use egui::Response;
-use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
 
-/// Text editor view for an entire scene object, will be embeded in other file objects
-#[derive(Debug)]
-pub struct CharacterEditor<'a> {
-    pub character: &'a mut Character,
-    pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub spellcheck_status: &'a mut SpellCheckStatus,
-}
-
-impl<'a> FileObjectEditorType<'a> for CharacterEditor<'a> {
-    fn ui(&mut self, ui: &mut egui::Ui) -> Response {
+impl FileObjectEditor for Character {
+    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)
             .width_range(50.0..=500.0)
-            .show_inside(ui, |ui| self.show_sidebar(ui));
+            .show_inside(ui, |ui| self.show_sidebar(ui, ctx));
 
         egui::CentralPanel::default()
-            .show_inside(ui, |ui| self.show_editor(ui))
+            .show_inside(ui, |ui| self.show_editor(ui, ctx))
             .response
     }
 }
 
-impl<'a> CharacterEditor<'a> {
-    fn show_sidebar(&mut self, ui: &mut egui::Ui) {
+impl Character {
+    fn show_sidebar(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
-                egui::TextEdit::singleline(&mut self.character.get_base_mut().metadata.name)
+                egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
                     .char_limit(50)
                     .id_salt("name")
                     .hint_text("Character Name")
@@ -52,11 +43,7 @@ impl<'a> CharacterEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(
-                            &mut self.character.metadata.summary,
-                            self.dictionary,
-                            self.spellcheck_status,
-                        ),
+                        &mut BaseTextEditor::new(&mut self.metadata.summary, ctx),
                     );
                     self.process_response(response);
                 });
@@ -66,72 +53,52 @@ impl<'a> CharacterEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(
-                            &mut self.character.metadata.notes,
-                            self.dictionary,
-                            self.spellcheck_status,
-                        ),
+                        &mut BaseTextEditor::new(&mut self.metadata.notes, ctx),
                     );
                     self.process_response(response);
                 });
         });
     }
 
-    fn show_editor(&mut self, ui: &mut egui::Ui) {
+    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             ui.label("Appearance");
-            let response: egui::Response = ui.add(&mut BaseTextEditor::new(
-                &mut self.character.metadata.appearance,
-                self.dictionary,
-                self.spellcheck_status,
-            ));
+            let response: egui::Response =
+                ui.add(&mut BaseTextEditor::new(&mut self.metadata.appearance, ctx));
             self.process_response(response);
 
             ui.label("Appearance");
-            let response: egui::Response = ui.add(&mut BaseTextEditor::new(
-                &mut self.character.metadata.appearance,
-                self.dictionary,
-                self.spellcheck_status,
-            ));
+            let response: egui::Response =
+                ui.add(&mut BaseTextEditor::new(&mut self.metadata.appearance, ctx));
             self.process_response(response);
 
             ui.label("Personality");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
-                &mut self.character.metadata.personality,
-                self.dictionary,
-                self.spellcheck_status,
+                &mut self.metadata.personality,
+                ctx,
             ));
             self.process_response(response);
 
             ui.label("Goals");
-            let response: egui::Response = ui.add(&mut BaseTextEditor::new(
-                &mut self.character.metadata.goal,
-                self.dictionary,
-                self.spellcheck_status,
-            ));
+            let response: egui::Response =
+                ui.add(&mut BaseTextEditor::new(&mut self.metadata.goal, ctx));
             self.process_response(response);
 
             ui.label("Conflicts");
-            let response: egui::Response = ui.add(&mut BaseTextEditor::new(
-                &mut self.character.metadata.conflict,
-                self.dictionary,
-                self.spellcheck_status,
-            ));
+            let response: egui::Response =
+                ui.add(&mut BaseTextEditor::new(&mut self.metadata.conflict, ctx));
             self.process_response(response);
 
             ui.label("Habits");
-            let response: egui::Response = ui.add(&mut BaseTextEditor::new(
-                &mut self.character.metadata.habits,
-                self.dictionary,
-                self.spellcheck_status,
-            ));
+            let response: egui::Response =
+                ui.add(&mut BaseTextEditor::new(&mut self.metadata.habits, ctx));
             self.process_response(response);
         });
     }
 
     fn process_response(&mut self, response: egui::Response) {
         if response.changed() {
-            self.character.get_base_mut().file.modified = true;
+            self.get_base_mut().file.modified = true;
         }
     }
 }

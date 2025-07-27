@@ -1,58 +1,45 @@
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
-use crate::ui::FileObjectEditorType;
-use crate::ui::project_editor::SpellCheckStatus;
+use crate::ui::FileObjectEditor;
+use crate::ui::project_editor::EditorContext;
 use egui::Response;
-use spellbook::Dictionary;
 
 use crate::ui::BaseTextEditor;
 use egui::ScrollArea;
 
-/// Text editor view for an entire scene object, will be embeded in other file objects
-#[derive(Debug)]
-pub struct SceneEditor<'a> {
-    pub scene: &'a mut Scene,
-    pub dictionary: &'a Option<&'a mut Dictionary>,
-    pub spellcheck_status: &'a mut SpellCheckStatus,
-}
-
-impl<'a> FileObjectEditorType<'a> for SceneEditor<'a> {
-    fn ui(&mut self, ui: &mut egui::Ui) -> Response {
+impl FileObjectEditor for Scene {
+    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)
             .width_range(50.0..=500.0)
-            .show_inside(ui, |ui| self.show_sidebar(ui));
+            .show_inside(ui, |ui| self.show_sidebar(ui, ctx));
 
         egui::CentralPanel::default()
-            .show_inside(ui, |ui| self.show_text_editor(ui))
+            .show_inside(ui, |ui| self.show_text_editor(ui, ctx))
             .response
     }
 }
 
-impl<'a> SceneEditor<'a> {
-    fn show_text_editor(&mut self, ui: &mut egui::Ui) {
+impl Scene {
+    fn show_text_editor<'a>(&'a mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical()
             .id_salt("text")
             .auto_shrink(egui::Vec2b { x: false, y: false })
             .show(ui, |ui| {
                 let response = ui.add_sized(
                     ui.available_size(),
-                    &mut BaseTextEditor::new(
-                        &mut self.scene.text,
-                        self.dictionary,
-                        self.spellcheck_status,
-                    ),
+                    &mut BaseTextEditor::new(&mut self.text, ctx),
                 );
 
                 self.process_response(response);
             });
     }
 
-    fn show_sidebar(&mut self, ui: &mut egui::Ui) {
+    fn show_sidebar<'a>(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
-                egui::TextEdit::singleline(&mut self.scene.get_base_mut().metadata.name)
+                egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
                     .char_limit(50)
                     .id_salt("name")
                     .hint_text("Scene Name")
@@ -61,7 +48,7 @@ impl<'a> SceneEditor<'a> {
             self.process_response(response);
 
             egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
-                let words = self.scene.word_count();
+                let words = self.word_count();
                 let text = format!("{words} Words");
                 ui.vertical_centered(|ui| {
                     let response = ui.label(text);
@@ -79,11 +66,7 @@ impl<'a> SceneEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(
-                            &mut self.scene.metadata.summary,
-                            self.dictionary,
-                            self.spellcheck_status,
-                        ),
+                        &mut BaseTextEditor::new(&mut self.metadata.summary, ctx),
                     );
                     self.process_response(response);
                 });
@@ -93,11 +76,7 @@ impl<'a> SceneEditor<'a> {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(
-                            &mut self.scene.metadata.notes,
-                            self.dictionary,
-                            self.spellcheck_status,
-                        ),
+                        &mut BaseTextEditor::new(&mut self.metadata.notes, ctx),
                     );
                     self.process_response(response);
                 });
@@ -106,7 +85,7 @@ impl<'a> SceneEditor<'a> {
 
     fn process_response(&mut self, response: egui::Response) {
         if response.changed() {
-            self.scene.get_base_mut().file.modified = true;
+            self.get_base_mut().file.modified = true;
         }
     }
 }

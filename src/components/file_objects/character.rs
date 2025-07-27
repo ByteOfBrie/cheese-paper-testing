@@ -1,7 +1,4 @@
-use spellbook::Dictionary;
-
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
-use crate::ui::{CharacterEditor, FileObjectEditorType, SpellCheckStatus};
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -144,15 +141,7 @@ impl FileObject for Character {
         self.base.toml_header["habits"] = toml_edit::value(&self.metadata.habits);
     }
 
-    fn create_editor<'a>(
-        &'a mut self,
-        dictionary: &'a Option<&'a mut Dictionary>,
-        spellcheck_status: &'a mut SpellCheckStatus,
-    ) -> Box<dyn FileObjectEditorType<'a> + 'a> {
-        Box::new(CharacterEditor {
-            character: self,
-            dictionary,
-            spellcheck_status,
-        })
+    fn as_editor(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
+        self
     }
 }

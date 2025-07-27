@@ -20,7 +20,7 @@ impl MemoizedMarkdownHighlighter {
         &mut self,
         egui_style: &egui::Style,
         text: &str,
-        dictionary: &Option<&mut Dictionary>,
+        dictionary: &Option<Dictionary>,
     ) -> egui::text::LayoutJob {
         if (&self.style, self.text.as_str()) != (egui_style, text) {
             self.style = egui_style.clone();
@@ -34,7 +34,7 @@ impl MemoizedMarkdownHighlighter {
 pub fn highlight_tinymark(
     egui_style: &egui::Style,
     mut text: &str,
-    dictionary: &Option<&mut Dictionary>,
+    dictionary: &Option<Dictionary>,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let mut style = Style::default();

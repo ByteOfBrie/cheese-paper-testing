@@ -1,5 +1,5 @@
-use std::fmt::Debug;
+use crate::{components::file_objects::FileObject, ui::project_editor::EditorContext};
 
-pub trait FileObjectEditorType<'a>: Debug {
-    fn ui(&mut self, ui: &mut egui::Ui) -> egui::Response;
+pub trait FileObjectEditor: FileObject {
+    fn ui<'a>(&'a mut self, ui: &'a mut egui::Ui, ctx: &'a mut EditorContext) -> egui::Response;
 }

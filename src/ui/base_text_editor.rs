@@ -23,6 +23,7 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
             .desired_width(f32::INFINITY)
             .layouter(&mut layouter)
             .min_size(egui::Vec2 { x: 50.0, y: 100.0 })
+            .lock_focus(true)
             .show(ui);
 
         if output.response.clicked_by(egui::PointerButton::Secondary) {

@@ -227,7 +227,23 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             *self.tab_move = Some(TabMove::Next);
         }
 
-        ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab));
+        if let Some(focused_tab) = ui.memory(|i| i.focused()) {
+            ui.memory_mut(|i| {
+                i.set_focus_lock_filter(
+                    focused_tab,
+                    egui::EventFilter {
+                        tab: true,
+                        ..Default::default()
+                    },
+                );
+            });
+        }
+
+        if ui.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Tab)) {
+            println!("pressed shift-tab");
+        } else if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
+            println!("pressed tab!");
+        }
 
         if let Some(file_object) = self.project.objects.get_mut(tab) {
             file_object.as_editor().ui(ui, self.editor_context);

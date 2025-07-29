@@ -3,6 +3,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
+use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -178,9 +179,15 @@ impl Project {
     }
 }
 
+pub enum TabMove {
+    Previous,
+    Next,
+}
+
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
+    pub tab_move: &'a mut Option<TabMove>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -204,6 +211,24 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+        let ctrl_shift_tab = egui::KeyboardShortcut {
+            modifiers: Modifiers::CTRL | Modifiers::SHIFT,
+            logical_key: Key::Tab,
+        };
+
+        let ctrl_tab = egui::KeyboardShortcut {
+            modifiers: Modifiers::CTRL,
+            logical_key: Key::Tab,
+        };
+
+        if ui.input_mut(|i| i.consume_shortcut(&ctrl_shift_tab)) {
+            *self.tab_move = Some(TabMove::Previous);
+        } else if ui.input_mut(|i| i.consume_shortcut(&ctrl_tab)) {
+            *self.tab_move = Some(TabMove::Next);
+        }
+
+        ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab));
+
         if let Some(file_object) = self.project.objects.get_mut(tab) {
             file_object.as_editor().ui(ui, self.editor_context);
         }
@@ -238,6 +263,8 @@ impl ProjectEditor {
         self.dock_state
             .retain_tabs(|tab_id| self.project.objects.contains_key(tab_id));
 
+        let mut tab_move_option: Option<TabMove> = None;
+
         // render the tab view
         DockArea::new(&mut self.dock_state)
             .allowed_splits(egui_dock::AllowedSplits::None)
@@ -248,8 +275,35 @@ impl ProjectEditor {
                 &mut TabViewer {
                     project: &mut self.project,
                     editor_context: &mut self.editor_context,
+                    tab_move: &mut tab_move_option,
                 },
-            )
+            );
+
+        if let Some(tab_move) = tab_move_option {
+            let open_tabs: Vec<_> = self.get_open_tabs();
+
+            // Make sure we have something to do
+            if open_tabs.len() > 1 {
+                if let Some((_, current_tab)) = self.dock_state.find_active_focused() {
+                    let current_pos = open_tabs
+                        .iter()
+                        .position(|val| val == current_tab)
+                        .expect("focused tab should be in list of tabs");
+
+                    let new_pos = match tab_move {
+                        TabMove::Next => (current_pos + 1) % open_tabs.len(),
+                        TabMove::Previous => current_pos
+                            .checked_sub(1)
+                            .unwrap_or_else(|| open_tabs.len() - 1),
+                    };
+
+                    let new_tab_id = open_tabs.get(new_pos).unwrap();
+
+                    self.dock_state
+                        .set_active_tab(self.dock_state.find_tab(new_tab_id).unwrap());
+                }
+            }
+        }
     }
 
     fn process_state(&mut self, ctx: &egui::Context) {

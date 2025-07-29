@@ -67,11 +67,6 @@ impl Character {
                 ui.add(&mut BaseTextEditor::new(&mut self.metadata.appearance, ctx));
             self.process_response(response);
 
-            ui.label("Appearance");
-            let response: egui::Response =
-                ui.add(&mut BaseTextEditor::new(&mut self.metadata.appearance, ctx));
-            self.process_response(response);
-
             ui.label("Personality");
             let response: egui::Response = ui.add(&mut BaseTextEditor::new(
                 &mut self.metadata.personality,

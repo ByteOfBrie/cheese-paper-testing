@@ -2,7 +2,7 @@ use cow_utils::CowUtils;
 use egui::{FontFamily, FontId, Stroke};
 use regex::Regex;
 use spellbook::Dictionary;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, ops::Range};
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct Style {
@@ -24,17 +24,22 @@ impl MemoizedMarkdownHighlighter {
         egui_style: &egui::Style,
         text: &str,
         dictionary: &Option<Dictionary>,
+        ignore_spellcheck: &Option<&Range<usize>>,
     ) -> egui::text::LayoutJob {
         if (&self.style, self.text.as_str()) != (egui_style, text) {
             self.style = egui_style.clone();
             text.clone_into(&mut self.text);
-            self.output = highlight_tinymark(egui_style, text, dictionary);
+            self.output = highlight_tinymark(egui_style, text, dictionary, ignore_spellcheck);
         }
         self.output.clone()
     }
 }
 
-fn find_misspelled_words(text: &str, dictionary: &Option<Dictionary>) -> VecDeque<usize> {
+fn find_misspelled_words(
+    text: &str,
+    dictionary: &Option<Dictionary>,
+    ignore_spellcheck: &Option<&Range<usize>>,
+) -> VecDeque<usize> {
     // Indexes of all of the misspelled words
     let mut misspelled_words = VecDeque::new();
 
@@ -74,6 +79,16 @@ fn find_misspelled_words(text: &str, dictionary: &Option<Dictionary>) -> VecDequ
 
                     assert!(start_pos < end_pos);
 
+                    // Check for the word that's currently being typed and
+                    // avoid adding it to the list of misspelled words. This delays
+                    // the detection a little bit, but I don't have a super nice way
+                    // of getting that to work
+                    if let Some(ignore_range) = ignore_spellcheck {
+                        if ignore_range.contains(&start_pos) {
+                            continue;
+                        }
+                    }
+
                     misspelled_words.push_back(start_pos);
                     misspelled_words.push_back(end_pos);
                 }
@@ -88,11 +103,12 @@ pub fn highlight_tinymark(
     egui_style: &egui::Style,
     mut text: &str,
     dictionary: &Option<Dictionary>,
+    ignore_spellcheck: &Option<&Range<usize>>,
 ) -> egui::text::LayoutJob {
     let mut job = egui::text::LayoutJob::default();
     let mut style = Style::default();
 
-    let mut misspelled_words = find_misspelled_words(text, dictionary);
+    let mut misspelled_words = find_misspelled_words(text, dictionary, ignore_spellcheck);
     let mut text_pos: usize = 0;
 
     while !text.is_empty() {

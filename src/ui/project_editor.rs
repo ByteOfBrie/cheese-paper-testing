@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Range;
 
 use crate::components::Project;
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
@@ -23,6 +24,12 @@ pub struct SpellCheckStatus {
     pub suggestions: Vec<String>,
 }
 
+#[derive(Debug, Default)]
+pub struct TypingStatus {
+    pub is_new_word: bool,
+    pub current_word: Range<usize>,
+}
+
 #[derive(Debug)]
 pub struct ProjectEditor {
     pub project: Project,
@@ -41,6 +48,7 @@ pub struct EditorContext {
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
     pub highlighters: HashMap<egui::Id, MemoizedMarkdownHighlighter>,
+    pub typing_status: TypingStatus,
 }
 
 enum ContextMenuActions {
@@ -643,6 +651,7 @@ impl ProjectEditor {
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
                 highlighters: HashMap::new(),
+                typing_status: TypingStatus::default(),
             },
             file_event_rx,
             _watcher: watcher,

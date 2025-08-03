@@ -16,6 +16,7 @@ pub struct MemoizedMarkdownHighlighter {
     style: egui::Style,
     text: String,
     output: egui::text::LayoutJob,
+    pub force_highlight: bool,
 }
 
 impl MemoizedMarkdownHighlighter {
@@ -26,10 +27,11 @@ impl MemoizedMarkdownHighlighter {
         dictionary: &Option<Dictionary>,
         ignore_spellcheck: &Option<&Range<usize>>,
     ) -> egui::text::LayoutJob {
-        if (&self.style, self.text.as_str()) != (egui_style, text) {
+        if self.force_highlight || (&self.style, self.text.as_str()) != (egui_style, text) {
             self.style = egui_style.clone();
             text.clone_into(&mut self.text);
             self.output = highlight_tinymark(egui_style, text, dictionary, ignore_spellcheck);
+            self.force_highlight = false;
         }
         self.output.clone()
     }

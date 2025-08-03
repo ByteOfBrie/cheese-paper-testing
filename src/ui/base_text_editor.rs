@@ -88,6 +88,20 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
             }
         }
 
+        // if we've just created a new word (pressed enter or space), force highlighting
+        // to happen a second time. We're one frame behind on inputs which wouldn't
+        // normally matter except we save highlight input. This means that the word
+        // will be spellchecked again, this time not being ignored.
+        //
+        // We could *possibly* do a little bit better about this by detecting when a new
+        // word has been created while still highlighting, but this is visually good and
+        // less complicated to implement
+        if ui.input(|i| i.key_pressed(egui::Key::Space) || i.key_pressed(egui::Key::Enter)) {
+            if let Some(highlighter) = self.ctx.highlighters.get_mut(&ui.id()) {
+                highlighter.force_highlight = true;
+            }
+        }
+
         if output.response.clicked_by(egui::PointerButton::Secondary) {
             if let Some(cursor_range) = output.cursor_range {
                 let clicked_pos = cursor_range.as_sorted_char_range().start;

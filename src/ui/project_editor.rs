@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use crate::components::Project;
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
+use crate::ui::tiny_markdown_highlighter::MemoizedMarkdownHighlighter;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
@@ -37,6 +40,7 @@ pub struct ProjectEditor {
 pub struct EditorContext {
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
+    pub highlighters: HashMap<egui::Id, MemoizedMarkdownHighlighter>,
 }
 
 enum ContextMenuActions {
@@ -638,6 +642,7 @@ impl ProjectEditor {
             editor_context: EditorContext {
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
+                highlighters: HashMap::new(),
             },
             file_event_rx,
             _watcher: watcher,

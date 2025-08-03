@@ -11,7 +11,7 @@ pub struct Style {
     pub misspelled: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct MemoizedMarkdownHighlighter {
     style: egui::Style,
     text: String,

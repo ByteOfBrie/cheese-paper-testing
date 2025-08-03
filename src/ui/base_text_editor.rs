@@ -4,17 +4,17 @@ use egui::{Response, TextBuffer, Widget};
 pub struct BaseTextEditor<'a> {
     text: &'a mut String,
 
-    highlighter: crate::ui::MemoizedMarkdownHighlighter,
-
     ctx: &'a mut EditorContext,
 }
 
 impl<'a> Widget for &mut BaseTextEditor<'a> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let mut layouter = |ui: &egui::Ui, tinymark: &dyn TextBuffer, wrap_width: f32| {
-            let mut layout_job =
-                self.highlighter
-                    .highlight(ui.style(), tinymark.as_str(), &self.ctx.dictionary);
+            let mut layout_job = self.ctx.highlighters.entry(ui.id()).or_default().highlight(
+                ui.style(),
+                tinymark.as_str(),
+                &self.ctx.dictionary,
+            );
             layout_job.wrap.max_width = wrap_width;
             ui.fonts(|f| f.layout_job(layout_job))
         };
@@ -92,11 +92,7 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
 
 impl<'a> BaseTextEditor<'a> {
     pub fn new(text: &'a mut String, ctx: &'a mut EditorContext) -> Self {
-        Self {
-            text,
-            highlighter: Default::default(),
-            ctx,
-        }
+        Self { text, ctx }
     }
 
     pub fn panels(&mut self, ctx: &egui::Context) {

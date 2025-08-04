@@ -177,20 +177,19 @@ pub fn highlight_tinymark(
 
         let end = next_token_pos.min(next_misspelled_relative);
 
-        if line_end < end {
-            job.append(
-                &text[..line_end],
-                0.0,
-                format_from_style(egui_style, &style),
-            );
+        let text_to_format = std::cmp::min(line_end, end);
 
-            text = &text[line_end..];
-            text_pos += line_end;
+        job.append(
+            &text[..text_to_format],
+            0.0,
+            format_from_style(egui_style, &style),
+        );
+
+        text = &text[text_to_format..];
+        text_pos += text_to_format;
+
+        if line_end < end {
             style = Default::default();
-        } else {
-            job.append(&text[..end], 0.0, format_from_style(egui_style, &style));
-            text = &text[end..];
-            text_pos += end;
         }
     }
 

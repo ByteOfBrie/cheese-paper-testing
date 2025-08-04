@@ -112,6 +112,7 @@ pub fn highlight_tinymark(
 
     let mut misspelled_words = find_misspelled_words(text, dictionary, ignore_spellcheck);
     let mut text_pos: usize = 0;
+    let mut start_of_line = true;
 
     while !text.is_empty() {
         let mut skip: usize;
@@ -179,9 +180,16 @@ pub fn highlight_tinymark(
 
         let text_to_format = std::cmp::min(line_end, end);
 
+        let leading_space = if start_of_line {
+            start_of_line = false;
+            20.0
+        } else {
+            0.0
+        };
+
         job.append(
             &text[..text_to_format],
-            0.0,
+            leading_space,
             format_from_style(egui_style, &style),
         );
 
@@ -190,6 +198,7 @@ pub fn highlight_tinymark(
 
         if line_end < end {
             style = Default::default();
+            start_of_line = true;
         }
     }
 

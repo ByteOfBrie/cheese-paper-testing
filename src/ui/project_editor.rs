@@ -351,22 +351,7 @@ impl ProjectEditor {
                         use notify::EventKind;
                         match event.kind {
                             EventKind::Create(_create_kind) => {
-                                // Somewhat tricky, we probably need to rescan that part
-                                // entire part of the tree. We don't necessarily know which
-                                // parents exist, and I can't trust that the events happened
-                                // in order.
-
-                                // For other solutions, we could scan every element in the
-                                // tree and find the longest path that matches, then do a
-                                // `from_file` one level below that. That's the least amount
-                                // of code, but also requires the most allocations
-
-                                // For a middle-ish ground, I could keep track of all of the
-                                // know files in a list and match against that. That saves
-                                // having to do a bunch of allocations but I don't know if it
-                                // matters enough to bother keeping track of another thing,
-                                // especially considering I have to remove from it at the same
-                                // time
+                                self.process_modify_event(event);
                             }
                             EventKind::Modify(_modify_kind) => {
                                 self.process_modify_event(event);

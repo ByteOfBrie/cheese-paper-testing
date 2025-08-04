@@ -63,10 +63,4 @@ impl Place {
                 self.process_response(response);
             });
     }
-
-    fn process_response(&mut self, response: egui::Response) {
-        if response.changed() {
-            self.get_base_mut().file.modified = true;
-        }
-    }
 }

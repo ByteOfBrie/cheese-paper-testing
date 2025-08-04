@@ -196,7 +196,7 @@ pub fn highlight_tinymark(
         text = &text[text_to_format..];
         text_pos += text_to_format;
 
-        if line_end < end {
+        if line_end <= end {
             style = Default::default();
             start_of_line = true;
         }

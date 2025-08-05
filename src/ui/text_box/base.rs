@@ -1,12 +1,31 @@
 use std::ops::Range;
 
-use crate::ui::EditorContext;
-use egui::{Response, TextBuffer, Widget};
+use super::format::MemoizedMarkdownHighlighter;
+use crate::ui::{
+    EditorContext,
+    project_editor::{SpellCheckStatus, TypingStatus},
+};
+use egui::{Response, TextBuffer, Widget, ahash::HashMap};
+use spellbook::Dictionary;
+
+#[derive(Debug, Default)]
+pub struct TextBoxContext {
+    highlighter: MemoizedMarkdownHighlighter,
+}
+
+#[derive(Debug, Default)]
+pub struct TextBoxStore(HashMap<*const String, TextBoxContext>);
 
 pub struct TextBox<'a> {
     text: &'a mut String,
 
-    ctx: &'a mut EditorContext,
+    dictionary: &'a mut Option<Dictionary>,
+
+    spellcheck_status: &'a mut SpellCheckStatus,
+
+    typing_status: &'a mut TypingStatus,
+
+    ctx: &'a mut TextBoxContext,
 }
 
 fn get_current_word(text: &str, position: usize) -> Range<usize> {
@@ -47,17 +66,17 @@ fn test_get_current_word() {
 
 impl<'a> Widget for &mut TextBox<'a> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
-        let ignore_range = if self.ctx.typing_status.is_new_word {
-            Some(&self.ctx.typing_status.current_word)
+        let ignore_range = if self.typing_status.is_new_word {
+            Some(&self.typing_status.current_word)
         } else {
             None
         };
 
         let mut layouter = |ui: &egui::Ui, tinymark: &dyn TextBuffer, wrap_width: f32| {
-            let mut layout_job = self.ctx.highlighters.entry(ui.id()).or_default().highlight(
+            let mut layout_job = self.ctx.highlighter.highlight(
                 ui.style(),
                 tinymark.as_str(),
-                &self.ctx.dictionary,
+                self.dictionary,
                 &ignore_range,
             );
             layout_job.wrap.max_width = wrap_width;
@@ -73,18 +92,18 @@ impl<'a> Widget for &mut TextBox<'a> {
 
         if let Some(cursor_range) = output.cursor_range {
             let primary_cursor_pos = cursor_range.primary.index;
-            let current_word_pos = get_current_word(&self.text, primary_cursor_pos);
+            let current_word_pos = get_current_word(self.text, primary_cursor_pos);
 
             if current_word_pos.is_empty() || current_word_pos.end == self.text.len() {
-                self.ctx.typing_status.is_new_word = true;
-                self.ctx.typing_status.current_word = current_word_pos;
-            } else if self.ctx.typing_status.is_new_word
-                && current_word_pos.contains(&self.ctx.typing_status.current_word.start)
+                self.typing_status.is_new_word = true;
+                self.typing_status.current_word = current_word_pos;
+            } else if self.typing_status.is_new_word
+                && current_word_pos.contains(&self.typing_status.current_word.start)
             {
-                self.ctx.typing_status.current_word = current_word_pos
+                self.typing_status.current_word = current_word_pos
             } else if !current_word_pos.contains(&primary_cursor_pos) {
                 // we're editing a word elsewhere
-                self.ctx.typing_status.is_new_word = false;
+                self.typing_status.is_new_word = false;
             }
         }
 
@@ -97,9 +116,7 @@ impl<'a> Widget for &mut TextBox<'a> {
         // word has been created while still highlighting, but this is visually good and
         // less complicated to implement
         if ui.input(|i| i.key_pressed(egui::Key::Space) || i.key_pressed(egui::Key::Enter)) {
-            if let Some(highlighter) = self.ctx.highlighters.get_mut(&ui.id()) {
-                highlighter.force_highlight = true;
-            }
+            self.ctx.highlighter.force_highlight = true;
         }
 
         if output.response.clicked_by(egui::PointerButton::Secondary) {
@@ -120,17 +137,17 @@ impl<'a> Widget for &mut TextBox<'a> {
 
                 let word = &self.text[clicked_pos - begin_offset..clicked_pos + end_offset];
 
-                self.ctx.spellcheck_status.selected_word = word.to_string();
+                self.spellcheck_status.selected_word = word.to_string();
 
-                if let Some(dictionary) = self.ctx.dictionary.as_ref() {
-                    if dictionary.check(&self.ctx.spellcheck_status.selected_word) {
-                        self.ctx.spellcheck_status.correct = true;
+                if let Some(dictionary) = self.dictionary.as_ref() {
+                    if dictionary.check(&self.spellcheck_status.selected_word) {
+                        self.spellcheck_status.correct = true;
                     } else {
-                        self.ctx.spellcheck_status.correct = false;
-                        self.ctx.spellcheck_status.suggestions.clear();
+                        self.spellcheck_status.correct = false;
+                        self.spellcheck_status.suggestions.clear();
                         dictionary.suggest(
-                            &self.ctx.spellcheck_status.selected_word,
-                            &mut self.ctx.spellcheck_status.suggestions,
+                            &self.spellcheck_status.selected_word,
+                            &mut self.spellcheck_status.suggestions,
                         );
                     }
                 }
@@ -138,22 +155,22 @@ impl<'a> Widget for &mut TextBox<'a> {
         }
 
         output.response.context_menu(|ui| {
-            if self.ctx.spellcheck_status.selected_word.is_empty() {
+            if self.spellcheck_status.selected_word.is_empty() {
                 ui.close();
             }
 
-            if self.ctx.spellcheck_status.correct {
+            if self.spellcheck_status.correct {
                 ui.label(format!(
                     "spelled {:?} correctly",
-                    self.ctx.spellcheck_status.selected_word
+                    self.spellcheck_status.selected_word
                 ));
             } else {
                 ui.label(format!(
                     "misspelled {:?}",
-                    self.ctx.spellcheck_status.selected_word
+                    self.spellcheck_status.selected_word
                 ));
 
-                for suggestion in self.ctx.spellcheck_status.suggestions.iter() {
+                for suggestion in self.spellcheck_status.suggestions.iter() {
                     if ui.button(suggestion).clicked() {
                         // TODO: implement replacement
                         println!("clicked {suggestion}");
@@ -168,7 +185,14 @@ impl<'a> Widget for &mut TextBox<'a> {
 
 impl<'a> TextBox<'a> {
     pub fn new(text: &'a mut String, ctx: &'a mut EditorContext) -> Self {
-        Self { text, ctx }
+        let key = text as *const String;
+        Self {
+            text,
+            dictionary: &mut ctx.dictionary,
+            spellcheck_status: &mut ctx.spellcheck_status,
+            typing_status: &mut ctx.typing_status,
+            ctx: ctx.text_box_store.0.entry(key).or_default(),
+        }
     }
 
     pub fn panels(&mut self, ctx: &egui::Context) {

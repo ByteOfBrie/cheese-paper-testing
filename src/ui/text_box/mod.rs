@@ -1,5 +1,4 @@
 mod base;
 mod format;
 
-pub use base::TextBox;
-pub use format::MemoizedMarkdownHighlighter;
+pub use base::{TextBox, TextBoxStore};

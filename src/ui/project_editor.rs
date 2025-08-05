@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::ops::Range;
 
 use crate::components::Project;
@@ -6,7 +5,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
-use crate::ui::text_box::MemoizedMarkdownHighlighter;
+use crate::ui::text_box::TextBoxStore;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
@@ -47,7 +46,7 @@ pub struct ProjectEditor {
 pub struct EditorContext {
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
-    pub highlighters: HashMap<egui::Id, MemoizedMarkdownHighlighter>,
+    pub text_box_store: TextBoxStore,
     pub typing_status: TypingStatus,
 }
 
@@ -635,7 +634,7 @@ impl ProjectEditor {
             editor_context: EditorContext {
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
-                highlighters: HashMap::new(),
+                text_box_store: TextBoxStore::default(),
                 typing_status: TypingStatus::default(),
             },
             file_event_rx,

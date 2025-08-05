@@ -4,7 +4,7 @@ use crate::ui::EditorContext;
 use crate::ui::FileObjectEditor;
 use egui::Response;
 
-use crate::ui::BaseTextEditor;
+use crate::ui::TextBox;
 use egui::ScrollArea;
 
 impl FileObjectEditor for Place {
@@ -38,7 +38,7 @@ impl Place {
                 ui.label("Notes");
                 let response = ui.add_sized(
                     ui.available_size(),
-                    &mut BaseTextEditor::new(&mut self.metadata.notes, ctx),
+                    &mut TextBox::new(&mut self.metadata.notes, ctx),
                 );
                 self.process_response(response);
             });
@@ -49,25 +49,19 @@ impl Place {
             .id_salt("main metadata")
             .show(ui, |ui| {
                 ui.label("Connection To Story");
-                let response = ui.add(&mut BaseTextEditor::new(&mut self.metadata.connection, ctx));
+                let response = ui.add(&mut TextBox::new(&mut self.metadata.connection, ctx));
                 self.process_response(response);
 
                 ui.label("Description");
-                let response = ui.add(&mut BaseTextEditor::new(
-                    &mut self.metadata.description,
-                    ctx,
-                ));
+                let response = ui.add(&mut TextBox::new(&mut self.metadata.description, ctx));
                 self.process_response(response);
 
                 ui.label("Appearance");
-                let response = ui.add(&mut BaseTextEditor::new(&mut self.metadata.appearance, ctx));
+                let response = ui.add(&mut TextBox::new(&mut self.metadata.appearance, ctx));
                 self.process_response(response);
 
                 ui.label("Other Senses");
-                let response = ui.add(&mut BaseTextEditor::new(
-                    &mut self.metadata.other_senses,
-                    ctx,
-                ));
+                let response = ui.add(&mut TextBox::new(&mut self.metadata.other_senses, ctx));
                 self.process_response(response);
             });
     }

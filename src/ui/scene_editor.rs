@@ -4,7 +4,7 @@ use crate::ui::FileObjectEditor;
 use crate::ui::project_editor::EditorContext;
 use egui::Response;
 
-use crate::ui::BaseTextEditor;
+use crate::ui::TextBox;
 use egui::ScrollArea;
 
 impl FileObjectEditor for Scene {
@@ -27,10 +27,8 @@ impl Scene {
             .id_salt("text")
             .auto_shrink(egui::Vec2b { x: false, y: false })
             .show(ui, |ui| {
-                let response = ui.add_sized(
-                    ui.available_size(),
-                    &mut BaseTextEditor::new(&mut self.text, ctx),
-                );
+                let response =
+                    ui.add_sized(ui.available_size(), &mut TextBox::new(&mut self.text, ctx));
 
                 self.process_response(response);
             });
@@ -66,7 +64,7 @@ impl Scene {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(&mut self.metadata.summary, ctx),
+                        &mut TextBox::new(&mut self.metadata.summary, ctx),
                     );
                     self.process_response(response);
                 });
@@ -76,7 +74,7 @@ impl Scene {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut BaseTextEditor::new(&mut self.metadata.notes, ctx),
+                        &mut TextBox::new(&mut self.metadata.notes, ctx),
                     );
                     self.process_response(response);
                 });

@@ -4,7 +4,7 @@ use crate::ui::EditorContext;
 use crate::ui::FileObjectEditor;
 use egui::Response;
 
-use crate::ui::BaseTextEditor;
+use crate::ui::TextBox;
 use egui::ScrollArea;
 
 impl FileObjectEditor for Folder {
@@ -30,15 +30,14 @@ impl Folder {
             egui::CollapsingHeader::new("Summary")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let response =
-                        ui.add(&mut BaseTextEditor::new(&mut self.metadata.summary, ctx));
+                    let response = ui.add(&mut TextBox::new(&mut self.metadata.summary, ctx));
                     self.process_response(response);
                 });
 
             egui::CollapsingHeader::new("Notes")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let response = ui.add(&mut BaseTextEditor::new(&mut self.metadata.notes, ctx));
+                    let response = ui.add(&mut TextBox::new(&mut self.metadata.notes, ctx));
                     self.process_response(response);
                 });
         });

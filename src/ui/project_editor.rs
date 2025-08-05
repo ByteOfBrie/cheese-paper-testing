@@ -6,7 +6,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
-use crate::ui::tiny_markdown_highlighter::MemoizedMarkdownHighlighter;
+use crate::ui::text_box::MemoizedMarkdownHighlighter;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};

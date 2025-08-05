@@ -3,7 +3,7 @@ use std::ops::Range;
 use crate::ui::EditorContext;
 use egui::{Response, TextBuffer, Widget};
 
-pub struct BaseTextEditor<'a> {
+pub struct TextBox<'a> {
     text: &'a mut String,
 
     ctx: &'a mut EditorContext,
@@ -45,7 +45,7 @@ fn test_get_current_word() {
     assert_eq!(get_current_word("asdf  qwerty", 6), 6..12);
 }
 
-impl<'a> Widget for &mut BaseTextEditor<'a> {
+impl<'a> Widget for &mut TextBox<'a> {
     fn ui(self, ui: &mut egui::Ui) -> Response {
         let ignore_range = if self.ctx.typing_status.is_new_word {
             Some(&self.ctx.typing_status.current_word)
@@ -166,7 +166,7 @@ impl<'a> Widget for &mut BaseTextEditor<'a> {
     }
 }
 
-impl<'a> BaseTextEditor<'a> {
+impl<'a> TextBox<'a> {
     pub fn new(text: &'a mut String, ctx: &'a mut EditorContext) -> Self {
         Self { text, ctx }
     }

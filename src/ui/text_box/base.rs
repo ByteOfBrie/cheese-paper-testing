@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{ops::Range, time::SystemTime};
 
 use super::format::MemoizedMarkdownHighlighter;
 use crate::ui::{
@@ -6,6 +6,7 @@ use crate::ui::{
     project_editor::{SpellCheckStatus, TypingStatus},
 };
 use egui::{Response, TextBuffer, Widget, ahash::HashMap};
+use random::Source;
 use spellbook::Dictionary;
 
 #[derive(Debug, Default)]
@@ -15,6 +16,27 @@ pub struct TextBoxContext {
 
 #[derive(Debug, Default)]
 pub struct TextBoxStore(HashMap<*const String, TextBoxContext>);
+
+impl TextBoxStore {
+    pub fn garbage_collect(&mut self) {
+        /* world's most advaned garbage collector: just randomly throw stuff out sometimes */
+
+        let mut random = random::default(
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_micros() as u64,
+        );
+
+        if random.read_u64() % 5000 == 0 {
+            for key in self.0.keys().copied().collect::<Vec<*const String>>() {
+                if random.read_u64() % 100 == 0 {
+                    self.0.remove(&key);
+                }
+            }
+        }
+    }
+}
 
 pub struct TextBox<'a> {
     text: &'a mut String,

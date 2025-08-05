@@ -368,6 +368,8 @@ impl ProjectEditor {
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
             }
         }
+
+        self.editor_context.text_box_store.garbage_collect();
     }
 
     /// `event` has to be modification, try to figure out the file and reload it if

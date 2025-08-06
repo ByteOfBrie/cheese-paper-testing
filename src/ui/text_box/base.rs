@@ -1,9 +1,10 @@
-use std::ops::Range;
-
 use super::format::MemoizedMarkdownHighlighter;
 use crate::components::Text;
 use crate::ui::EditorContext;
+use cow_utils::CowUtils;
 use egui::{Response, TextBuffer};
+use std::borrow::Cow;
+use std::ops::Range;
 
 #[derive(Debug, Default)]
 pub struct TextBox {
@@ -44,6 +45,42 @@ fn test_get_current_word() {
     assert_eq!(get_current_word("asdf jkl qwerty", 6), 5..8);
     assert_eq!(get_current_word("asdf  qwerty", 5), 5..5);
     assert_eq!(get_current_word("asdf  qwerty", 6), 6..12);
+}
+
+pub fn trim_word_for_spellcheck(word: &str) -> (Cow<str>, Range<usize>) {
+    // Keep track of how much we trimmed in each step (since that shouldn't be
+    // marked as misspelled). This could also be done by a regex, but that seems
+    // more complicated
+    // possible regex: ^(['".,\-!*_]*)(\w.*\w)?(['".,\-!*_]*)$
+    let start_trimmed_word = word.trim_start_matches(|chr: char| chr.is_ascii_punctuation());
+    let trimmed_word = start_trimmed_word.trim_end_matches(|chr: char| chr.is_ascii_punctuation());
+
+    // TODO: filter out links and stuff (and maybe numbers?)
+
+    // Rare case, allow for mid-word formatting changes (without unnecessary allocation)
+    let check_word = trimmed_word.cow_replace("*", "");
+
+    let chars_trimmed_start = word.len() - start_trimmed_word.len();
+    let chars_trimmed_end = start_trimmed_word.len() - trimmed_word.len();
+
+    let end_pos = word.len() - chars_trimmed_end;
+
+    (check_word, chars_trimmed_start..end_pos)
+}
+
+#[test]
+fn test_trim_word_for_spellcheck() {
+    assert_eq!(trim_word_for_spellcheck("word").0, "word");
+    assert_eq!(trim_word_for_spellcheck("word").1, 0..4);
+
+    assert_eq!(trim_word_for_spellcheck("word,").0, "word");
+    assert_eq!(trim_word_for_spellcheck("word,").1, 0..4);
+
+    assert_eq!(trim_word_for_spellcheck("*word*").0, "word");
+    assert_eq!(trim_word_for_spellcheck("*word*").1, 1..5);
+
+    assert_eq!(trim_word_for_spellcheck("*wo*rd").0, "word");
+    assert_eq!(trim_word_for_spellcheck("*wo*rd").1, 1..6);
 }
 
 impl Text {
@@ -103,23 +140,16 @@ impl Text {
 
         if output.response.clicked_by(egui::PointerButton::Secondary) {
             if let Some(cursor_range) = output.cursor_range {
-                let clicked_pos = cursor_range.as_sorted_char_range().start;
+                let clicked_pos = cursor_range.primary.index;
 
-                let (before, after) = self.text.split_at(clicked_pos);
-                let word_boundry_regex = regex::Regex::new(r#"[^\w'-]"#).unwrap();
-                let end_offset = match word_boundry_regex.find(after) {
-                    Some(mat) => mat.start(),
-                    None => after.len(),
-                };
-                let begin_offset =
-                    match word_boundry_regex.find(&before.chars().rev().collect::<String>()) {
-                        Some(mat) => mat.start(),
-                        None => before.len(),
-                    };
+                let word_boundaries = get_current_word(&self.text, clicked_pos);
 
-                let word = &self.text[clicked_pos - begin_offset..clicked_pos + end_offset];
+                let raw_word = &self.text[word_boundaries];
 
-                ctx.spellcheck_status.selected_word = word.to_string();
+                // Will need word_range when spellcheck corrections are implemented, but it's not needed now
+                let (check_word, _word_range) = trim_word_for_spellcheck(raw_word);
+
+                ctx.spellcheck_status.selected_word = check_word.to_string();
 
                 if let Some(dictionary) = ctx.dictionary.as_ref() {
                     if dictionary.check(&ctx.spellcheck_status.selected_word) {

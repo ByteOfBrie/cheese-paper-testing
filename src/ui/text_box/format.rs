@@ -1,8 +1,9 @@
-use cow_utils::CowUtils;
 use egui::{FontFamily, FontId, Stroke};
 use regex::Regex;
 use spellbook::Dictionary;
 use std::{collections::VecDeque, ops::Range};
+
+use super::base::trim_word_for_spellcheck;
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct Style {
@@ -52,32 +53,14 @@ fn find_misspelled_words(
         let word_regex = Regex::new(r"([^\s]+)").unwrap();
 
         for word_match in word_regex.find_iter(text) {
-            let raw_word = word_match.as_str();
-
-            // Keep track of how much we trimmed in each step (since that shouldn't be
-            // marked as misspelled). This could also be done by a regex, but that seems
-            // more complicated
-            // possible regex: ^(['".,\-!*_]*)(\w.*\w)?(['".,\-!*_]*)$
-            let start_trimmed_word =
-                raw_word.trim_start_matches(|chr: char| chr.is_ascii_punctuation());
-
-            let trimmed_word =
-                start_trimmed_word.trim_end_matches(|chr: char| chr.is_ascii_punctuation());
-
-            // TODO: filter out links and stuff (and maybe numbers?)
-
-            // Rare case, allow for mid-word formatting changes (without unnecessary allocation)
-            let check_word = trimmed_word.cow_replace("*", "");
+            let (check_word, word_range) = trim_word_for_spellcheck(word_match.as_str());
 
             // floating punctuation isn't misspelled
             if !check_word.is_empty() && !dict.check(&check_word) {
                 // We have a misspelled word now, compute boundaries
 
-                let chars_trimmed_start = raw_word.len() - start_trimmed_word.len();
-                let chars_trimmed_end = start_trimmed_word.len() - trimmed_word.len();
-
-                let start_pos = word_match.start() + chars_trimmed_start;
-                let end_pos = word_match.end() - chars_trimmed_end;
+                let start_pos = word_match.start() + word_range.start;
+                let end_pos = word_match.start() + word_range.end;
 
                 assert!(start_pos < end_pos);
 

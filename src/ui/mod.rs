@@ -1,3 +1,5 @@
+mod render_data;
+
 mod editor_base;
 mod file_object_editor;
 mod text_box;
@@ -15,3 +17,4 @@ use text_box::TextBox;
 pub use editor_base::CheesePaperApp;
 pub use file_object_editor::FileObjectEditor;
 pub use project_editor::EditorContext;
+pub use render_data::RenderData;

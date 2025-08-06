@@ -8,7 +8,7 @@ use crate::components::file_objects::utils::{
     write_with_temp_file,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
-use crate::ui::FileObjectEditor;
+use crate::ui::{FileObjectEditor, RenderData};
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result};
@@ -61,6 +61,7 @@ pub struct BaseFileObject {
     pub file: FileInfo,
     pub toml_header: DocumentMut,
     pub children: Vec<String>,
+    pub render_data: RenderData,
 }
 
 impl Default for FileObjectMetadata {
@@ -512,6 +513,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         file: file_info,
         toml_header,
         children: Vec::new(),
+        render_data: RenderData::default(),
     };
 
     // Will eventually return this and all children
@@ -702,6 +704,7 @@ impl BaseFileObject {
             },
             toml_header: DocumentMut::new(),
             children: Vec::new(),
+            render_data: RenderData::default(),
         }
     }
 

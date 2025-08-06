@@ -69,31 +69,29 @@ fn find_misspelled_words(
             let check_word = trimmed_word.cow_replace("*", "");
 
             // floating punctuation isn't misspelled
-            if !check_word.is_empty() {
-                if !dict.check(&check_word) {
-                    // We have a misspelled word now, compute boundaries
+            if !check_word.is_empty() && !dict.check(&check_word) {
+                // We have a misspelled word now, compute boundaries
 
-                    let chars_trimmed_start = raw_word.len() - start_trimmed_word.len();
-                    let chars_trimmed_end = start_trimmed_word.len() - trimmed_word.len();
+                let chars_trimmed_start = raw_word.len() - start_trimmed_word.len();
+                let chars_trimmed_end = start_trimmed_word.len() - trimmed_word.len();
 
-                    let start_pos = word_match.start() + chars_trimmed_start;
-                    let end_pos = word_match.end() - chars_trimmed_end;
+                let start_pos = word_match.start() + chars_trimmed_start;
+                let end_pos = word_match.end() - chars_trimmed_end;
 
-                    assert!(start_pos < end_pos);
+                assert!(start_pos < end_pos);
 
-                    // Check for the word that's currently being typed and
-                    // avoid adding it to the list of misspelled words. This delays
-                    // the detection a little bit, but I don't have a super nice way
-                    // of getting that to work
-                    if let Some(ignore_range) = ignore_spellcheck {
-                        if ignore_range.contains(&start_pos) {
-                            continue;
-                        }
+                // Check for the word that's currently being typed and
+                // avoid adding it to the list of misspelled words. This delays
+                // the detection a little bit, but I don't have a super nice way
+                // of getting that to work
+                if let Some(ignore_range) = ignore_spellcheck {
+                    if ignore_range.contains(&start_pos) {
+                        continue;
                     }
-
-                    misspelled_words.push_back(start_pos);
-                    misspelled_words.push_back(end_pos);
                 }
+
+                misspelled_words.push_back(start_pos);
+                misspelled_words.push_back(end_pos);
             }
         }
     }

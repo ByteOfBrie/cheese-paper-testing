@@ -21,7 +21,7 @@ impl FileObjectEditor for Scene {
 }
 
 impl Scene {
-    fn show_text_editor<'a>(&'a mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_text_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical()
             .id_salt("text")
             .auto_shrink(egui::Vec2b { x: false, y: false })
@@ -33,7 +33,7 @@ impl Scene {
             });
     }
 
-    fn show_sidebar<'a>(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_sidebar(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)

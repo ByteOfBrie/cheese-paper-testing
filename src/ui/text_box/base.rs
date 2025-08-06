@@ -30,7 +30,7 @@ fn get_current_word(text: &str, position: usize) -> Range<usize> {
     let after_whitespace_offset = &text[position..]
         .char_indices()
         .find_map(|(pos, chr)| if chr.is_whitespace() { Some(pos) } else { None })
-        .unwrap_or_else(|| after.len());
+        .unwrap_or(after.len());
 
     let after_pos = position + after_whitespace_offset;
 

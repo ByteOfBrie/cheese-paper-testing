@@ -54,14 +54,15 @@ fn find_misspelled_words(
         for word_match in word_regex.find_iter(text) {
             let raw_word = word_match.as_str();
 
-            // We need to filter out anything attached to our words
-            let punctuation: &[_] = &['.', '\'', '"', ',', '-', '!', '*', '_'];
             // Keep track of how much we trimmed in each step (since that shouldn't be
             // marked as misspelled). This could also be done by a regex, but that seems
             // more complicated
             // possible regex: ^(['".,\-!*_]*)(\w.*\w)?(['".,\-!*_]*)$
-            let start_trimmed_word = raw_word.trim_start_matches(punctuation);
-            let trimmed_word = start_trimmed_word.trim_end_matches(punctuation);
+            let start_trimmed_word =
+                raw_word.trim_start_matches(|chr: char| chr.is_ascii_punctuation());
+
+            let trimmed_word =
+                start_trimmed_word.trim_end_matches(|chr: char| chr.is_ascii_punctuation());
 
             // TODO: filter out links and stuff (and maybe numbers?)
 

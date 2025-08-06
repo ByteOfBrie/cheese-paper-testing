@@ -1,6 +1,7 @@
 use crate::components::file_objects::base::{
     BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
+use crate::components::text::Text;
 use std::ffi::OsString;
 use std::fs::create_dir;
 use std::io::Result;
@@ -8,16 +9,16 @@ use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
 pub struct FolderMetadata {
-    pub summary: String,
-    pub notes: String,
+    pub summary: Text,
+    pub notes: Text,
     pub compile_status: bool,
 }
 
 impl Default for FolderMetadata {
     fn default() -> Self {
         Self {
-            summary: String::new(),
-            notes: String::new(),
+            summary: Text::default(),
+            notes: Text::default(),
             compile_status: true,
         }
     }
@@ -90,12 +91,12 @@ impl FileObject for Folder {
         let mut modified = false;
 
         match metadata_extract_string(&self.base.toml_header, "summary")? {
-            Some(value) => self.metadata.summary = value,
+            Some(value) => self.metadata.summary = value.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "notes")? {
-            Some(notes) => self.metadata.notes = notes,
+            Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
@@ -138,8 +139,8 @@ impl FileObject for Folder {
 
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("folder");
-        self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
-        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+        self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
+        self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.base.toml_header["compile_status"] = toml_edit::value(self.metadata.compile_status);
     }
 

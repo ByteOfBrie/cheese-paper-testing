@@ -2,9 +2,8 @@ use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
 use crate::ui::EditorContext;
 use crate::ui::FileObjectEditor;
-use egui::Response;
+use egui::{Response, Ui};
 
-use crate::ui::TextBox;
 use egui::ScrollArea;
 
 impl FileObjectEditor for Character {
@@ -43,7 +42,7 @@ impl Character {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut TextBox::new(&mut self.metadata.summary, ctx),
+                        |ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx),
                     );
                     self.process_response(response);
                 });
@@ -53,7 +52,7 @@ impl Character {
                 .show(ui, |ui| {
                     let response = ui.add_sized(
                         egui::vec2(ui.available_width(), min_height),
-                        &mut TextBox::new(&mut self.metadata.notes, ctx),
+                        |ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx),
                     );
                     self.process_response(response);
                 });
@@ -64,26 +63,26 @@ impl Character {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             ui.label("Appearance");
             let response: egui::Response =
-                ui.add(&mut TextBox::new(&mut self.metadata.appearance, ctx));
+                ui.add(|ui: &'_ mut Ui| self.metadata.appearance.ui(ui, ctx));
             self.process_response(response);
 
             ui.label("Personality");
             let response: egui::Response =
-                ui.add(&mut TextBox::new(&mut self.metadata.personality, ctx));
+                ui.add(|ui: &'_ mut Ui| self.metadata.personality.ui(ui, ctx));
             self.process_response(response);
 
             ui.label("Goals");
-            let response: egui::Response = ui.add(&mut TextBox::new(&mut self.metadata.goal, ctx));
+            let response: egui::Response = ui.add(|ui: &'_ mut Ui| self.metadata.goal.ui(ui, ctx));
             self.process_response(response);
 
             ui.label("Conflicts");
             let response: egui::Response =
-                ui.add(&mut TextBox::new(&mut self.metadata.conflict, ctx));
+                ui.add(|ui: &'_ mut Ui| self.metadata.conflict.ui(ui, ctx));
             self.process_response(response);
 
             ui.label("Habits");
             let response: egui::Response =
-                ui.add(&mut TextBox::new(&mut self.metadata.habits, ctx));
+                ui.add(|ui: &'_ mut Ui| self.metadata.habits.ui(ui, ctx));
             self.process_response(response);
         });
     }

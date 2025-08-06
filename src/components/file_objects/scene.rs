@@ -29,7 +29,7 @@ impl Default for SceneMetadata {
 pub struct Scene {
     base: BaseFileObject,
     pub metadata: SceneMetadata,
-    pub text: String,
+    pub text: Text,
 }
 
 impl FileObject for Scene {
@@ -76,7 +76,7 @@ impl FileObject for Scene {
     }
 
     fn load_body(&mut self, data: String) {
-        self.text = data.trim().to_string();
+        self.text = data.trim().to_string().into();
     }
 
     fn get_base(&self) -> &BaseFileObject {
@@ -116,7 +116,7 @@ impl Scene {
         let mut scene = Self {
             base: BaseFileObject::new(dirname, Some(index)),
             metadata: SceneMetadata::default(),
-            text: String::new(),
+            text: Text::default(),
         };
 
         scene.base.file.basename = scene.calculate_filename();
@@ -130,7 +130,7 @@ impl Scene {
         let mut scene = Self {
             base,
             metadata: Default::default(),
-            text: String::new(),
+            text: Text::default(),
         };
 
         match scene.load_metadata() {

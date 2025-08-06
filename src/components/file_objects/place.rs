@@ -1,15 +1,16 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use crate::components::text::Text;
 use std::fs::create_dir;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Default)]
 pub struct PlaceMetadata {
-    pub connection: String,
-    pub description: String,
-    pub appearance: String,
-    pub other_senses: String,
-    pub notes: String,
+    pub connection: Text,
+    pub description: Text,
+    pub appearance: Text,
+    pub other_senses: Text,
+    pub notes: Text,
 }
 
 #[derive(Debug)]
@@ -64,27 +65,27 @@ impl FileObject for Place {
         let mut modified = false;
 
         match metadata_extract_string(&self.base.toml_header, "connection")? {
-            Some(connection) => self.metadata.connection = connection,
+            Some(connection) => self.metadata.connection = connection.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "description")? {
-            Some(description) => self.metadata.description = description,
+            Some(description) => self.metadata.description = description.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "appearance")? {
-            Some(appearance) => self.metadata.appearance = appearance,
+            Some(appearance) => self.metadata.appearance = appearance.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "other_senses")? {
-            Some(other_senses) => self.metadata.other_senses = other_senses,
+            Some(other_senses) => self.metadata.other_senses = other_senses.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "notes")? {
-            Some(notes) => self.metadata.notes = notes,
+            Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
@@ -122,11 +123,11 @@ impl FileObject for Place {
 
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
-        self.base.toml_header["connection"] = toml_edit::value(&self.metadata.connection);
-        self.base.toml_header["description"] = toml_edit::value(&self.metadata.description);
-        self.base.toml_header["appearance"] = toml_edit::value(&self.metadata.appearance);
-        self.base.toml_header["other_senses"] = toml_edit::value(&self.metadata.other_senses);
-        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+        self.base.toml_header["connection"] = toml_edit::value(&*self.metadata.connection);
+        self.base.toml_header["description"] = toml_edit::value(&*self.metadata.description);
+        self.base.toml_header["appearance"] = toml_edit::value(&*self.metadata.appearance);
+        self.base.toml_header["other_senses"] = toml_edit::value(&*self.metadata.other_senses);
+        self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
     }
 
     fn as_editor(&mut self) -> &mut dyn crate::ui::FileObjectEditor {

@@ -12,8 +12,6 @@ mod scene_editor;
 
 mod project_editor;
 
-use text_box::TextBox;
-
 pub use editor_base::CheesePaperApp;
 pub use file_object_editor::FileObjectEditor;
 pub use project_editor::EditorContext;

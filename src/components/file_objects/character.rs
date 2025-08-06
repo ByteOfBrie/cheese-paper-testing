@@ -1,16 +1,17 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use crate::components::text::Text;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Default)]
 pub struct CharacterMetadata {
-    pub summary: String,
-    pub notes: String,
-    pub appearance: String,
-    pub personality: String,
-    pub goal: String,
-    pub conflict: String,
-    pub habits: String,
+    pub summary: Text,
+    pub notes: Text,
+    pub appearance: Text,
+    pub personality: Text,
+    pub goal: Text,
+    pub conflict: Text,
+    pub habits: Text,
 }
 
 #[derive(Debug)]
@@ -64,37 +65,37 @@ impl FileObject for Character {
         let mut modified = false;
 
         match metadata_extract_string(&self.base.toml_header, "summary")? {
-            Some(summary) => self.metadata.summary = summary,
+            Some(summary) => self.metadata.summary = summary.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "notes")? {
-            Some(notes) => self.metadata.notes = notes,
+            Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "appearance")? {
-            Some(appearance) => self.metadata.appearance = appearance,
+            Some(appearance) => self.metadata.appearance = appearance.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "personality")? {
-            Some(personality) => self.metadata.personality = personality,
+            Some(personality) => self.metadata.personality = personality.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "goal")? {
-            Some(goal) => self.metadata.goal = goal,
+            Some(goal) => self.metadata.goal = goal.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "conflict")? {
-            Some(conflict) => self.metadata.conflict = conflict,
+            Some(conflict) => self.metadata.conflict = conflict.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "habits")? {
-            Some(habits) => self.metadata.habits = habits,
+            Some(habits) => self.metadata.habits = habits.into(),
             None => modified = true,
         }
 
@@ -132,13 +133,13 @@ impl FileObject for Character {
 
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("character");
-        self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
-        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
-        self.base.toml_header["appearance"] = toml_edit::value(&self.metadata.appearance);
-        self.base.toml_header["personality"] = toml_edit::value(&self.metadata.personality);
-        self.base.toml_header["goal"] = toml_edit::value(&self.metadata.goal);
-        self.base.toml_header["conflict"] = toml_edit::value(&self.metadata.conflict);
-        self.base.toml_header["habits"] = toml_edit::value(&self.metadata.habits);
+        self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
+        self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
+        self.base.toml_header["appearance"] = toml_edit::value(&*self.metadata.appearance);
+        self.base.toml_header["personality"] = toml_edit::value(&*self.metadata.personality);
+        self.base.toml_header["goal"] = toml_edit::value(&*self.metadata.goal);
+        self.base.toml_header["conflict"] = toml_edit::value(&*self.metadata.conflict);
+        self.base.toml_header["habits"] = toml_edit::value(&*self.metadata.habits);
     }
 
     fn as_editor(&mut self) -> &mut dyn crate::ui::FileObjectEditor {

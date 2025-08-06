@@ -5,7 +5,6 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
-use crate::ui::text_box::TextBoxStore;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
@@ -46,7 +45,6 @@ pub struct ProjectEditor {
 pub struct EditorContext {
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
-    pub text_box_store: TextBoxStore,
     pub typing_status: TypingStatus,
 }
 
@@ -368,8 +366,6 @@ impl ProjectEditor {
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
             }
         }
-
-        self.editor_context.text_box_store.garbage_collect();
     }
 
     /// `event` has to be modification, try to figure out the file and reload it if
@@ -636,7 +632,6 @@ impl ProjectEditor {
             editor_context: EditorContext {
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
-                text_box_store: TextBoxStore::default(),
                 typing_status: TypingStatus::default(),
             },
             file_event_rx,

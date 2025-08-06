@@ -2,9 +2,8 @@ use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Place;
 use crate::ui::EditorContext;
 use crate::ui::FileObjectEditor;
-use egui::Response;
+use egui::{Response, Ui};
 
-use crate::ui::TextBox;
 use egui::ScrollArea;
 
 impl FileObjectEditor for Place {
@@ -36,10 +35,9 @@ impl Place {
                 self.process_response(response);
 
                 ui.label("Notes");
-                let response = ui.add_sized(
-                    ui.available_size(),
-                    &mut TextBox::new(&mut self.metadata.notes, ctx),
-                );
+                let response = ui.add_sized(ui.available_size(), |ui: &'_ mut Ui| {
+                    self.metadata.notes.ui(ui, ctx)
+                });
                 self.process_response(response);
             });
     }
@@ -49,19 +47,19 @@ impl Place {
             .id_salt("main metadata")
             .show(ui, |ui| {
                 ui.label("Connection To Story");
-                let response = ui.add(&mut TextBox::new(&mut self.metadata.connection, ctx));
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.connection.ui(ui, ctx));
                 self.process_response(response);
 
                 ui.label("Description");
-                let response = ui.add(&mut TextBox::new(&mut self.metadata.description, ctx));
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.description.ui(ui, ctx));
                 self.process_response(response);
 
                 ui.label("Appearance");
-                let response = ui.add(&mut TextBox::new(&mut self.metadata.appearance, ctx));
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.appearance.ui(ui, ctx));
                 self.process_response(response);
 
                 ui.label("Other Senses");
-                let response = ui.add(&mut TextBox::new(&mut self.metadata.other_senses, ctx));
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.other_senses.ui(ui, ctx));
                 self.process_response(response);
             });
     }

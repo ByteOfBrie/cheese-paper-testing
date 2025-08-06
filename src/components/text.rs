@@ -1,9 +1,6 @@
-use std::ops::{Deref, DerefMut, Range};
-
-use egui::widgets::text_edit::TextBuffer;
+use std::ops::{Deref, DerefMut};
 
 use crate::ui::RenderData;
-
 
 /// An abstraction for a block of text.
 #[derive(Debug, Default)]
@@ -14,7 +11,10 @@ pub struct Text {
 
 impl From<String> for Text {
     fn from(s: String) -> Text {
-        Text { text: s, _rdata: RenderData::default() }
+        Text {
+            text: s,
+            _rdata: RenderData::default(),
+        }
     }
 }
 
@@ -27,7 +27,6 @@ impl Deref for Text {
 }
 
 impl DerefMut for Text {
-
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.text
     }

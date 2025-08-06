@@ -162,7 +162,7 @@ pub fn highlight_tinymark(
         // read up to the next special character
         let line_end = text[skip..]
             .find('\n')
-            .map_or_else(|| text.len(), |i| (skip + i + 1));
+            .map_or_else(|| text.len(), |i| skip + i + 1);
 
         let next_token_pos = if let Some(next_token) = text[skip..].find("*") {
             (skip + next_token).max(1)

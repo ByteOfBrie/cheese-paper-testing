@@ -61,7 +61,7 @@ pub struct BaseFileObject {
     pub file: FileInfo,
     pub toml_header: DocumentMut,
     pub children: Vec<String>,
-    pub render_data: RenderData,
+    pub _rdata: RenderData,
 }
 
 impl Default for FileObjectMetadata {
@@ -513,7 +513,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         file: file_info,
         toml_header,
         children: Vec::new(),
-        render_data: RenderData::default(),
+        _rdata: RenderData::default(),
     };
 
     // Will eventually return this and all children
@@ -704,7 +704,7 @@ impl BaseFileObject {
             },
             toml_header: DocumentMut::new(),
             children: Vec::new(),
-            render_data: RenderData::default(),
+            _rdata: RenderData::default(),
         }
     }
 

@@ -1,24 +1,25 @@
 use crate::components::file_objects::base::{
     BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
 };
+use crate::components::text::Text;
 use regex::Regex;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug)]
 pub struct SceneMetadata {
-    pub summary: String,
-    pub notes: String,
-    pub pov: String, // TODO: create custom object for this
+    pub summary: Text,
+    pub notes: Text,
+    pub pov: Text, // TODO: create custom object for this
     pub compile_status: bool,
 }
 
 impl Default for SceneMetadata {
     fn default() -> Self {
         Self {
-            summary: String::new(),
-            notes: String::new(),
-            pov: String::new(),
+            summary: Text::default(),
+            notes: Text::default(),
+            pov: Text::default(),
             compile_status: true,
         }
     }
@@ -36,17 +37,17 @@ impl FileObject for Scene {
         let mut modified = false;
 
         match metadata_extract_string(&self.base.toml_header, "summary")? {
-            Some(summary) => self.metadata.summary = summary,
+            Some(summary) => self.metadata.summary = summary.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "notes")? {
-            Some(notes) => self.metadata.notes = notes,
+            Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.base.toml_header, "pov")? {
-            Some(pov) => self.metadata.pov = pov,
+            Some(pov) => self.metadata.pov = pov.into(),
             None => modified = true,
         }
 
@@ -99,9 +100,9 @@ impl FileObject for Scene {
 
     fn write_metadata(&mut self) {
         self.base.toml_header["file_type"] = toml_edit::value("scene");
-        self.base.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
-        self.base.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
-        self.base.toml_header["pov"] = toml_edit::value(&self.metadata.pov);
+        self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
+        self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
+        self.base.toml_header["pov"] = toml_edit::value(&*self.metadata.pov);
         self.base.toml_header["compile_status"] = toml_edit::value(self.metadata.compile_status);
     }
 

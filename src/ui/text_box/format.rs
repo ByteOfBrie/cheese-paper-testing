@@ -1,9 +1,11 @@
 use egui::{FontFamily, FontId, Stroke};
 use regex::Regex;
 use spellbook::Dictionary;
-use std::{collections::VecDeque, ops::Range};
+use std::{collections::VecDeque, ops::Range, sync::LazyLock};
 
 use super::base::trim_word_for_spellcheck;
+
+type SavedRegex = LazyLock<Regex>;
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct Style {
@@ -50,9 +52,9 @@ fn find_misspelled_words(
     if let Some(dict) = &dictionary {
         // words in this case means everything that isn't whitespace, we'll take care of
         // trimming
-        let word_regex = Regex::new(r"([^\s]+)").unwrap();
+        static WORD_REGEX: SavedRegex = SavedRegex::new(|| Regex::new(r"([^\s]+)").unwrap());
 
-        for word_match in word_regex.find_iter(text) {
+        for word_match in WORD_REGEX.find_iter(text) {
             let (check_word, word_range) = trim_word_for_spellcheck(word_match.as_str());
 
             // floating punctuation isn't misspelled

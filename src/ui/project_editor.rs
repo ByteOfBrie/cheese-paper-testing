@@ -3,6 +3,7 @@ use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
     FileObject, FileObjectStore, from_file, move_child, run_with_file_object,
 };
+use crate::ui::project_tracker::ProjectTracker;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
@@ -38,6 +39,7 @@ pub struct ProjectEditor {
     file_event_rx: WatcherReceiver,
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
     _watcher: RecommendedDebouncer,
+    tracker: Option<ProjectTracker>,
 }
 
 #[derive(Debug)]
@@ -365,6 +367,14 @@ impl ProjectEditor {
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
             }
         }
+
+        if let Some(tracker) = &mut self.tracker
+            && tracker.snapshot_time.elapsed().as_secs() >= 60 * 15
+        {
+            if let Err(err) = tracker.snapshot("Autosave") {
+                log::warn!("Failed to track changes: {err}");
+            }
+        }
     }
 
     /// `event` has to be modification, try to figure out the file and reload it if
@@ -649,6 +659,19 @@ impl ProjectEditor {
             .watch(project.get_path(), RecursiveMode::Recursive)
             .unwrap();
 
+        let tracker = match ProjectTracker::new(&project.get_path()) {
+            Ok(mut tracker) => {
+                if let Err(err) = tracker.snapshot("Startup") {
+                    log::warn!("Failed to snapshot tracker: {err}");
+                };
+                Some(tracker)
+            }
+            Err(err) => {
+                log::warn!("failed to create project tracker: {err}");
+                None
+            }
+        };
+
         Self {
             project,
             dock_state: DockState::new(open_tabs),
@@ -660,6 +683,7 @@ impl ProjectEditor {
             },
             file_event_rx,
             _watcher: watcher,
+            tracker,
         }
     }
 

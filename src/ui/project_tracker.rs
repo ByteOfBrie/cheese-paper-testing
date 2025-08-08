@@ -1,0 +1,158 @@
+use git2::{Repository, Signature};
+use std::fmt::{Debug, Formatter};
+use std::path::Path;
+use std::time::Instant;
+
+const COMMITTER_NAME: &str = "Cheese Paper Autosave";
+const COMMITTER_EMAIL: &str = "\".\"";
+
+pub struct ProjectTracker {
+    repo: Repository,
+    pub snapshot_time: Instant,
+}
+
+impl Debug for ProjectTracker {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Repo")
+            .field("Path", &self.repo.path())
+            .field(
+                "Head",
+                &self
+                    .repo
+                    .head()
+                    .map(|head| head.name().unwrap_or_default().to_string()),
+            )
+            .finish()
+    }
+}
+
+impl ProjectTracker {
+    pub fn new(path: &Path) -> Result<Self, String> {
+        let repo = if path.join(".git").exists() {
+            match Repository::open(path) {
+                Ok(repo) => repo,
+                Err(err) => return Err(err.to_string()),
+            }
+        } else {
+            match Repository::init(path) {
+                Ok(repo) => repo,
+                Err(err) => return Err(err.to_string()),
+            }
+        };
+
+        match repo.head_detached() {
+            Ok(true) => {
+                log::warn!("Attempting to open a tracker on a detached head");
+
+                if let Err(err) = repo.set_head("main") {
+                    return Err(format!("failed to set tracker head to main: {err}"));
+                }
+            }
+            Ok(false) => {} // good state, nothing to do
+            Err(err) => return Err(format!("failed to get state of tracker repo head: {err}")),
+        }
+
+        match repo.head() {
+            Ok(head) => match head.peel_to_commit() {
+                Ok(_commit) => {}
+                Err(_err) => {
+                    // no initial commit, we need to create one
+                    let committer = Signature::now(COMMITTER_NAME, COMMITTER_EMAIL).unwrap();
+
+                    let current_index_tree_oid =
+                        match repo.index().and_then(|mut index| index.write_tree()) {
+                            Ok(oid) => oid,
+                            Err(err) => return Err(format!("failed to get tree oid: {err}")),
+                        };
+
+                    let tree = match repo.find_tree(current_index_tree_oid) {
+                        Ok(tree) => tree,
+                        Err(err) => return Err(format!("failed to get tree: {err}")),
+                    };
+
+                    if let Err(err) = repo.commit(
+                        Some("HEAD"),
+                        &committer,
+                        &committer,
+                        "initial_commit",
+                        &tree,
+                        &Vec::new(),
+                    ) {
+                        return Err(format!("failed to create initial commit: {err}"));
+                    }
+                }
+            },
+            Err(err) => return Err(format!("failed to get tracker head: {err}")),
+        }
+
+        Ok(Self {
+            repo,
+            snapshot_time: Instant::now(), // technically untrue, but we're going to snapshot anyway
+        })
+    }
+
+    pub fn snapshot(&mut self, reason: &str) -> Result<bool, String> {
+        let committer = Signature::now(COMMITTER_NAME, COMMITTER_EMAIL).unwrap();
+
+        let mut index = self.repo.index().expect("cannot get the Index file");
+
+        if let Err(err) = index.add_all(["."], git2::IndexAddOption::DEFAULT, None) {
+            return Err(format!("failed to add paths: {err}"));
+        }
+
+        // write the index/staging area
+        match index.write() {
+            Ok(()) => {}
+            Err(err) => {
+                return Err(format!("failed to write index: {err}"));
+            }
+        }
+
+        let head_tree = self.repo.head().unwrap().peel_to_tree().unwrap();
+
+        match self
+            .repo
+            .diff_tree_to_index(Some(&head_tree), Some(&index), None)
+        {
+            Ok(diff) => {
+                if diff.deltas().len() == 0 {
+                    log::debug!("Not writing to tracker because no changes are staged");
+                    return Ok(false);
+                }
+            }
+            Err(err) => {
+                return Err(format!("failed to get diff: {err}"));
+            }
+        }
+
+        // write the tree that will be used in the commit
+        let tree_oid = match index.write_tree() {
+            Ok(tree) => tree,
+            Err(err) => return Err(format!("failed to write tree: {err}")),
+        };
+
+        let tree = self.repo.find_tree(tree_oid).unwrap();
+
+        let parent_commit = self
+            .repo
+            .head()
+            .expect("head should always exist")
+            .peel_to_commit()
+            .expect("head should always have commits");
+
+        if let Err(err) = self.repo.commit(
+            Some("HEAD"),
+            &committer,
+            &committer,
+            reason,
+            &tree,
+            &[&parent_commit],
+        ) {
+            return Err(format!("failed to create snapshot: {err}"));
+        }
+
+        self.snapshot_time = Instant::now();
+
+        Ok(true)
+    }
+}

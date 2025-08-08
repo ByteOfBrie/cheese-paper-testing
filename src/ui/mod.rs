@@ -11,6 +11,7 @@ mod place_editor;
 mod scene_editor;
 
 mod project_editor;
+mod project_tracker;
 
 pub use editor_base::CheesePaperApp;
 pub use file_object_editor::FileObjectEditor;

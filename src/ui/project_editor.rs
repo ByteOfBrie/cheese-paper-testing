@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::components::Project;
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{
@@ -11,6 +9,7 @@ use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use spellbook::Dictionary;
+use std::ops::Range;
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 type WatcherReceiver = std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>;
@@ -383,7 +382,19 @@ impl ProjectEditor {
             }
         };
 
-        if *modify_path == self.project.get_path() {
+        if modify_path.ends_with(".tmp") {
+            // we write .tmp files and then immediately remove them, ignore this file
+            return;
+        }
+
+        if !modify_path.exists() {
+            log::debug!(
+                "Attempted to process modification of a file that no longer exists: {modify_path:?}"
+            );
+            return;
+        }
+
+        if *modify_path == self.project.get_project_info_file() {
             match self.project.reload_file() {
                 Ok(_) => {}
                 Err(err) => {
@@ -399,11 +410,17 @@ impl ProjectEditor {
                 }
             };
 
-            if !(modify_path.starts_with("text")
+            if !(relative_path.starts_with("text")
                 || relative_path.starts_with("characters")
                 || relative_path.starts_with("worldbuilding"))
             {
-                log::debug!("invalid modify/create path not in project folders: {modify_path:?}");
+                if !relative_path.starts_with(".git") {
+                    // We expect a bunch of git events, but other events are unexpected
+                    log::debug!(
+                        "invalid modify/create path not in project folders: {modify_path:?}"
+                    );
+                }
+                return;
             }
 
             match self.project.find_object_by_path(modify_path) {
@@ -424,10 +441,17 @@ impl ProjectEditor {
                         // We need to check if this object can be loaded, which means
                         // that its parent is already in the tree
 
-                        let parent_path = ancestor.parent().expect(
-                            "parents should exist and the loop should always \
-                            finish before it escapes the project tree",
-                        );
+                        let parent_path = match ancestor.parent() {
+                            Some(parent) => parent,
+                            None => {
+                                log::error!(
+                                    "unexpected result while processing event: {event:?}\
+                                    parents should exist and the loop should always \
+                                    finish before it escapes the project tree",
+                                );
+                                return;
+                            }
+                        };
 
                         let parent_id = match self.project.find_object_by_path(parent_path) {
                             Some(id) => id,

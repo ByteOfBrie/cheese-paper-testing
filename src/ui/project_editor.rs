@@ -22,7 +22,7 @@ pub struct SpellCheckStatus {
     pub suggestions: Vec<String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TypingStatus {
     pub is_new_word: bool,
     pub current_word: Range<usize>,

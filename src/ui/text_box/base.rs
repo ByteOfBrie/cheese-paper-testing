@@ -2,7 +2,6 @@
 use super::spellcheck::*;
 use crate::components::Text;
 use crate::ui::EditorContext;
-use crate::ui::project_editor::TypingStatus;
 use crate::ui::text_box::format;
 use egui::text::LayoutJob;
 use egui::{Response, TextBuffer};
@@ -14,23 +13,27 @@ pub struct TextBox {
     // Memoized Layout Job
     layout_job: LayoutJob,
 
+    // manually force the layout to be redone
+    redo_layout: bool,
+
     // formatting information that the highlight job was for
     // used to know when highlight needs to be redone
     text: String,
     style: egui::Style,
-    typing_status: TypingStatus,
 }
 
 impl TextBox {
     fn get_layout(&mut self, ui: &egui::Ui, text: &str, ctx: &mut EditorContext) -> LayoutJob {
-        if (text, ui.style().as_ref(), &ctx.typing_status)
-            != (&self.text, &self.style, &self.typing_status)
-        {
+        if (text, ui.style().as_ref()) != (&self.text, &self.style) {
             self.text = String::from(text);
             self.style = ui.style().as_ref().clone();
-            self.typing_status = ctx.typing_status.clone();
 
-            self.layout_job = format::compute_layout_job(text, ctx, &self.style)
+            self.redo_layout = true;
+        }
+
+        if self.redo_layout {
+            self.layout_job = format::compute_layout_job(text, ctx, &self.style);
+            self.redo_layout = false;
         }
 
         self.layout_job.clone()
@@ -69,6 +72,18 @@ impl Text {
                 // we're editing a word elsewhere
                 ctx.typing_status.is_new_word = false;
             }
+        }
+
+        // if we've just created a new word (pressed enter or space), force highlighting
+        // to happen a second time. We're one frame behind on inputs which wouldn't
+        // normally matter except we save highlight input. This means that the word
+        // will be spellchecked again, this time not being ignored.
+        //
+        // We could *possibly* do a little bit better about this by detecting when a new
+        // word has been created while still highlighting, but this is visually good and
+        // less complicated to implement
+        if ui.input(|i| i.key_pressed(egui::Key::Space) || i.key_pressed(egui::Key::Enter)) {
+            text_box.redo_layout = true;
         }
 
         if output.response.clicked_by(egui::PointerButton::Secondary) {

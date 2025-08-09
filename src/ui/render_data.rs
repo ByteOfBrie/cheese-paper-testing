@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, cell::RefCell, rc::Rc};
 
 struct NoData();
 
@@ -21,15 +21,19 @@ impl std::fmt::Debug for RenderData {
 }
 
 impl RenderData {
-    pub fn obtain<T: Default + 'static>(&mut self) -> &mut T {
-        if !self.0.is::<T>() {
+    pub fn obtain<T: Default + 'static>(&mut self) -> Rc<RefCell<T>> {
+
+        if !self.0.is::<Rc<RefCell<T>>>() {
             assert!(
                 self.0.is::<NoData>(),
                 "RenderData must always be accessed with the same type"
             );
-            self.0 = Box::new(T::default());
+            let data : Rc<RefCell<T>> = Rc::new(RefCell::new(T::default()));
+            self.0 = Box::new(data);
         }
 
-        self.0.downcast_mut::<T>().unwrap()
+        let rc: &mut Rc<RefCell<T>> = self.0.downcast_mut::<Rc<RefCell<T>>>().unwrap();
+
+        rc.clone()
     }
 }

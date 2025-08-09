@@ -45,7 +45,8 @@ impl TextBox {
 
 impl Text {
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
-        let text_box = self._rdata.obtain::<TextBox>();
+        let rdata = self._rdata.obtain::<TextBox>();
+        let text_box: &mut TextBox = &mut rdata.borrow_mut();
 
         let mut layouter = |ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32| {
             let mut layout_job = text_box.get_layout(ui, text.as_str(), ctx);

@@ -1,12 +1,12 @@
+use super::FileObjectEditor;
+use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
-use crate::components::file_objects::Scene;
-use crate::ui::FileObjectEditor;
-use crate::ui::project_editor::EditorContext;
+use crate::ui::EditorContext;
 use egui::{Response, Ui};
 
 use egui::ScrollArea;
 
-impl FileObjectEditor for Scene {
+impl FileObjectEditor for Character {
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
         egui::SidePanel::right("metadata sidebar")
             .resizable(true)
@@ -15,43 +15,22 @@ impl FileObjectEditor for Scene {
             .show_inside(ui, |ui| self.show_sidebar(ui, ctx));
 
         egui::CentralPanel::default()
-            .show_inside(ui, |ui| self.show_text_editor(ui, ctx))
+            .show_inside(ui, |ui| self.show_editor(ui, ctx))
             .response
     }
 }
 
-impl Scene {
-    fn show_text_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
-        ScrollArea::vertical()
-            .id_salt("text")
-            .auto_shrink(egui::Vec2b { x: false, y: false })
-            .show(ui, |ui| {
-                let response =
-                    ui.add_sized(ui.available_size(), |ui: &'_ mut Ui| self.text.ui(ui, ctx));
-
-                self.process_response(response);
-            });
-    }
-
+impl Character {
     fn show_sidebar(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
                     .char_limit(50)
                     .id_salt("name")
-                    .hint_text("Scene Name")
+                    .hint_text("Character Name")
                     .desired_width(f32::INFINITY),
             );
             self.process_response(response);
-
-            egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
-                let words = self.word_count();
-                let text = format!("{words} Words");
-                ui.vertical_centered(|ui| {
-                    let response = ui.label(text);
-                    self.process_response(response);
-                });
-            });
 
             // Make each text box take up a bit of the screen by default
             // this could be smarter, but available/2.5 is visually better than /3, and /2
@@ -77,6 +56,34 @@ impl Scene {
                     );
                     self.process_response(response);
                 });
+        });
+    }
+
+    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+        ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
+            ui.label("Appearance");
+            let response: egui::Response =
+                ui.add(|ui: &'_ mut Ui| self.metadata.appearance.ui(ui, ctx));
+            self.process_response(response);
+
+            ui.label("Personality");
+            let response: egui::Response =
+                ui.add(|ui: &'_ mut Ui| self.metadata.personality.ui(ui, ctx));
+            self.process_response(response);
+
+            ui.label("Goals");
+            let response: egui::Response = ui.add(|ui: &'_ mut Ui| self.metadata.goal.ui(ui, ctx));
+            self.process_response(response);
+
+            ui.label("Conflicts");
+            let response: egui::Response =
+                ui.add(|ui: &'_ mut Ui| self.metadata.conflict.ui(ui, ctx));
+            self.process_response(response);
+
+            ui.label("Habits");
+            let response: egui::Response =
+                ui.add(|ui: &'_ mut Ui| self.metadata.habits.ui(ui, ctx));
+            self.process_response(response);
         });
     }
 }

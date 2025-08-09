@@ -1,3 +1,8 @@
+mod character_editor;
+mod folder_editor;
+mod place_editor;
+mod scene_editor;
+
 use crate::{components::file_objects::FileObject, ui::project_editor::EditorContext};
 
 pub trait FileObjectEditor: FileObject {

@@ -1,3 +1,5 @@
+pub mod file_object_editor;
+
 use crate::components::Project;
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
 use crate::components::file_objects::{

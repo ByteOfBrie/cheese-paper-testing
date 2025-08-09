@@ -1,7 +1,7 @@
+use super::FileObjectEditor;
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Place;
 use crate::ui::EditorContext;
-use crate::ui::FileObjectEditor;
 use egui::{Response, Ui};
 
 use egui::ScrollArea;

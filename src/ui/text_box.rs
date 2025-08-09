@@ -1,10 +1,13 @@
-// use super::format::MemoizedMarkdownHighlighter;
-use super::spellcheck::*;
+mod format;
+mod spellcheck;
+
 use crate::components::Text;
 use crate::ui::EditorContext;
-use crate::ui::text_box::format;
 use egui::text::LayoutJob;
 use egui::{Response, TextBuffer};
+use spellcheck::*;
+
+type SavedRegex = std::sync::LazyLock<regex::Regex>;
 
 #[derive(Debug, Default)]
 pub struct TextBox {

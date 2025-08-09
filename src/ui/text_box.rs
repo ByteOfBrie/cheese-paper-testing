@@ -21,22 +21,29 @@ pub struct TextBox {
 
     // formatting information that the highlight job was for
     // used to know when highlight needs to be redone
-    text: String,
+    text_signature: (usize, usize),
     style: egui::Style,
 }
 
 impl TextBox {
-    fn get_layout(&mut self, ui: &egui::Ui, text: &str, ctx: &mut EditorContext) -> LayoutJob {
-        if (text, ui.style().as_ref()) != (&self.text, &self.style) {
-            self.text = String::from(text);
+    fn get_layout(
+        &mut self,
+        ui: &egui::Ui,
+        text: &dyn TextBuffer,
+        ctx: &mut EditorContext,
+    ) -> LayoutJob {
+        let signature = Text::buffer_signature(text);
+
+        if (signature, ui.style().as_ref()) != (self.text_signature, &self.style) {
+            self.text_signature = signature;
             self.style = ui.style().as_ref().clone();
 
             self.redo_layout = true;
         }
 
         if self.redo_layout {
-            self.layout_job = format::compute_layout_job(text, ctx, &self.style);
             self.redo_layout = false;
+            self.layout_job = format::compute_layout_job(text.as_str(), ctx, &self.style)
         }
 
         self.layout_job.clone()
@@ -49,12 +56,12 @@ impl Text {
         let text_box: &mut TextBox = &mut rdata.borrow_mut();
 
         let mut layouter = |ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32| {
-            let mut layout_job = text_box.get_layout(ui, text.as_str(), ctx);
+            let mut layout_job = text_box.get_layout(ui, text, ctx);
             layout_job.wrap.max_width = wrap_width;
             ui.fonts(|f| f.layout_job(layout_job))
         };
 
-        let output = egui::TextEdit::multiline(&mut self.text)
+        let output = egui::TextEdit::multiline(self)
             .desired_width(f32::INFINITY)
             .layouter(&mut layouter)
             .min_size(egui::Vec2 { x: 50.0, y: 100.0 })

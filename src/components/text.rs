@@ -12,6 +12,8 @@ fn get_uid() -> usize {
     GLOBAL_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
+pub type TextUID = usize;
+
 /// An abstraction for a block of text.
 #[derive(Debug)]
 pub struct Text {
@@ -22,7 +24,7 @@ pub struct Text {
 
     // version number and uid for knowing when the text is updated
     version: usize,
-    struct_uid: usize,
+    struct_uid: TextUID,
 }
 
 impl Text {
@@ -39,6 +41,10 @@ impl Text {
         assert!(buffer.type_id() == std::any::TypeId::of::<Text>());
         let text = unsafe { &*(buffer as *const dyn TextBuffer as *const Text) };
         (text.version, text.struct_uid)
+    }
+
+    pub fn id(&self) -> TextUID {
+        self.struct_uid
     }
 }
 

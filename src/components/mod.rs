@@ -4,4 +4,4 @@ mod test;
 mod text;
 
 pub use project::Project;
-pub use text::Text;
+pub use text::{Text, TextUID};

@@ -1,9 +1,11 @@
 pub mod file_object_editor;
 mod file_tree;
+mod search;
 
 use crate::components::Project;
 use crate::components::file_objects::base::FileObjectCreation;
 use crate::components::file_objects::{FileObject, from_file, run_with_file_object};
+use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
@@ -47,6 +49,7 @@ pub struct EditorContext {
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
     pub typing_status: TypingStatus,
+    pub global_search: global_search::GlobalSearch,
 }
 
 pub enum TabMove {
@@ -138,11 +141,7 @@ impl ProjectEditor {
         self.process_state(ctx);
 
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
-            egui::ScrollArea::both()
-                .id_salt("tree scroll")
-                .show(ui, |ui| {
-                    file_tree::ui(self, ui);
-                });
+            self.side_panel(ui);
         });
 
         // Before rendering the tab view, clear out any deleted scenes
@@ -192,6 +191,31 @@ impl ProjectEditor {
         }
     }
 
+    // the side panel containing the tree view or the global search
+    fn side_panel(&mut self, ui: &mut egui::Ui) {
+        // a very ugly UI, I just need it to work so I can implement the rest
+        // Brie is more familiar than me with egui, she'll be able to make a pretty UI I'm sure
+
+        let scroll_area_height = ui.available_height() - 50.0;
+
+        if self.editor_context.global_search.active {
+            global_search::ui(ui, &mut self.editor_context);
+        } else {
+            egui::ScrollArea::both()
+                .id_salt("tree scroll")
+                .max_height(scroll_area_height)
+                .show(ui, |ui| {
+                    file_tree::ui(self, ui);
+                });
+        }
+
+        let toggle_search = ui.add(egui::Button::new("toggle search")).clicked();
+
+        if toggle_search {
+            self.editor_context.global_search.toggle();
+        }
+    }
+
     fn process_state(&mut self, ctx: &egui::Context) {
         if self.title_needs_update {
             // Set the window title properly
@@ -234,6 +258,11 @@ impl ProjectEditor {
             if let Err(err) = tracker.snapshot("Autosave") {
                 log::warn!("Failed to track changes: {err}");
             }
+        }
+
+        if self.editor_context.global_search.redo_search {
+            self.editor_context.global_search.redo_search = false;
+            global_search::search(&self.project, &mut self.editor_context);
         }
     }
 
@@ -413,6 +442,7 @@ impl ProjectEditor {
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),
+                global_search: global_search::GlobalSearch::default(),
             },
             file_event_rx,
             _watcher: watcher,

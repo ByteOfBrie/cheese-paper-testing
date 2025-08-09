@@ -22,13 +22,12 @@ impl std::fmt::Debug for RenderData {
 
 impl RenderData {
     pub fn obtain<T: Default + 'static>(&mut self) -> Rc<RefCell<T>> {
-
         if !self.0.is::<Rc<RefCell<T>>>() {
             assert!(
                 self.0.is::<NoData>(),
                 "RenderData must always be accessed with the same type"
             );
-            let data : Rc<RefCell<T>> = Rc::new(RefCell::new(T::default()));
+            let data: Rc<RefCell<T>> = Rc::new(RefCell::new(T::default()));
             self.0 = Box::new(data);
         }
 

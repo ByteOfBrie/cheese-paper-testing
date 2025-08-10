@@ -72,12 +72,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         if let Some(object) = self.project.objects.get(tab) {
-            if object.get_base().metadata.name.is_empty() {
-                object.empty_string_name().to_string()
-            } else {
-                object.get_base().metadata.name.clone()
-            }
-            .into()
+            object.get_title().into()
         } else {
             "<Deleted>".into()
         }
@@ -199,7 +194,7 @@ impl ProjectEditor {
         let scroll_area_height = ui.available_height() - 50.0;
 
         if self.editor_context.global_search.active {
-            global_search::ui(ui, &mut self.editor_context);
+            global_search::ui(ui, &self.project, &mut self.editor_context);
         } else {
             egui::ScrollArea::both()
                 .id_salt("tree scroll")

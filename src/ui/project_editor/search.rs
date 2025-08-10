@@ -5,4 +5,3 @@ use egui::Ui;
 
 use super::EditorContext;
 use crate::components::TextUID;
-

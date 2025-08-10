@@ -23,12 +23,14 @@ impl FileObjectEditor for Scene {
     fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
         f(&self.metadata.summary, "Summary");
         f(&self.metadata.notes, "Notes");
+        f(&self.text, "text");
         // f(&self.metadata.pov, "POV");
     }
 
     fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str)) {
         f(&mut self.metadata.summary, "Summary");
         f(&mut self.metadata.notes, "Notes");
+        f(&mut self.text, "text");
         // f(&mut self.metadata.pov, "POV");
     }
 }

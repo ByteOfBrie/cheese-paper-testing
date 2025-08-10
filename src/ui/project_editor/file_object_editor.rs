@@ -8,7 +8,6 @@ use crate::components::Text;
 use crate::{components::file_objects::FileObject, ui::project_editor::EditorContext};
 
 pub trait FileObjectEditor: FileObject {
-
     fn ui<'a>(&'a mut self, ui: &'a mut egui::Ui, ctx: &'a mut EditorContext) -> egui::Response;
 
     // we cannot use `impl FnMut`` here because we need FileObjectEditor to be dyn-compatible

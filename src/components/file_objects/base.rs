@@ -738,7 +738,7 @@ pub trait FileObject: Debug {
     /// Writes the current type-specific metadata to the BaseFileObjects toml_header
     fn write_metadata(&mut self);
 
-    fn as_editor(&self) -> & dyn FileObjectEditor;
+    fn as_editor(&self) -> &dyn FileObjectEditor;
 
     fn as_editor_mut(&mut self) -> &mut dyn FileObjectEditor;
 
@@ -1172,6 +1172,16 @@ pub trait FileObject: Debug {
                     );
                 }
             }
+        }
+    }
+}
+
+impl dyn FileObject {
+    pub fn get_title(&self) -> String {
+        if self.get_base().metadata.name.is_empty() {
+            self.empty_string_name().to_string()
+        } else {
+            self.get_base().metadata.name.clone()
         }
     }
 }

@@ -1,4 +1,5 @@
 use super::FileObjectEditor;
+use crate::components::Text;
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Scene;
 use crate::ui::project_editor::EditorContext;
@@ -17,6 +18,18 @@ impl FileObjectEditor for Scene {
         egui::CentralPanel::default()
             .show_inside(ui, |ui| self.show_text_editor(ui, ctx))
             .response
+    }
+
+    fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
+        f(&self.metadata.summary, "Summary");
+        f(&self.metadata.notes, "Notes");
+        // f(&self.metadata.pov, "POV");
+    }
+
+    fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str)) {
+        f(&mut self.metadata.summary, "Summary");
+        f(&mut self.metadata.notes, "Notes");
+        // f(&mut self.metadata.pov, "POV");
     }
 }
 

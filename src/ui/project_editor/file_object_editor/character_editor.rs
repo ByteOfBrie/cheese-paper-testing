@@ -1,4 +1,5 @@
 use super::FileObjectEditor;
+use crate::components::Text;
 use crate::components::file_objects::Character;
 use crate::components::file_objects::FileObject;
 use crate::ui::EditorContext;
@@ -17,6 +18,26 @@ impl FileObjectEditor for Character {
         egui::CentralPanel::default()
             .show_inside(ui, |ui| self.show_editor(ui, ctx))
             .response
+    }
+
+    fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
+        f(&self.metadata.summary, "summary");
+        f(&self.metadata.notes, "notes");
+        f(&self.metadata.appearance, "appearance");
+        f(&self.metadata.personality, "personality");
+        f(&self.metadata.goal, "goal");
+        f(&self.metadata.conflict, "conflict");
+        f(&self.metadata.habits, "habits");
+    }
+
+    fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str)) {
+        f(&mut self.metadata.summary, "summary");
+        f(&mut self.metadata.notes, "notes");
+        f(&mut self.metadata.appearance, "appearance");
+        f(&mut self.metadata.personality, "personality");
+        f(&mut self.metadata.goal, "goal");
+        f(&mut self.metadata.conflict, "conflict");
+        f(&mut self.metadata.habits, "habits");
     }
 }
 

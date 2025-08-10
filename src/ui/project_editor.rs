@@ -116,7 +116,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         }
 
         if let Some(file_object) = self.project.objects.get_mut(tab) {
-            file_object.as_editor().ui(ui, self.editor_context);
+            file_object.as_editor_mut().ui(ui, self.editor_context);
         }
     }
 

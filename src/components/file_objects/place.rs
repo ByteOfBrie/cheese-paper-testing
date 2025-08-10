@@ -130,7 +130,11 @@ impl FileObject for Place {
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
     }
 
-    fn as_editor(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
+    fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {
+        self
+    }
+
+    fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
     }
 }

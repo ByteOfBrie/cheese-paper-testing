@@ -142,7 +142,11 @@ impl FileObject for Character {
         self.base.toml_header["habits"] = toml_edit::value(&*self.metadata.habits);
     }
 
-    fn as_editor(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
+    fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {
+        self
+    }
+
+    fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
     }
 }

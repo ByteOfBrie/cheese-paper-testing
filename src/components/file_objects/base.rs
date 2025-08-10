@@ -738,7 +738,9 @@ pub trait FileObject: Debug {
     /// Writes the current type-specific metadata to the BaseFileObjects toml_header
     fn write_metadata(&mut self);
 
-    fn as_editor(&mut self) -> &mut dyn FileObjectEditor;
+    fn as_editor(&self) -> & dyn FileObjectEditor;
+
+    fn as_editor_mut(&mut self) -> &mut dyn FileObjectEditor;
 
     /// Sets the index to this file, doing the move if necessary
     fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<bool> {

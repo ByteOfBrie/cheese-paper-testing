@@ -22,9 +22,11 @@ pub struct Text {
 
     pub _rdata: RenderData,
 
-    // version number and uid for knowing when the text is updated
-    version: usize,
-    struct_uid: TextUID,
+    // version number for knowing if the text has been updated
+    pub version: usize,
+
+    // unique id for this text struct
+    pub struct_uid: TextUID,
 }
 
 impl Text {
@@ -37,10 +39,9 @@ impl Text {
         }
     }
 
-    pub fn buffer_signature(buffer: &dyn TextBuffer) -> (usize, usize) {
+    pub fn downcast(buffer: &dyn TextBuffer) -> &Self {
         assert!(buffer.type_id() == std::any::TypeId::of::<Text>());
-        let text = unsafe { &*(buffer as *const dyn TextBuffer as *const Text) };
-        (text.version, text.struct_uid)
+        unsafe { &*(buffer as *const dyn TextBuffer as *const Text) }
     }
 
     pub fn id(&self) -> TextUID {

@@ -1,8 +1,11 @@
-use egui::text::LayoutJob;
+use egui::{Color32, TextFormat, text::LayoutJob};
 use regex::Regex;
 
 use super::SavedRegex;
-use crate::ui::{EditorContext, text_box::spellcheck::find_misspelled_words};
+use crate::ui::{
+    EditorContext, project_editor::search::textbox_search::TextBoxSearchResult,
+    text_box::spellcheck::find_misspelled_words,
+};
 
 use egui::{FontFamily, FontId, Stroke};
 
@@ -12,6 +15,7 @@ enum StyleOption {
     Italic,
     Misspelled,
     NewLine,
+    SearchHighlight,
     None,
 }
 
@@ -27,6 +31,7 @@ struct Style {
     strong: bool,
     italic: bool,
     misspelled: bool,
+    search_highlight: bool,
     newline: bool,
 }
 
@@ -37,38 +42,39 @@ impl Style {
             StyleOption::Italic => self.italic = marker.on,
             StyleOption::Misspelled => self.misspelled = marker.on,
             StyleOption::NewLine => self.newline = marker.on,
+            StyleOption::SearchHighlight => self.search_highlight = marker.on,
             _ => (),
         }
     }
 }
 
 fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text::TextFormat {
-    let color = if text_style.strong {
-        egui_style.visuals.strong_text_color()
-    } else {
-        egui_style.visuals.text_color()
+    let mut format = TextFormat::default();
+
+    format.font_id = FontId {
+        // TODO: update this based on actual font size (or figure out why it doesn't update)
+        size: 24.0,
+        family: FontFamily::Proportional,
     };
 
-    let underline = if text_style.misspelled {
-        Stroke {
+    if text_style.strong {
+        format.color = egui_style.visuals.strong_text_color()
+    } else {
+        format.color = egui_style.visuals.text_color()
+    };
+
+    if text_style.misspelled {
+        format.underline = Stroke {
             width: 2.0,
             color: egui_style.visuals.error_fg_color,
         }
-    } else {
-        Stroke::NONE
-    };
-
-    egui::text::TextFormat {
-        color,
-        underline,
-        italics: text_style.italic,
-        font_id: FontId {
-            // TODO: update this based on actual font size (or figure out why it doesn't update)
-            size: 24.0,
-            family: FontFamily::Proportional,
-        },
-        ..Default::default()
     }
+
+    if text_style.search_highlight {
+        format.background = Color32::YELLOW;
+    }
+
+    format
 }
 
 // format rules
@@ -168,14 +174,45 @@ fn format_rule_spellcheck(text: &str, ctx: &EditorContext) -> Vec<StyleMarker> {
         .collect()
 }
 
+fn format_rule_search(_text: &str, search_result: &TextBoxSearchResult) -> Vec<StyleMarker> {
+    let mut res = Vec::new();
+
+    for word_find in &search_result.finds {
+        res.push(StyleMarker {
+            idx: word_find.start,
+            style: StyleOption::SearchHighlight,
+            on: true,
+        });
+        res.push(StyleMarker {
+            idx: word_find.end,
+            style: StyleOption::SearchHighlight,
+            on: false,
+        });
+    }
+
+    res
+}
+
 // end format rules
 
-pub fn compute_layout_job(text: &str, ctx: &EditorContext, egui_style: &egui::Style) -> LayoutJob {
-    let (bold, italic) = format_rule_bold_italic(text, ctx);
-    let newlines = format_rule_newlines(text, ctx);
-    let spellcheck = format_rule_spellcheck(text, ctx);
+pub fn compute_layout_job(
+    text: &str,
+    ctx: &EditorContext,
+    search_result: Option<&TextBoxSearchResult>,
+    egui_style: &egui::Style,
+) -> LayoutJob {
+    let mut applied_rules = Vec::with_capacity(5);
 
-    let mut styles = vec_merge([bold, italic, newlines, spellcheck]);
+    let (bold, italic) = format_rule_bold_italic(text, ctx);
+    applied_rules.push(bold);
+    applied_rules.push(italic);
+    applied_rules.push(format_rule_newlines(text, ctx));
+    applied_rules.push(format_rule_spellcheck(text, ctx));
+    if let Some(search_result) = search_result {
+        applied_rules.push(format_rule_search(text, search_result));
+    }
+
+    let mut styles = vec_merge(applied_rules);
     styles.push(StyleMarker {
         idx: text.len(),
         style: StyleOption::None,
@@ -212,7 +249,7 @@ pub fn compute_layout_job(text: &str, ctx: &EditorContext, egui_style: &egui::St
     job
 }
 
-fn vec_merge(formats: [Vec<StyleMarker>; 4]) -> Vec<StyleMarker> {
+fn vec_merge(formats: Vec<Vec<StyleMarker>>) -> Vec<StyleMarker> {
     let mut res = Vec::new();
     let mut iters: Vec<_> = formats
         .into_iter()

@@ -9,12 +9,15 @@ pub struct TextBoxSearchResult {
 
     // sorted list of search matches in the text
     pub finds: Vec<WordFind>,
+
+    // version of the text that this was computed for
+    pub text_version: usize,
 }
 
 #[derive(Debug)]
 pub struct WordFind {
-    start: usize,
-    end: usize,
+    pub start: usize,
+    pub end: usize,
     preview: WordFindPreview,
 }
 
@@ -53,5 +56,6 @@ pub fn search(
         file_object_id: file_object_id.to_string(),
         box_name: box_name.to_string(),
         finds,
+        text_version: text.version,
     }
 }

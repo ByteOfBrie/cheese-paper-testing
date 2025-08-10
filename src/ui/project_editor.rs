@@ -1,6 +1,6 @@
 pub mod file_object_editor;
 mod file_tree;
-mod search;
+pub mod search;
 
 use crate::components::Project;
 use crate::components::file_objects::base::FileObjectCreation;

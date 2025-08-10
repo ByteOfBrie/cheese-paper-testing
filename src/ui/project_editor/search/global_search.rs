@@ -10,13 +10,15 @@ use std::collections::HashMap;
 pub struct GlobalSearch {
     pub active: bool,
 
-    find_text: String,
+    pub find_text: String,
 
     replace_text: String,
 
     pub redo_search: bool,
 
-    search_results: Option<HashMap<TextUID, TextBoxSearchResult>>,
+    pub search_results: Option<HashMap<TextUID, TextBoxSearchResult>>,
+
+    pub version: usize,
 }
 
 impl GlobalSearch {
@@ -43,6 +45,7 @@ pub fn search(project: &Project, ctx: &mut EditorContext) {
     }
 
     ctx.global_search.search_results = Some(search_results);
+    ctx.global_search.version += 1;
 }
 
 pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {

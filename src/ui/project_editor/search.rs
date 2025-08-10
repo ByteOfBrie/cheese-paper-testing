@@ -1,5 +1,5 @@
 pub mod global_search;
-mod textbox_search;
+pub mod textbox_search;
 
 use egui::Ui;
 

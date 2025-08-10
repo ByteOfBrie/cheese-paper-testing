@@ -3,6 +3,7 @@ mod spellcheck;
 
 use crate::components::Text;
 use crate::ui::EditorContext;
+use crate::ui::project_editor::search::textbox_search;
 use egui::text::LayoutJob;
 use egui::{Response, TextBuffer};
 use spellcheck::*;
@@ -22,6 +23,7 @@ pub struct TextBox {
     // formatting information that the highlight job was for
     // used to know when highlight needs to be redone
     text_signature: (usize, usize),
+    search_signature: usize,
     style: egui::Style,
 }
 
@@ -32,7 +34,9 @@ impl TextBox {
         text: &dyn TextBuffer,
         ctx: &mut EditorContext,
     ) -> LayoutJob {
-        let signature = Text::buffer_signature(text);
+        let text = Text::downcast(text);
+
+        let signature = (text.struct_uid, text.version);
 
         if (signature, ui.style().as_ref()) != (self.text_signature, &self.style) {
             self.text_signature = signature;
@@ -41,9 +45,37 @@ impl TextBox {
             self.redo_layout = true;
         }
 
+        if ctx.global_search.active {
+            if ctx.global_search.version != self.search_signature {
+                self.search_signature = ctx.global_search.version;
+                self.redo_layout = true;
+            }
+
+            if let Some(search_results) = ctx.global_search.search_results.as_mut()
+                && let Some(sr) = search_results.get_mut(&text.struct_uid)
+            {
+                if sr.text_version != text.version {
+                    *sr = textbox_search::search(
+                        text,
+                        &sr.file_object_id,
+                        &sr.box_name,
+                        &ctx.global_search.find_text,
+                    );
+                    self.redo_layout = true;
+                }
+            }
+        }
+
+        let search_result = ctx
+            .global_search
+            .search_results
+            .as_ref()
+            .and_then(|sr| sr.get(&text.struct_uid));
+
         if self.redo_layout {
             self.redo_layout = false;
-            self.layout_job = format::compute_layout_job(text.as_str(), ctx, &self.style)
+            self.layout_job =
+                format::compute_layout_job(text.as_str(), ctx, search_result, &self.style)
         }
 
         self.layout_job.clone()

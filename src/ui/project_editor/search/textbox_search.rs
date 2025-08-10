@@ -1,3 +1,5 @@
+use egui::{Color32, Label, TextFormat, Vec2, text::LayoutJob};
+
 use crate::components::Text;
 
 #[derive(Debug, Default)]
@@ -23,12 +25,51 @@ pub struct WordFind {
 
 #[derive(Debug)]
 struct WordFindPreview {
-    word: String,
+    context: String,
+    word_start: usize,
+    word_end: usize,
+    line_number: usize,
 }
 
 impl WordFind {
     pub fn ui(&self, ui: &mut egui::Ui) {
-        ui.label(&self.preview.word);
+        self.preview.ui(ui);
+    }
+}
+
+impl WordFindPreview {
+    pub fn ui(&self, ui: &mut egui::Ui) {
+        let context_format = TextFormat::default();
+        let match_format = TextFormat {
+            color: Color32::WHITE,
+            ..Default::default()
+        };
+
+        let mut job = LayoutJob::default();
+
+        job.append(
+            &self.context[0..self.word_start],
+            0.0,
+            context_format.clone(),
+        );
+        job.append(
+            &self.context[self.word_start..self.word_end],
+            0.0,
+            match_format,
+        );
+        job.append(
+            &self.context[self.word_end..self.context.len()],
+            0.0,
+            context_format,
+        );
+
+        ui.horizontal(|ui| {
+            ui.add_sized(
+                Vec2::new(20.0, 10.0),
+                Label::new(self.line_number.to_string()),
+            );
+            ui.add(Label::new(job).wrap_mode(egui::TextWrapMode::Truncate));
+        });
     }
 }
 
@@ -40,16 +81,28 @@ pub fn search(
 ) -> TextBoxSearchResult {
     let mut finds = Vec::new();
 
-    for (start, m) in text.text.match_indices(search_term) {
-        let preview = WordFindPreview {
-            word: m.to_string(),
-        };
-        let end = start + m.len();
-        finds.push(WordFind {
-            start,
-            end,
-            preview,
-        });
+    let mut line_start = 0;
+
+    for (line_number, line) in text.text.split('\n').enumerate() {
+        for (start_in_line, m) in line.match_indices(search_term) {
+            let preview = WordFindPreview {
+                context: line.to_string(),
+                word_start: start_in_line,
+                word_end: start_in_line + m.len(),
+                line_number: line_number + 1,
+            };
+
+            let start = line_start + start_in_line;
+            let end = start + m.len();
+
+            finds.push(WordFind {
+                start,
+                end,
+                preview,
+            });
+        }
+
+        line_start += line.len() + 1;
     }
 
     TextBoxSearchResult {

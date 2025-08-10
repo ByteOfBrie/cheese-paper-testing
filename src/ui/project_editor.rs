@@ -74,24 +74,29 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         if let Some(object) = self.project.objects.get(tab) {
             object.get_title().into()
         } else {
+            // any deleted scenes should be cleaned up before we get here, but we have this
+            // logic instead of panicking anyway
             "<Deleted>".into()
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        let ctrl_shift_tab = egui::KeyboardShortcut {
-            modifiers: Modifiers::CTRL | Modifiers::SHIFT,
-            logical_key: Key::Tab,
-        };
-
-        let ctrl_tab = egui::KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            logical_key: Key::Tab,
-        };
-
-        if ui.input_mut(|i| i.consume_shortcut(&ctrl_shift_tab)) {
+        // hotkeys for tab movement
+        if ui.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL | Modifiers::SHIFT,
+                logical_key: Key::Tab,
+            })
+        }) {
+            // ctrl-shift-tab was pressed, move backwards
             *self.tab_move = Some(TabMove::Previous);
-        } else if ui.input_mut(|i| i.consume_shortcut(&ctrl_tab)) {
+        } else if ui.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                logical_key: Key::Tab,
+            })
+        }) {
+            // ctrl-tab was pressed, move fowards
             *self.tab_move = Some(TabMove::Next);
         }
 
@@ -119,6 +124,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
+        // disable moving tabs into windows (untested, could maybe be supported later)
         false
     }
 }

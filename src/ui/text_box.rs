@@ -53,17 +53,16 @@ impl TextBox {
 
             if let Some(search_results) = ctx.global_search.search_results.as_mut()
                 && let Some(sr) = search_results.get_mut(&text.struct_uid)
+                && sr.text_version != text.version
             {
-                if sr.text_version != text.version {
-                    *sr = textbox_search::search(
-                        text,
-                        &sr.file_object_id,
-                        &sr.box_name,
-                        &ctx.global_search.find_text,
-                    );
-                    ctx.global_search.clear_focus();
-                    self.redo_layout = true;
-                }
+                *sr = textbox_search::search(
+                    text,
+                    &sr.file_object_id,
+                    &sr.box_name,
+                    &ctx.global_search.find_text,
+                );
+                ctx.global_search.clear_focus();
+                self.redo_layout = true;
             }
         }
 

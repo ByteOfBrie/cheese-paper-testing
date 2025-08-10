@@ -4,9 +4,7 @@ use regex::Regex;
 use super::SavedRegex;
 use crate::ui::{
     EditorContext,
-    project_editor::search::{
-        textbox_search::{TextBoxSearchResult, WordFind},
-    },
+    project_editor::search::textbox_search::{TextBoxSearchResult, WordFind},
     text_box::spellcheck::find_misspelled_words,
 };
 
@@ -55,12 +53,13 @@ impl Style {
 }
 
 fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text::TextFormat {
-    let mut format = TextFormat::default();
-
-    format.font_id = FontId {
-        // TODO: update this based on actual font size (or figure out why it doesn't update)
-        size: 24.0,
-        family: FontFamily::Proportional,
+    let mut format = TextFormat {
+        font_id: FontId {
+            // TODO: update this based on actual font size (or figure out why it doesn't update)
+            size: 24.0,
+            family: FontFamily::Proportional,
+        },
+        ..Default::default()
     };
 
     if text_style.strong {

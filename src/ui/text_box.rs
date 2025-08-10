@@ -61,21 +61,43 @@ impl TextBox {
                         &sr.box_name,
                         &ctx.global_search.find_text,
                     );
+                    ctx.global_search.clear_focus();
                     self.redo_layout = true;
                 }
             }
         }
 
-        let search_result = ctx
-            .global_search
-            .search_results
-            .as_ref()
-            .and_then(|sr| sr.get(&text.struct_uid));
+        let (mut search_result, mut search_result_focus) = (None, None);
+
+        if ctx.global_search.active {
+            search_result = ctx
+                .global_search
+                .search_results
+                .as_ref()
+                .and_then(|sr| sr.get(&text.struct_uid));
+
+            search_result_focus = ctx
+                .global_search
+                .focus
+                .as_ref()
+                .and_then(|(uid, word_find)| {
+                    if *uid == text.struct_uid {
+                        Some(word_find)
+                    } else {
+                        None
+                    }
+                });
+        }
 
         if self.redo_layout {
             self.redo_layout = false;
-            self.layout_job =
-                format::compute_layout_job(text.as_str(), ctx, search_result, &self.style)
+            self.layout_job = format::compute_layout_job(
+                text.as_str(),
+                ctx,
+                search_result,
+                search_result_focus,
+                &self.style,
+            )
         }
 
         self.layout_job.clone()

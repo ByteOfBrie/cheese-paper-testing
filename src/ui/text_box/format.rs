@@ -3,7 +3,10 @@ use regex::Regex;
 
 use super::SavedRegex;
 use crate::ui::{
-    EditorContext, project_editor::search::textbox_search::TextBoxSearchResult,
+    EditorContext,
+    project_editor::search::{
+        textbox_search::{TextBoxSearchResult, WordFind},
+    },
     text_box::spellcheck::find_misspelled_words,
 };
 
@@ -16,6 +19,7 @@ enum StyleOption {
     Misspelled,
     NewLine,
     SearchHighlight,
+    SearchHighlightFocus,
     None,
 }
 
@@ -32,6 +36,7 @@ struct Style {
     italic: bool,
     misspelled: bool,
     search_highlight: bool,
+    search_highlight_focus: bool,
     newline: bool,
 }
 
@@ -43,6 +48,7 @@ impl Style {
             StyleOption::Misspelled => self.misspelled = marker.on,
             StyleOption::NewLine => self.newline = marker.on,
             StyleOption::SearchHighlight => self.search_highlight = marker.on,
+            StyleOption::SearchHighlightFocus => self.search_highlight_focus = marker.on,
             _ => (),
         }
     }
@@ -72,6 +78,10 @@ fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text
 
     if text_style.search_highlight {
         format.background = Color32::YELLOW;
+    }
+
+    if text_style.search_highlight_focus {
+        format.background = Color32::ORANGE;
     }
 
     format
@@ -193,12 +203,28 @@ fn format_rule_search(_text: &str, search_result: &TextBoxSearchResult) -> Vec<S
     res
 }
 
+fn format_rule_search_focus(_text: &str, word_find: &WordFind) -> Vec<StyleMarker> {
+    vec![
+        StyleMarker {
+            idx: word_find.start,
+            style: StyleOption::SearchHighlightFocus,
+            on: true,
+        },
+        StyleMarker {
+            idx: word_find.end,
+            style: StyleOption::SearchHighlightFocus,
+            on: false,
+        },
+    ]
+}
+
 // end format rules
 
 pub fn compute_layout_job(
     text: &str,
     ctx: &EditorContext,
     search_result: Option<&TextBoxSearchResult>,
+    search_result_focus: Option<&WordFind>,
     egui_style: &egui::Style,
 ) -> LayoutJob {
     let mut applied_rules = Vec::with_capacity(5);
@@ -210,6 +236,9 @@ pub fn compute_layout_job(
     applied_rules.push(format_rule_spellcheck(text, ctx));
     if let Some(search_result) = search_result {
         applied_rules.push(format_rule_search(text, search_result));
+    }
+    if let Some(word_find) = search_result_focus {
+        applied_rules.push(format_rule_search_focus(text, word_find));
     }
 
     let mut styles = vec_merge(applied_rules);

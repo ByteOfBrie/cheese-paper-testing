@@ -3,6 +3,7 @@ use egui::Color32;
 use super::textbox_search::TextBoxSearchResult;
 use super::*;
 use crate::components::Project;
+use crate::ui::project_editor::search::textbox_search::WordFind;
 
 use std::collections::HashMap;
 
@@ -12,11 +13,15 @@ pub struct GlobalSearch {
 
     pub find_text: String,
 
-    replace_text: String,
+    pub replace_text: String,
 
     pub redo_search: bool,
 
     pub search_results: Option<HashMap<TextUID, TextBoxSearchResult>>,
+
+    pub focus: Option<(TextUID, WordFind)>,
+
+    pub goto_focus: bool,
 
     pub version: usize,
 }
@@ -24,6 +29,11 @@ pub struct GlobalSearch {
 impl GlobalSearch {
     pub fn toggle(&mut self) {
         self.active = !self.active;
+    }
+
+    pub fn clear_focus(&mut self) {
+        self.focus = None;
+        self.goto_focus = false;
     }
 }
 
@@ -38,13 +48,8 @@ pub fn search(project: &Project, ctx: &mut EditorContext) {
         });
     }
 
-    println!("search complete with {} finds", search_results.len());
-
-    for tbsr in search_results.iter() {
-        println!("{tbsr:#?}");
-    }
-
     ctx.global_search.search_results = Some(search_results);
+    ctx.global_search.clear_focus();
     ctx.global_search.version += 1;
 }
 
@@ -60,7 +65,7 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
         egui::TextEdit::singleline(&mut gs.find_text),
     );
 
-    ui.label("replace");
+    ui.label("replace (not implemented)");
 
     ui.add_sized(
         egui::vec2(ui.available_width(), min_height),
@@ -74,20 +79,20 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
     }
 
     if let Some(search_results) = &mut ctx.global_search.search_results {
-        let mut items: Vec<(String, &TextBoxSearchResult)> = search_results
+        let mut items: Vec<(TextUID, String, &TextBoxSearchResult)> = search_results
             .iter()
-            .filter_map(|(_, tbsr)| {
+            .filter_map(|(id, tbsr)| {
                 let file_object_name = project.objects.get(&tbsr.file_object_id)?.get_title();
-                Some((file_object_name, tbsr))
+                Some((*id, file_object_name, tbsr))
             })
-            .filter(|(_, tbsr)| !tbsr.finds.is_empty())
+            .filter(|(_, _, tbsr)| !tbsr.finds.is_empty())
             .collect();
 
-        items.sort_by_key(|(file_object_name, tbsr)| (file_object_name.clone(), &tbsr.box_name));
+        items.sort_by_key(|(_, file_object_name, tbsr)| (file_object_name.clone(), &tbsr.box_name));
 
         let mut file_object_id: Option<String> = None;
 
-        for (file_object_name, tbsr) in items {
+        for (id, file_object_name, tbsr) in items {
             if file_object_id.as_ref() != Some(&file_object_name) {
                 file_object_id = Some(file_object_name.clone());
                 ui.colored_label(Color32::LIGHT_GREEN, &file_object_name);
@@ -96,7 +101,12 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
             ui.colored_label(Color32::LIGHT_BLUE, &tbsr.box_name);
 
             for word_find in &tbsr.finds {
-                word_find.ui(ui);
+                let clicked = word_find.ui(ui).clicked();
+                if clicked {
+                    ctx.global_search.focus = Some((id, word_find.clone()));
+                    ctx.global_search.goto_focus = true;
+                    ctx.global_search.version += 1;
+                }
             }
         }
     }

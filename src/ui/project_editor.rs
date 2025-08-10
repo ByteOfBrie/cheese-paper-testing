@@ -259,6 +259,16 @@ impl ProjectEditor {
             self.editor_context.global_search.redo_search = false;
             global_search::search(&self.project, &mut self.editor_context);
         }
+
+        // BY THE POWER OF IF LET CHAINS
+        if self.editor_context.global_search.goto_focus
+            && let Some((uid, _word_find)) = &self.editor_context.global_search.focus.as_ref()
+            && let Some(search_results) = &self.editor_context.global_search.search_results.as_ref()
+            && let Some(focused_text_box) = search_results.get(&uid)
+            && let Some(tab) = self.dock_state.find_tab(&focused_text_box.file_object_id)
+        {
+            self.dock_state.set_active_tab(tab);
+        }
     }
 
     /// `event` has to be modification, try to figure out the file and reload it if

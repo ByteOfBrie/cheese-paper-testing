@@ -1,4 +1,4 @@
-use egui::{Color32, Label, TextFormat, Vec2, text::LayoutJob};
+use egui::{Color32, Label, Sense, TextFormat, Vec2, Widget, text::LayoutJob};
 
 use crate::components::Text;
 
@@ -16,14 +16,14 @@ pub struct TextBoxSearchResult {
     pub text_version: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WordFind {
     pub start: usize,
     pub end: usize,
     preview: WordFindPreview,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct WordFindPreview {
     context: String,
     word_start: usize,
@@ -32,13 +32,13 @@ struct WordFindPreview {
 }
 
 impl WordFind {
-    pub fn ui(&self, ui: &mut egui::Ui) {
-        self.preview.ui(ui);
+    pub fn ui(&self, ui: &mut egui::Ui) -> egui::Response {
+        ui.add(&self.preview)
     }
 }
 
-impl WordFindPreview {
-    pub fn ui(&self, ui: &mut egui::Ui) {
+impl Widget for &WordFindPreview {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let context_format = TextFormat::default();
         let match_format = TextFormat {
             color: Color32::WHITE,
@@ -68,8 +68,14 @@ impl WordFindPreview {
                 Vec2::new(20.0, 10.0),
                 Label::new(self.line_number.to_string()),
             );
-            ui.add(Label::new(job).wrap_mode(egui::TextWrapMode::Truncate));
-        });
+            return ui.add(
+                Label::new(job)
+                    .wrap_mode(egui::TextWrapMode::Truncate)
+                    .selectable(false)
+                    .sense(Sense::click()),
+            );
+        })
+        .inner
     }
 }
 

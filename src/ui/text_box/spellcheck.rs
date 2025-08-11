@@ -7,20 +7,26 @@ use crate::ui::EditorContext;
 use std::borrow::Cow;
 use std::ops::Range;
 
-pub fn get_current_word(text: &str, position: usize) -> Range<usize> {
+pub fn get_current_word(text: &str, mut position: usize) -> Range<usize> {
+    // Use `ceil_char_boundary` once it's stable
+    while !text.is_char_boundary(position) {
+        position += 1;
+    }
+
     let before = &text[..position];
 
-    let before_pos = before
-        .char_indices()
-        .rev()
-        .find_map(|(pos, chr)| {
-            if chr.is_whitespace() {
-                Some(pos + 1) // +1 because we're looking for the first non-whitespace
-            } else {
-                None
-            }
-        })
-        .unwrap_or_default();
+    let mut before_pos_option = None;
+
+    for (pos, chr) in before.char_indices().rev() {
+        if chr.is_whitespace() {
+            // The last character we found was the correct spot, before_pos_option is already set
+            break;
+        } else {
+            before_pos_option = Some(pos);
+        }
+    }
+
+    let before_pos = before_pos_option.unwrap_or_default();
 
     let after = &text[position..];
 

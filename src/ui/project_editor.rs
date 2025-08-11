@@ -61,6 +61,7 @@ pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
     pub tab_move: &'a mut Option<TabMove>,
+    pub tab_to_close: &'a mut Option<String>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -108,6 +109,16 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             })
         }) {
             self.editor_context.global_search.show();
+        }
+
+        // closing current tab
+        if ui.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                logical_key: Key::W,
+            })
+        }) {
+            *self.tab_to_close = Some(tab.clone());
         }
 
         // lock tab presses to the current window
@@ -162,6 +173,7 @@ impl ProjectEditor {
             .retain_tabs(|tab_id| self.project.objects.contains_key(tab_id));
 
         let mut tab_move_option: Option<TabMove> = None;
+        let mut tab_to_close_option: Option<String> = None;
 
         // render the tab view
         DockArea::new(&mut self.dock_state)
@@ -174,8 +186,15 @@ impl ProjectEditor {
                     project: &mut self.project,
                     editor_context: &mut self.editor_context,
                     tab_move: &mut tab_move_option,
+                    tab_to_close: &mut tab_to_close_option,
                 },
             );
+
+        if let Some(tab_to_close) = tab_to_close_option {
+            if let Some(tab_position) = self.dock_state.find_tab(&tab_to_close) {
+                self.dock_state.remove_tab(tab_position);
+            }
+        }
 
         if let Some(tab_move) = tab_move_option {
             let open_tabs: Vec<_> = self.get_open_tabs();
@@ -219,6 +238,9 @@ impl ProjectEditor {
     }
 
     fn process_state(&mut self, ctx: &egui::Context) {
+        // update window title. silly that we have to do it here, but we can't set it when calling new()
+        // since we don't have the `egui::Context`. This will also need to happen once we can actually
+        // set project names
         if self.title_needs_update {
             // Set the window title properly
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
@@ -228,6 +250,7 @@ impl ProjectEditor {
             self.title_needs_update = false;
         }
 
+        // check for file system events and process them
         if let Ok(response) = self.file_event_rx.try_recv() {
             match response {
                 Ok(events) => {
@@ -254,6 +277,7 @@ impl ProjectEditor {
             }
         }
 
+        // automatically track progerss if we have a tracker
         if let Some(tracker) = &mut self.tracker
             && tracker.snapshot_time.elapsed().as_secs() >= 60 * 15
         {
@@ -267,6 +291,7 @@ impl ProjectEditor {
             global_search::search(&self.project, &mut self.editor_context);
         }
 
+        // if one of the search results has been clicked, open that now
         // BY THE POWER OF IF LET CHAINS
         if self.editor_context.global_search.goto_focus
             && let Some((uid, _word_find)) = &self.editor_context.global_search.focus.as_ref()

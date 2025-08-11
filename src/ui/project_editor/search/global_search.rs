@@ -33,6 +33,7 @@ impl GlobalSearch {
 
     pub fn hide(&mut self) {
         self.active = false;
+        // TODO: #85: do something about highlighters here
     }
 
     pub fn clear_focus(&mut self) {
@@ -60,25 +61,18 @@ pub fn search(project: &Project, ctx: &mut EditorContext) {
 pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
     let gs = &mut ctx.global_search;
 
-    let min_height = 30.0;
-
-    ui.label("find");
-
+    // Take up the entire area horizontally
     ui.add_sized(
-        egui::vec2(ui.available_width(), min_height),
-        egui::TextEdit::singleline(&mut gs.find_text),
+        egui::vec2(ui.available_width(), 0.0),
+        egui::TextEdit::singleline(&mut gs.find_text).hint_text("find"),
     );
 
-    ui.label("replace (not implemented)");
-
     ui.add_sized(
-        egui::vec2(ui.available_width(), min_height),
-        egui::TextEdit::singleline(&mut gs.replace_text),
+        egui::vec2(ui.available_width(), 0.0),
+        egui::TextEdit::singleline(&mut gs.replace_text).hint_text("replace (not implemented)"),
     );
 
-    let search_clicked = ui.button("search").clicked();
-
-    if search_clicked {
+    if ui.button("search").clicked() {
         gs.redo_search = true;
     }
 
@@ -105,8 +99,7 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
             ui.colored_label(Color32::LIGHT_BLUE, &tbsr.box_name);
 
             for word_find in &tbsr.finds {
-                let clicked = word_find.ui(ui).clicked();
-                if clicked {
+                if word_find.ui(ui).clicked() {
                     ctx.global_search.focus = Some((id, word_find.clone()));
                     ctx.global_search.goto_focus = true;
                     ctx.global_search.version += 1;

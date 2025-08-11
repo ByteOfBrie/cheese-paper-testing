@@ -163,18 +163,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
             Action::SetSelected(selected_file_ids) => {
                 // Open nodes when they're selected
                 if let Some(file_id) = selected_file_ids.first() {
-                    if *file_id != editor.project.text_id
-                        && *file_id != editor.project.characters_id
-                        && *file_id != editor.project.worldbuilding_id
-                    {
-                        if let Some(tab_position) = editor.dock_state.find_tab(file_id) {
-                            // We've already opened this, just select it
-                            editor.dock_state.set_active_tab(tab_position);
-                        } else {
-                            // New file object, open it for editing
-                            editor.dock_state.push_to_first_leaf(file_id.clone());
-                        }
-                    }
+                    editor.set_editor_tab(file_id);
                 }
             }
             Action::Move(drag_and_drop) => {

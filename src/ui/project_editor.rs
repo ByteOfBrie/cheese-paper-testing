@@ -195,10 +195,7 @@ impl ProjectEditor {
                             .unwrap_or_else(|| open_tabs.len() - 1),
                     };
 
-                    let new_tab_id = open_tabs.get(new_pos).unwrap();
-
-                    self.dock_state
-                        .set_active_tab(self.dock_state.find_tab(new_tab_id).unwrap());
+                    self.set_editor_tab(open_tabs.get(new_pos).unwrap());
                 }
             }
         }
@@ -275,9 +272,8 @@ impl ProjectEditor {
             && let Some((uid, _word_find)) = &self.editor_context.global_search.focus.as_ref()
             && let Some(search_results) = &self.editor_context.global_search.search_results.as_ref()
             && let Some(focused_text_box) = search_results.get(uid)
-            && let Some(tab) = self.dock_state.find_tab(&focused_text_box.file_object_id)
         {
-            self.dock_state.set_active_tab(tab);
+            self.set_editor_tab(&focused_text_box.file_object_id.clone());
         }
     }
 
@@ -422,6 +418,24 @@ impl ProjectEditor {
                     }
                 }
             };
+        }
+    }
+
+    fn set_editor_tab(&mut self, file_id: &String) {
+        // We don't want to open these, so just exit early
+        if *file_id == self.project.text_id
+            || *file_id == self.project.characters_id
+            || *file_id == self.project.worldbuilding_id
+        {
+            return;
+        }
+
+        if let Some(tab_position) = self.dock_state.find_tab(file_id) {
+            // We've already opened this, just select it
+            self.dock_state.set_active_tab(tab_position);
+        } else {
+            // New file object, open it for editing
+            self.dock_state.push_to_first_leaf(file_id.clone());
         }
     }
 

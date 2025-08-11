@@ -68,13 +68,13 @@ impl Widget for &WordFindPreview {
                 Vec2::new(20.0, 10.0),
                 Label::new(self.line_number.to_string()),
             );
-            #[allow(clippy::needless_return)] // this return statement is important, clippy
-            return ui.add(
+
+            ui.add(
                 Label::new(job)
                     .wrap_mode(egui::TextWrapMode::Truncate)
                     .selectable(false)
                     .sense(Sense::click()),
-            );
+            )
         })
         .inner
     }

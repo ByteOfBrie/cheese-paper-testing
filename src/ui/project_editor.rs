@@ -100,6 +100,17 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             *self.tab_move = Some(TabMove::Next);
         }
 
+        // check for ctrl-shift-f for search
+        if ui.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL | Modifiers::SHIFT,
+                logical_key: Key::F,
+            })
+        }) {
+            self.editor_context.global_search.show();
+        }
+
+        // lock tab presses to the current window
         if let Some(focused_tab) = ui.memory(|i| i.focused()) {
             ui.memory_mut(|i| {
                 i.set_focus_lock_filter(
@@ -118,6 +129,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             println!("pressed tab!");
         }
 
+        // draw the actual UI for the tab open in the editor
         if let Some(file_object) = self.project.objects.get_mut(tab) {
             file_object.as_editor_mut().ui(ui, self.editor_context);
         }
@@ -194,26 +206,18 @@ impl ProjectEditor {
 
     // the side panel containing the tree view or the global search
     fn side_panel(&mut self, ui: &mut egui::Ui) {
-        // a very ugly UI, I just need it to work so I can implement the rest
-        // Brie is more familiar than me with egui, she'll be able to make a pretty UI I'm sure
-
-        let scroll_area_height = ui.available_height() - 50.0;
-
         if self.editor_context.global_search.active {
+            if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+                self.editor_context.global_search.hide();
+            }
             global_search::ui(ui, &self.project, &mut self.editor_context);
         } else {
             egui::ScrollArea::both()
                 .id_salt("tree scroll")
-                .max_height(scroll_area_height)
+                .max_height(ui.available_height())
                 .show(ui, |ui| {
                     file_tree::ui(self, ui);
                 });
-        }
-
-        let toggle_search = ui.add(egui::Button::new("toggle search")).clicked();
-
-        if toggle_search {
-            self.editor_context.global_search.toggle();
         }
     }
 

@@ -27,8 +27,12 @@ pub struct GlobalSearch {
 }
 
 impl GlobalSearch {
-    pub fn toggle(&mut self) {
-        self.active = !self.active;
+    pub fn show(&mut self) {
+        self.active = true;
+    }
+
+    pub fn hide(&mut self) {
+        self.active = false;
     }
 
     pub fn clear_focus(&mut self) {

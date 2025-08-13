@@ -51,7 +51,10 @@ pub enum ProjectFolder {
 
 const PROJECT_INFO_NAME: &str = "project.toml";
 
-fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, FileObjectStore)> {
+fn load_top_level_folder(project_path: &Path, name: &str) -> Result<(Folder, FileObjectStore)> {
+    log::debug!("loading top level folder: {name}");
+
+    let folder_path = &Path::join(project_path, name);
     if folder_path.exists() {
         match from_file(folder_path, None) {
             Ok(created_object) => match created_object {
@@ -67,8 +70,9 @@ fn load_top_level_folder(folder_path: &Path, name: String) -> Result<(Folder, Fi
             }
         }
     } else {
+        log::debug!("top level folder {name} does not exist, creating...");
         Ok((
-            Folder::new_top_level(folder_path.to_owned(), name)?,
+            Folder::new_top_level(project_path.to_owned(), name)?,
             HashMap::new(),
         ))
     }
@@ -90,10 +94,9 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
-        let text = Folder::new_top_level(project_path.clone(), "text".to_owned())?;
-        let characters = Folder::new_top_level(project_path.clone(), "characters".to_owned())?;
-        let worldbuilding =
-            Folder::new_top_level(project_path.clone(), "worldbuilding".to_owned())?;
+        let text = Folder::new_top_level(project_path.clone(), "text")?;
+        let characters = Folder::new_top_level(project_path.clone(), "characters")?;
+        let worldbuilding = Folder::new_top_level(project_path.clone(), "worldbuilding")?;
 
         let mut project = Self {
             base_metadata: FileObjectMetadata {
@@ -164,6 +167,8 @@ impl Project {
         let project_info_path = Path::join(&path, PROJECT_INFO_NAME);
 
         let toml_header = if project_info_path.exists() {
+            log::debug!("Found `project_info.toml`, loading project");
+
             let project_info_data =
                 std::fs::read_to_string(project_info_path).expect("could not read file");
 
@@ -187,20 +192,19 @@ impl Project {
                     ),
                 ));
             }
+            log::debug!("Found `text/` but no project info file, creating it and continuing");
             DocumentMut::new()
         };
 
         // Load or create folders
-        let (text, mut descendents) =
-            load_top_level_folder(&Path::join(&path, "text"), "text".to_string())?;
+        let (text, mut descendents) = load_top_level_folder(&path, "text")?;
 
-        let (characters, characters_descendents) =
-            load_top_level_folder(&Path::join(&path, "characters"), "characters".to_string())?;
+        let (characters, characters_descendents) = load_top_level_folder(&path, "characters")?;
 
-        let (worldbuilding, worldbuilding_descendents) = load_top_level_folder(
-            &Path::join(&path, "worldbuilding"),
-            "worldbuilding".to_string(),
-        )?;
+        let (worldbuilding, worldbuilding_descendents) =
+            load_top_level_folder(&path, "worldbuilding")?;
+
+        log::debug!("Finished loading all project file objects, continuing");
 
         // merge all of the descendents into a single hashmap that owns all of them
         descendents.extend(characters_descendents);

@@ -36,17 +36,30 @@ impl Folder {
         Ok(folder)
     }
 
-    pub fn new_top_level(dirname: PathBuf, name: String) -> Result<Self> {
+    pub fn new_top_level(dirname: PathBuf, name: &str) -> Result<Self> {
         let mut folder = Self {
             base: BaseFileObject::new(dirname, None),
             metadata: FolderMetadata::default(),
         };
 
-        folder.get_base_mut().metadata.name = name.clone();
+        folder.get_base_mut().metadata.name = name.to_string();
         folder.get_base_mut().file.basename = OsString::from(name);
 
-        create_dir(folder.get_path())?;
-        <dyn FileObject>::save(&mut folder, &HashMap::new()).unwrap();
+        if let Err(err) = create_dir(folder.get_path()) {
+            log::error!(
+                "Failed to create top level directory: {:?}: {err}",
+                folder.get_path()
+            );
+            return Err(err);
+        }
+
+        if let Err(err) = <dyn FileObject>::save(&mut folder, &HashMap::new()) {
+            log::error!(
+                "Failed to save newly created top level directory: {}: {err}",
+                &folder.get_base().metadata.name
+            );
+            return Err(err);
+        }
 
         Ok(folder)
     }

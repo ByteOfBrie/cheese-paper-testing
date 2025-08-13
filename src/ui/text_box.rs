@@ -150,30 +150,30 @@ impl Text {
             text_box.redo_layout = true;
         }
 
-        if output.response.clicked_by(egui::PointerButton::Secondary) {
-            if let Some(cursor_range) = output.cursor_range {
-                let clicked_pos = cursor_range.primary.index;
+        if output.response.clicked_by(egui::PointerButton::Secondary)
+            && let Some(cursor_range) = output.cursor_range
+        {
+            let clicked_pos = cursor_range.primary.index;
 
-                let word_boundaries = get_current_word(&self.text, clicked_pos);
+            let word_boundaries = get_current_word(&self.text, clicked_pos);
 
-                let raw_word = &self.text[word_boundaries];
+            let raw_word = &self.text[word_boundaries];
 
-                // Will need word_range when spellcheck corrections are implemented, but it's not needed now
-                let (check_word, _word_range) = trim_word_for_spellcheck(raw_word);
+            // Will need word_range when spellcheck corrections are implemented, but it's not needed now
+            let (check_word, _word_range) = trim_word_for_spellcheck(raw_word);
 
-                ctx.spellcheck_status.selected_word = check_word.to_string();
+            ctx.spellcheck_status.selected_word = check_word.to_string();
 
-                if let Some(dictionary) = ctx.dictionary.as_ref() {
-                    if dictionary.check(&ctx.spellcheck_status.selected_word) {
-                        ctx.spellcheck_status.correct = true;
-                    } else {
-                        ctx.spellcheck_status.correct = false;
-                        ctx.spellcheck_status.suggestions.clear();
-                        dictionary.suggest(
-                            &ctx.spellcheck_status.selected_word,
-                            &mut ctx.spellcheck_status.suggestions,
-                        );
-                    }
+            if let Some(dictionary) = ctx.dictionary.as_ref() {
+                if dictionary.check(&ctx.spellcheck_status.selected_word) {
+                    ctx.spellcheck_status.correct = true;
+                } else {
+                    ctx.spellcheck_status.correct = false;
+                    ctx.spellcheck_status.suggestions.clear();
+                    dictionary.suggest(
+                        &ctx.spellcheck_status.selected_word,
+                        &mut ctx.spellcheck_status.suggestions,
+                    );
                 }
             }
         }

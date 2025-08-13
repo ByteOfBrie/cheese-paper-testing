@@ -923,11 +923,11 @@ pub trait FileObject: Debug {
             .modified()
             .expect("Modtime not available");
 
-        if let Some(old_modtime) = self.get_base().file.modtime {
-            if old_modtime == current_modtime {
-                // We've already loaded the latest revision, nothing to do
-                return Ok(false);
-            }
+        if let Some(old_modtime) = self.get_base().file.modtime
+            && old_modtime == current_modtime
+        {
+            // We've already loaded the latest revision, nothing to do
+            return Ok(false);
         }
 
         Ok(true)

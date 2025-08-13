@@ -120,16 +120,16 @@ impl Data {
             self.recent_projects = recent_projects;
         }
 
-        if let Some(last_project_parent_folder_value) = table.get("last_project_parent_folder") {
-            if let Some(last_export_folder) = last_project_parent_folder_value.as_str() {
-                self.last_project_parent_folder = PathBuf::from(last_export_folder)
-            }
+        if let Some(last_project_parent_folder_value) = table.get("last_project_parent_folder")
+            && let Some(last_export_folder) = last_project_parent_folder_value.as_str()
+        {
+            self.last_project_parent_folder = PathBuf::from(last_export_folder)
         }
 
-        if let Some(last_export_folder_value) = table.get("last_export_folder") {
-            if let Some(last_export_folder) = last_export_folder_value.as_str() {
-                self.last_export_folder = PathBuf::from(last_export_folder)
-            }
+        if let Some(last_export_folder_value) = table.get("last_export_folder")
+            && let Some(last_export_folder) = last_export_folder_value.as_str()
+        {
+            self.last_export_folder = PathBuf::from(last_export_folder)
         }
 
         if let Some(last_open_file_ids) = table
@@ -311,10 +311,10 @@ impl eframe::App for CheesePaperApp {
         if self.state.closing_project {
             self.project_editor = None;
             self.state.closing_project = false;
-            if let Some(new_project_path) = self.state.next_project.take() {
-                if let Err(err) = self.load_project(new_project_path) {
-                    log::error!("Could not load project: {err}");
-                };
+            if let Some(new_project_path) = self.state.next_project.take()
+                && let Err(err) = self.load_project(new_project_path)
+            {
+                log::error!("Could not load project: {err}");
             }
         }
 
@@ -449,14 +449,14 @@ impl CheesePaperApp {
             dictionary,
         };
 
-        if app.state.settings.reopen_last {
-            if let Some(last_open_project) = app.state.data.recent_projects.first() {
-                let last_open_project = last_open_project.clone();
-                if let Err(err) = app.load_project(PathBuf::from(&last_open_project)) {
-                    log::error!(
-                        "error while trying to open most recent project: {last_open_project:?}: {err}"
-                    );
-                }
+        if app.state.settings.reopen_last
+            && let Some(last_open_project) = app.state.data.recent_projects.first()
+        {
+            let last_open_project = last_open_project.clone();
+            if let Err(err) = app.load_project(PathBuf::from(&last_open_project)) {
+                log::error!(
+                    "error while trying to open most recent project: {last_open_project:?}: {err}"
+                );
             }
         }
 
@@ -464,10 +464,10 @@ impl CheesePaperApp {
     }
 
     fn choose_project_ui(&mut self, ctx: &egui::Context) {
-        if let Some((_message, time)) = &self.state.error_message {
-            if time.elapsed().as_secs() > 7 {
-                self.state.error_message = None;
-            }
+        if let Some((_message, time)) = &self.state.error_message
+            && time.elapsed().as_secs() > 7
+        {
+            self.state.error_message = None;
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -478,12 +478,12 @@ impl CheesePaperApp {
                         ui.vertical_centered(|ui| {
                             let projects = self.state.data.recent_projects.clone();
                             for project in projects {
-                                if ui.button(project.to_string_lossy().to_string()).clicked() {
-                                    if let Err(err) = self.load_project(project.clone()) {
-                                        log::error!(
-                                            "Error while attempting to load {project:?}: {err}"
-                                        );
-                                    }
+                                if ui.button(project.to_string_lossy().to_string()).clicked()
+                                    && let Err(err) = self.load_project(project.clone())
+                                {
+                                    log::error!(
+                                        "Error while attempting to load {project:?}: {err}"
+                                    );
                                 }
                             }
                         })
@@ -534,12 +534,12 @@ impl CheesePaperApp {
                                 .set_directory(&self.state.data.last_project_parent_folder)
                                 .pick_folder();
 
-                            if let Some(project_dir) = project_dir {
-                                if let Err(err) = self.load_project(project_dir.clone()) {
-                                    log::error!(
-                                        "Error while attempting to load {project_dir:?}: {err}"
-                                    );
-                                }
+                            if let Some(project_dir) = project_dir
+                                && let Err(err) = self.load_project(project_dir.clone())
+                            {
+                                log::error!(
+                                    "Error while attempting to load {project_dir:?}: {err}"
+                                );
                             }
                         }
                     });
@@ -613,11 +613,10 @@ impl CheesePaperApp {
                 // update recent projects
                 if project_path.parent()
                     != Some(self.state.data.last_project_parent_folder.as_path())
+                    && let Some(path) = project_path.parent()
                 {
-                    if let Some(path) = project_path.parent() {
-                        self.state.data.last_project_parent_folder = path.to_path_buf();
-                        self.state.modified = true;
-                    }
+                    self.state.data.last_project_parent_folder = path.to_path_buf();
+                    self.state.modified = true;
                 }
 
                 let project_path_position = self

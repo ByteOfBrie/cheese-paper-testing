@@ -49,7 +49,7 @@ fn test_get_current_word() {
     assert_eq!(get_current_word("asdf  qwerty", 6), 6..12);
 }
 
-pub fn trim_word_for_spellcheck(word: &str) -> (Cow<str>, Range<usize>) {
+pub fn trim_word_for_spellcheck(word: &str) -> (Cow<'_, str>, Range<usize>) {
     // Keep track of how much we trimmed in each step (since that shouldn't be
     // marked as misspelled). This could also be done by a regex, but that seems
     // more complicated

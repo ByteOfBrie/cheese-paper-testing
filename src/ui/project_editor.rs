@@ -190,32 +190,32 @@ impl ProjectEditor {
                 },
             );
 
-        if let Some(tab_to_close) = tab_to_close_option {
-            if let Some(tab_position) = self.dock_state.find_tab(&tab_to_close) {
-                self.dock_state.remove_tab(tab_position);
-            }
+        if let Some(tab_to_close) = tab_to_close_option
+            && let Some(tab_position) = self.dock_state.find_tab(&tab_to_close)
+        {
+            self.dock_state.remove_tab(tab_position);
         }
 
         if let Some(tab_move) = tab_move_option {
             let open_tabs: Vec<_> = self.get_open_tabs();
 
             // Make sure we have something to do
-            if open_tabs.len() > 1 {
-                if let Some((_, current_tab)) = self.dock_state.find_active_focused() {
-                    let current_pos = open_tabs
-                        .iter()
-                        .position(|val| val == current_tab)
-                        .expect("focused tab should be in list of tabs");
+            if open_tabs.len() > 1
+                && let Some((_, current_tab)) = self.dock_state.find_active_focused()
+            {
+                let current_pos = open_tabs
+                    .iter()
+                    .position(|val| val == current_tab)
+                    .expect("focused tab should be in list of tabs");
 
-                    let new_pos = match tab_move {
-                        TabMove::Next => (current_pos + 1) % open_tabs.len(),
-                        TabMove::Previous => current_pos
-                            .checked_sub(1)
-                            .unwrap_or_else(|| open_tabs.len() - 1),
-                    };
+                let new_pos = match tab_move {
+                    TabMove::Next => (current_pos + 1) % open_tabs.len(),
+                    TabMove::Previous => current_pos
+                        .checked_sub(1)
+                        .unwrap_or_else(|| open_tabs.len() - 1),
+                };
 
-                    self.set_editor_tab(open_tabs.get(new_pos).unwrap());
-                }
+                self.set_editor_tab(open_tabs.get(new_pos).unwrap());
             }
         }
     }
@@ -280,10 +280,9 @@ impl ProjectEditor {
         // automatically track progerss if we have a tracker
         if let Some(tracker) = &mut self.tracker
             && tracker.snapshot_time.elapsed().as_secs() >= 60 * 15
+            && let Err(err) = tracker.snapshot("Autosave")
         {
-            if let Err(err) = tracker.snapshot("Autosave") {
-                log::warn!("Failed to track changes: {err}");
-            }
+            log::warn!("Failed to track changes: {err}");
         }
 
         if self.editor_context.global_search.redo_search {

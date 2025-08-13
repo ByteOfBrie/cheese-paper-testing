@@ -97,13 +97,13 @@ impl dyn FileObject {
 
                 ui.separator();
 
-                if let Some(parent) = parent_id {
-                    if ui.button("Delete").clicked() {
-                        actions.push(ContextMenuActions::Delete {
-                            parent: parent.to_string(),
-                            deleting: self.get_base().metadata.id.clone(),
-                        });
-                    }
+                if let Some(parent) = parent_id
+                    && ui.button("Delete").clicked()
+                {
+                    actions.push(ContextMenuActions::Delete {
+                        parent: parent.to_string(),
+                        deleting: self.get_base().metadata.id.clone(),
+                    });
                 }
             });
 

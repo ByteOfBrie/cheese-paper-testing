@@ -12,7 +12,7 @@ use toml_edit::DocumentMut;
 
 use std::rc::Rc;
 
-use crate::components::file_objects::utils::process_name_for_filename;
+use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
 
 use crate::components::file_objects::base::{
     FileID, FileObjectCreation, load_base_metadata, metadata_extract_string,
@@ -435,5 +435,67 @@ impl Project {
         }
 
         None
+    }
+
+    // Export an outline to a string (which can be written to a file)
+    pub fn export_outline(&mut self) -> String {
+        let mut export_string = String::new();
+
+        // Property at the top
+        export_string.push_str("# ");
+        export_string.push_str(&self.base_metadata.name);
+        export_string.push_str("\n\n");
+
+        write_outline_property("Story Summary", &self.metadata.summary, &mut export_string);
+
+        let text = self.objects.get(&self.text_id).unwrap().borrow();
+
+        if !text.get_base().children.is_empty() {
+            export_string.push_str("# Scenes\n\n");
+
+            for child_id in text.get_base().children.iter() {
+                self.objects
+                    .get(child_id)
+                    .unwrap()
+                    .borrow()
+                    .generate_outline(2, &mut export_string, &self.objects);
+            }
+
+            export_string.push_str("\n\n");
+        }
+
+        let characters = self.objects.get(&self.characters_id).unwrap().borrow();
+
+        if !characters.get_base().children.is_empty() {
+            export_string.push_str("# Characters\n\n");
+
+            for child_id in characters.get_base().children.iter() {
+                self.objects
+                    .get(child_id)
+                    .unwrap()
+                    .borrow()
+                    .generate_outline(2, &mut export_string, &self.objects);
+            }
+
+            export_string.push_str("\n\n");
+        }
+
+        let worldbuilding = self.objects.get(&self.worldbuilding_id).unwrap().borrow();
+
+        if !worldbuilding.get_base().children.is_empty() {
+            export_string.push_str("# Worldbuilding\n\n");
+
+            for child_id in worldbuilding.get_base().children.iter() {
+                self.objects
+                    .get(child_id)
+                    .unwrap()
+                    .borrow()
+                    .generate_outline(2, &mut export_string, &self.objects);
+            }
+
+            export_string.push_str("\n\n");
+        }
+
+        export_string
     }
 }

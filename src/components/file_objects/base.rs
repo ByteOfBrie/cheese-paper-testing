@@ -162,19 +162,21 @@ pub fn metadata_extract_u64(
     field_name: &str,
     allow_bool: bool,
 ) -> Result<Option<u64>> {
-    Ok(match table.get(field_name) {
-        Some(value) => Some(if let Some(value) = value.as_integer() {
-            value as u64
-        } else if allow_bool && let Some(value) = value.as_bool() {
-            value as u64
-        } else {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                format!("{field_name} was not an integer"),
-            ));
-        }),
-        None => None,
-    })
+    match table.get(field_name) {
+        Some(value) => {
+            if let Some(value) = value.as_integer() {
+                Ok(Some(value as u64))
+            } else if allow_bool && let Some(value) = value.as_bool() {
+                Ok(Some(value as u64))
+            } else {
+                Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("{field_name} was not an integer"),
+                ))
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 pub fn metadata_extract_string(table: &DocumentMut, field_name: &str) -> Result<Option<String>> {
@@ -762,6 +764,11 @@ pub trait FileObject: Debug {
     fn empty_string_name(&self) -> &'static str;
     fn is_folder(&self) -> bool;
     fn extension(&self) -> &'static str;
+
+    /// Display the outline, writing all relevant non-prose information we have to a single
+    /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
+    /// on export, everything gets included
+    fn generate_outline(&self, depth: u32, export_string: &mut String, objects: &FileObjectStore);
 
     /// Loads the file-specific metadata from the toml document
     ///

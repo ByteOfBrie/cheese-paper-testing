@@ -1,6 +1,7 @@
 use crate::components::file_objects::base::{
     BaseFileObject, CompileStatus, FileObject, metadata_extract_string, metadata_extract_u64,
 };
+use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
 use regex::Regex;
 use std::io::Result;
@@ -96,6 +97,19 @@ impl FileObject for Scene {
         self.base.toml_header["pov"] = toml_edit::value(&*self.metadata.pov);
         self.base.toml_header["compile_status"] =
             toml_edit::value(self.metadata.compile_status.bits() as i64);
+    }
+
+    fn generate_outline(
+        &self,
+        depth: u32,
+        export_string: &mut String,
+        _objects: &super::FileObjectStore,
+    ) {
+        (self as &dyn FileObject).write_outline_title(depth, export_string);
+
+        write_outline_property("summary", &self.metadata.summary, export_string);
+        write_outline_property("pov", &self.metadata.pov, export_string);
+        write_outline_property("notes", &self.metadata.notes, export_string);
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

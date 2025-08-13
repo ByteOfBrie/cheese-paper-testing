@@ -1,4 +1,5 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
 use std::fs::create_dir;
 use std::io::Result;
@@ -128,6 +129,29 @@ impl FileObject for Place {
         self.base.toml_header["appearance"] = toml_edit::value(&*self.metadata.appearance);
         self.base.toml_header["other_senses"] = toml_edit::value(&*self.metadata.other_senses);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
+    }
+
+    fn generate_outline(
+        &self,
+        depth: u32,
+        export_string: &mut String,
+        objects: &super::FileObjectStore,
+    ) {
+        (self as &dyn FileObject).write_outline_title(depth, export_string);
+
+        write_outline_property("connection", &self.metadata.connection, export_string);
+        write_outline_property("description", &self.metadata.description, export_string);
+        write_outline_property("appearance", &self.metadata.appearance, export_string);
+        write_outline_property("other_senses", &self.metadata.other_senses, export_string);
+        write_outline_property("notes", &self.metadata.notes, export_string);
+
+        for child_id in self.get_base().children.iter() {
+            objects.get(child_id).unwrap().borrow().generate_outline(
+                depth + 1,
+                export_string,
+                objects,
+            );
+        }
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

@@ -134,6 +134,17 @@ impl dyn FileObject {
         }
     }
 
+    /// Called by all of the generate_outline functions, keeps the formatting consistent
+    pub fn write_outline_title(&self, depth: u32, export_string: &mut String) {
+        // file object title (at the appropriate header level)
+        for _ in 0..depth {
+            export_string.push('#');
+        }
+        export_string.push(' ');
+        export_string.push_str(&self.get_title());
+        export_string.push_str("\n\n");
+    }
+
     /// For ease of calling, `objects` can contain arbitrary objects, only values contained
     /// in `children` will actually be sorted.
     pub fn fix_indexing(&mut self, objects: &FileObjectStore) {

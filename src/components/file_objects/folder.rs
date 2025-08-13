@@ -1,6 +1,7 @@
 use crate::components::file_objects::base::{
     BaseFileObject, CompileStatus, FileObject, metadata_extract_string, metadata_extract_u64,
 };
+use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
 use std::ffi::OsString;
 use std::fs::create_dir;
@@ -135,6 +136,26 @@ impl FileObject for Folder {
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.base.toml_header["compile_status"] =
             toml_edit::value(self.metadata.compile_status.bits() as i64);
+    }
+
+    fn generate_outline(
+        &self,
+        depth: u32,
+        export_string: &mut String,
+        objects: &super::FileObjectStore,
+    ) {
+        (self as &dyn FileObject).write_outline_title(depth, export_string);
+
+        write_outline_property("summary", &self.metadata.summary, export_string);
+        write_outline_property("notes", &self.metadata.notes, export_string);
+
+        for child_id in self.get_base().children.iter() {
+            objects.get(child_id).unwrap().borrow().generate_outline(
+                depth + 1,
+                export_string,
+                objects,
+            );
+        }
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

@@ -110,3 +110,28 @@ fn test_write_with_temp_file() -> std::io::Result<()> {
 
     Ok(())
 }
+
+pub fn write_outline_property(property_name: &str, property: &str, export_string: &mut String) {
+    if property.is_empty() {
+        return;
+    }
+
+    export_string.push_str(property_name);
+    export_string.push(':');
+
+    if property.contains('\n') || property.len() > 40 {
+        export_string.push_str("\n\n");
+
+        for line in property.split('\n') {
+            export_string.push_str("> ");
+            export_string.push_str(line);
+            export_string.push('\n');
+        }
+
+        export_string.push_str("\n\n");
+    } else {
+        export_string.push(' ');
+        export_string.push_str(property);
+        export_string.push_str("\n\n");
+    }
+}

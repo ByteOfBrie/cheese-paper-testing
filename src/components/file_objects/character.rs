@@ -1,4 +1,5 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
+use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
@@ -140,6 +141,23 @@ impl FileObject for Character {
         self.base.toml_header["goal"] = toml_edit::value(&*self.metadata.goal);
         self.base.toml_header["conflict"] = toml_edit::value(&*self.metadata.conflict);
         self.base.toml_header["habits"] = toml_edit::value(&*self.metadata.habits);
+    }
+
+    fn generate_outline(
+        &self,
+        depth: u32,
+        export_string: &mut String,
+        _objects: &super::FileObjectStore,
+    ) {
+        (self as &dyn FileObject).write_outline_title(depth, export_string);
+
+        write_outline_property("summary", &self.metadata.summary, export_string);
+        write_outline_property("appearance", &self.metadata.appearance, export_string);
+        write_outline_property("personality", &self.metadata.personality, export_string);
+        write_outline_property("goal", &self.metadata.goal, export_string);
+        write_outline_property("conflict", &self.metadata.conflict, export_string);
+        write_outline_property("habits", &self.metadata.habits, export_string);
+        write_outline_property("notes", &self.metadata.notes, export_string);
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

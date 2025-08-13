@@ -1,7 +1,8 @@
 use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
-    run_with_file_object, write_with_temp_file,
+    write_with_temp_file,
 };
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{Error, ErrorKind, Result};
@@ -9,10 +10,12 @@ use std::path::Path;
 use std::path::PathBuf;
 use toml_edit::DocumentMut;
 
+use std::rc::Rc;
+
 use crate::components::file_objects::utils::process_name_for_filename;
 
 use crate::components::file_objects::base::{
-    FileObjectCreation, load_base_metadata, metadata_extract_string,
+    FileID, FileObjectCreation, load_base_metadata, metadata_extract_string,
 };
 
 /// An entire project. This is somewhat file_object like, but we don't implement everything,
@@ -22,9 +25,9 @@ pub struct Project {
     pub metadata: ProjectMetadata,
     pub base_metadata: FileObjectMetadata,
     pub file: FileInfo,
-    pub text_id: String,
-    pub characters_id: String,
-    pub worldbuilding_id: String,
+    pub text_id: FileID,
+    pub characters_id: FileID,
+    pub worldbuilding_id: FileID,
     pub objects: FileObjectStore,
     toml_header: DocumentMut,
 }
@@ -39,6 +42,7 @@ pub struct ProjectMetadata {
 }
 
 #[allow(non_camel_case_types)]
+#[cfg(test)]
 pub enum ProjectFolder {
     text,
     characters,
@@ -110,9 +114,9 @@ impl Project {
             objects: HashMap::new(),
         };
 
-        project.add_object(Box::new(text));
-        project.add_object(Box::new(characters));
-        project.add_object(Box::new(worldbuilding));
+        project.add_object(Box::new(RefCell::new(text)));
+        project.add_object(Box::new(RefCell::new(characters)));
+        project.add_object(Box::new(RefCell::new(worldbuilding)));
 
         project.save()?;
 
@@ -216,20 +220,23 @@ impl Project {
         };
 
         project.load_metadata()?;
-        project.add_object(Box::new(text));
-        project.add_object(Box::new(characters));
-        project.add_object(Box::new(worldbuilding));
+        project.add_object(Box::new(RefCell::new(text)));
+        project.add_object(Box::new(RefCell::new(characters)));
+        project.add_object(Box::new(RefCell::new(worldbuilding)));
 
         project.save()?;
 
         Ok(project)
     }
 
-    pub fn add_object(&mut self, new_object: Box<dyn FileObject>) {
-        self.objects
-            .insert(new_object.get_base().metadata.id.clone(), new_object);
+    pub fn add_object(&mut self, new_object: Box<RefCell<dyn FileObject>>) {
+        let id = new_object.borrow().id().clone();
+        self.objects.insert(id, new_object);
     }
 
+    /// DEPRECATED ! I'm leaving this function here for now because
+    /// it's used 40 times in the unit tests and I don't want to re-write all that
+    ///
     /// Intended to replace constantly doing this myself in code:
     /// ```
     /// let (text_id_string, mut text) = self
@@ -245,10 +252,12 @@ impl Project {
     /// ```
     /// self.run_with_folder(ProjectFolder::text, |text, objects| text.save(&mut objects))
     /// ```
+    ///
+    #[cfg(test)]
     pub fn run_with_folder<T>(
         &mut self,
         folder: ProjectFolder,
-        func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> T,
+        func: impl FnOnce(&mut Box<RefCell<dyn FileObject>>, &mut FileObjectStore) -> T,
     ) -> T {
         let id_string = match folder {
             ProjectFolder::text => &self.text_id,
@@ -256,24 +265,37 @@ impl Project {
             ProjectFolder::worldbuilding => &self.worldbuilding_id,
         };
 
-        run_with_file_object(id_string, &mut self.objects, func)
+        let mut object_box = self
+            .objects
+            .remove(id_string)
+            .expect("File Object should exist");
+        let res = func(&mut object_box, &mut self.objects);
+        self.objects.insert(id_string.clone(), object_box);
+
+        res
     }
 
     pub fn save(&mut self) -> Result<()> {
         // First, try saving the children
 
-        let text_result =
-            self.run_with_folder(ProjectFolder::text, |text, objects| text.save(objects));
-
+        let text_result = self
+            .objects
+            .get(&self.text_id)
+            .unwrap()
+            .borrow_mut()
+            .save(&self.objects);
         let characters_result = self
-            .run_with_folder(ProjectFolder::characters, |characters, objects| {
-                characters.save(objects)
-            });
-
+            .objects
+            .get(&self.characters_id)
+            .unwrap()
+            .borrow_mut()
+            .save(&self.objects);
         let worldbuilding_result = self
-            .run_with_folder(ProjectFolder::worldbuilding, |worldbuilding, objects| {
-                worldbuilding.save(objects)
-            });
+            .objects
+            .get(&self.worldbuilding_id)
+            .unwrap()
+            .borrow_mut()
+            .save(&self.objects);
 
         // Now save the project itself
         // unlike other file objects, this one doesn't rename automatically. This might be something
@@ -305,7 +327,7 @@ impl Project {
     fn write_metadata(&mut self) {
         self.toml_header["version"] = toml_edit::value(self.base_metadata.version as i64);
         self.toml_header["name"] = toml_edit::value(&self.base_metadata.name);
-        self.toml_header["id"] = toml_edit::value(&self.base_metadata.id);
+        self.toml_header["id"] = toml_edit::value(&*self.base_metadata.id);
 
         self.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
         self.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
@@ -397,7 +419,7 @@ impl Project {
     /// Given a path, find the file ID. Right now, this is a pretty dumb algorithm that
     /// just visits every file object, gets its path, and compares it. This means it's
     /// O(n) path allocations, but it should be reliable.
-    pub fn find_object_by_path(&self, object_path: &Path) -> Option<String> {
+    pub fn find_object_by_path(&self, object_path: &Path) -> Option<Rc<String>> {
         // If we have the metadata path, we're trying to find the object with the
         // parent of it, so we compute that path instead
         let compare_path = if object_path.ends_with("metadata.toml") {
@@ -407,7 +429,7 @@ impl Project {
         };
 
         for (id, file_object) in self.objects.iter() {
-            if file_object.get_path() == compare_path {
+            if file_object.borrow().get_path() == compare_path {
                 return Some(id.clone());
             }
         }

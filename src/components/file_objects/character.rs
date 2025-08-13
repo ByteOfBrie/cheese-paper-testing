@@ -29,7 +29,7 @@ impl Character {
 
         character.base.file.basename = character.calculate_filename();
 
-        character.save(&mut HashMap::new())?;
+        <dyn FileObject>::save(&mut character, &HashMap::new()).unwrap();
 
         Ok(character)
     }
@@ -148,5 +148,14 @@ impl FileObject for Character {
 
     fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
+    }
+}
+
+// shortcuts for not having to cast every time
+
+#[cfg(test)]
+impl Character {
+    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<()> {
+        (self as &mut dyn FileObject).save(objects)
     }
 }

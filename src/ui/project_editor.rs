@@ -4,7 +4,7 @@ pub mod search;
 
 use crate::components::Project;
 use crate::components::file_objects::base::FileObjectCreation;
-use crate::components::file_objects::{FileObject, from_file, run_with_file_object};
+use crate::components::file_objects::{FileObject, from_file};
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use egui::{Key, Modifiers};
@@ -12,6 +12,7 @@ use egui_dock::{DockArea, DockState};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use spellbook::Dictionary;
+use std::cell::RefCell;
 use std::ops::Range;
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
@@ -73,7 +74,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         if let Some(object) = self.project.objects.get(tab) {
-            object.get_title().into()
+            object.borrow().get_title().into()
         } else {
             // any deleted scenes should be cleaned up before we get here, but we have this
             // logic instead of panicking anyway
@@ -142,7 +143,10 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
         // draw the actual UI for the tab open in the editor
         if let Some(file_object) = self.project.objects.get_mut(tab) {
-            file_object.as_editor_mut().ui(ui, self.editor_context);
+            file_object
+                .borrow_mut()
+                .as_editor_mut()
+                .ui(ui, self.editor_context);
         }
     }
 
@@ -359,14 +363,10 @@ impl ProjectEditor {
 
             match self.project.find_object_by_path(modify_path) {
                 Some(id) => {
-                    run_with_file_object(&id, &mut self.project.objects, |file_object, _objects| {
-                        if let Err(err) = file_object.reload_file() {
-                            log::warn!(
-                                "Error loading file {}: {err}",
-                                file_object.get_base().metadata.id
-                            );
-                        }
-                    })
+                    let file_object = self.project.objects.get(&id).unwrap();
+                    if let Err(err) = file_object.borrow_mut().reload_file() {
+                        log::warn!("Error loading file {}: {err}", file_object.borrow());
+                    }
                 }
                 None => {
                     let ancestors = modify_path.ancestors();
@@ -392,9 +392,9 @@ impl ProjectEditor {
                             None => continue,
                         };
 
-                        let parent_object = self.project.objects.get_mut(&parent_id).unwrap();
+                        let parent_object = self.project.objects.get(&parent_id).unwrap();
 
-                        let new_index = parent_object.get_base().children.len();
+                        let new_index = parent_object.borrow_mut().get_base().children.len();
 
                         // We've found a parent, which means that this object should
                         // have from_file called on it
@@ -409,31 +409,33 @@ impl ProjectEditor {
                             }
                         };
 
-                        let (new_object, descendents): (Box<dyn FileObject>, _) = match new_object {
-                            FileObjectCreation::Scene(parent, children) => {
-                                (Box::new(parent), children)
-                            }
-                            FileObjectCreation::Character(parent, children) => {
-                                (Box::new(parent), children)
-                            }
-                            FileObjectCreation::Folder(parent, children) => {
-                                (Box::new(parent), children)
-                            }
-                            FileObjectCreation::Place(parent, children) => {
-                                (Box::new(parent), children)
-                            }
-                        };
+                        let (new_object, descendents): (Box<RefCell<dyn FileObject>>, _) =
+                            match new_object {
+                                FileObjectCreation::Scene(parent, children) => {
+                                    (Box::new(RefCell::new(parent)), children)
+                                }
+                                FileObjectCreation::Character(parent, children) => {
+                                    (Box::new(RefCell::new(parent)), children)
+                                }
+                                FileObjectCreation::Folder(parent, children) => {
+                                    (Box::new(RefCell::new(parent)), children)
+                                }
+                                FileObjectCreation::Place(parent, children) => {
+                                    (Box::new(RefCell::new(parent)), children)
+                                }
+                            };
+
+                        let id = new_object.borrow().id().clone();
 
                         // Add to the parent's list of children
                         parent_object
+                            .borrow_mut()
                             .get_base_mut()
                             .children
-                            .push(new_object.get_base().metadata.id.clone());
+                            .push(id.clone());
 
                         // Add the parent object to the object list
-                        self.project
-                            .objects
-                            .insert(new_object.get_base().metadata.id.clone(), new_object);
+                        self.project.objects.insert(id, new_object);
 
                         // Add all of the descendents to the list
                         for (id_string, object) in descendents {
@@ -447,9 +449,9 @@ impl ProjectEditor {
 
     fn set_editor_tab(&mut self, file_id: &String) {
         // We don't want to open these, so just exit early
-        if *file_id == self.project.text_id
-            || *file_id == self.project.characters_id
-            || *file_id == self.project.worldbuilding_id
+        if *file_id == *self.project.text_id
+            || *file_id == *self.project.characters_id
+            || *file_id == *self.project.worldbuilding_id
         {
             return;
         }

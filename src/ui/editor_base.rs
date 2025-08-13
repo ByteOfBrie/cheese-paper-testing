@@ -648,7 +648,7 @@ impl CheesePaperApp {
                     .state
                     .data
                     .last_open_file_ids
-                    .get(&project.base_metadata.id)
+                    .get(&*project.base_metadata.id)
                 {
                     Some(open_tabs) => Some(ProjectEditor::new(
                         project,
@@ -682,12 +682,12 @@ impl CheesePaperApp {
                     .state
                     .data
                     .last_open_file_ids
-                    .get(&project_editor.project.base_metadata.id)
+                    .get(&*project_editor.project.base_metadata.id)
             {
-                self.state
-                    .data
-                    .last_open_file_ids
-                    .insert(project_editor.project.base_metadata.id.clone(), open_tabs);
+                self.state.data.last_open_file_ids.insert(
+                    project_editor.project.base_metadata.id.to_string(),
+                    open_tabs,
+                );
 
                 self.state.modified = true;
             }

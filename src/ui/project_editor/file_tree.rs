@@ -1,20 +1,20 @@
+use std::rc::Rc;
+
 use super::ProjectEditor;
 
 use crate::components::Project;
-use crate::components::file_objects::base::FileType;
-use crate::components::file_objects::{
-    FileObject, FileObjectStore, move_child, run_with_file_object,
-};
+use crate::components::file_objects::base::{FileID, FileType};
+use crate::components::file_objects::{FileObject, FileObjectStore, move_child};
 
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 
 enum ContextMenuActions {
     Delete {
-        parent: String,
-        deleting: String,
+        parent: FileID,
+        deleting: FileID,
     },
     Add {
-        parent: String,
+        parent: FileID,
         position: DirPosition<String>,
         file_type: FileType,
     },
@@ -23,10 +23,10 @@ enum ContextMenuActions {
 impl dyn FileObject {
     fn build_tree(
         &self,
-        objects: &mut FileObjectStore,
+        objects: &FileObjectStore,
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
         actions: &mut Vec<ContextMenuActions>,
-        parent_id: Option<&str>,
+        parent_id: Option<FileID>,
     ) {
         // TODO: scale off of font size
         const NODE_HEIGHT: f32 = 26.0;
@@ -39,22 +39,16 @@ impl dyn FileObject {
         // first, construct the node. we avoid a lot of duplication by putting it into a variable
         // before sticking it in the nodebuilder
         let base_node = if self.is_folder() {
-            NodeBuilder::dir(self.get_base().metadata.id.clone())
+            NodeBuilder::dir(self.id().to_string())
         } else {
-            NodeBuilder::leaf(self.get_base().metadata.id.clone())
+            NodeBuilder::leaf(self.id().to_string())
         };
 
         // compute some stuff for our context menu:
         let (add_parent, position) = if self.is_folder() {
-            (
-                Some(self.get_base().metadata.id.as_str()),
-                DirPosition::Last,
-            )
+            (Some(self.id().clone()), DirPosition::Last)
         } else {
-            (
-                parent_id,
-                DirPosition::After(self.get_base().metadata.id.clone()),
-            )
+            (parent_id.clone(), DirPosition::After(self.id().to_string()))
         };
 
         let node = base_node
@@ -64,7 +58,7 @@ impl dyn FileObject {
                 // We can safely call unwrap on parent here because children can't be root nodes
                 if ui.button("New Scene").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: add_parent.unwrap().to_string(),
+                        parent: add_parent.as_ref().unwrap().clone(),
                         position: position.clone(),
                         file_type: FileType::Scene,
                     });
@@ -72,7 +66,7 @@ impl dyn FileObject {
                 }
                 if ui.button("New Character").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: add_parent.unwrap().to_string(),
+                        parent: add_parent.as_ref().unwrap().clone(),
                         position: position.clone(),
                         file_type: FileType::Character,
                     });
@@ -80,7 +74,7 @@ impl dyn FileObject {
                 }
                 if ui.button("New Folder").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: add_parent.unwrap().to_string(),
+                        parent: add_parent.as_ref().unwrap().clone(),
                         position: position.clone(),
                         file_type: FileType::Folder,
                     });
@@ -88,7 +82,7 @@ impl dyn FileObject {
                 }
                 if ui.button("New Place").clicked() {
                     actions.push(ContextMenuActions::Add {
-                        parent: add_parent.unwrap().to_string(),
+                        parent: add_parent.as_ref().unwrap().clone(),
                         position: position.clone(),
                         file_type: FileType::Place,
                     });
@@ -97,12 +91,12 @@ impl dyn FileObject {
 
                 ui.separator();
 
-                if let Some(parent) = parent_id
+                if let Some(parent) = parent_id.clone()
                     && ui.button("Delete").clicked()
                 {
                     actions.push(ContextMenuActions::Delete {
-                        parent: parent.to_string(),
-                        deleting: self.get_base().metadata.id.clone(),
+                        parent,
+                        deleting: self.id().clone(),
                     });
                 }
             });
@@ -110,15 +104,10 @@ impl dyn FileObject {
         builder.node(node);
 
         if self.is_folder() {
-            for child_id in self.get_base().children.iter() {
-                run_with_file_object(child_id, objects, |child, objects| {
-                    child.build_tree(
-                        objects,
-                        builder,
-                        actions,
-                        Some(self.get_base().metadata.id.as_str()),
-                    );
-                });
+            for child in self.children(objects) {
+                child
+                    .borrow_mut()
+                    .build_tree(objects, builder, actions, Some(self.id().clone()));
             }
 
             builder.close_dir();
@@ -132,19 +121,21 @@ impl Project {
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, String>,
         actions: &mut Vec<ContextMenuActions>,
     ) {
-        run_with_file_object(&self.text_id, &mut self.objects, |text, objects| {
-            text.build_tree(objects, builder, actions, None)
-        });
-        run_with_file_object(
-            &self.characters_id,
-            &mut self.objects,
-            |characters, objects| characters.build_tree(objects, builder, actions, None),
-        );
-        run_with_file_object(
-            &self.worldbuilding_id,
-            &mut self.objects,
-            |worldbuilding, objects| worldbuilding.build_tree(objects, builder, actions, None),
-        );
+        self.objects
+            .get(&self.text_id)
+            .unwrap()
+            .borrow_mut()
+            .build_tree(&self.objects, builder, actions, None);
+        self.objects
+            .get(&self.characters_id)
+            .unwrap()
+            .borrow_mut()
+            .build_tree(&self.objects, builder, actions, None);
+        self.objects
+            .get(&self.worldbuilding_id)
+            .unwrap()
+            .borrow_mut()
+            .build_tree(&self.objects, builder, actions, None);
     }
 }
 
@@ -169,9 +160,9 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
             Action::Move(drag_and_drop) => {
                 if let Some(source) = drag_and_drop.source.first() {
                     // Don't move one of the roots
-                    if *source == editor.project.text_id
-                        || *source == editor.project.characters_id
-                        || *source == editor.project.worldbuilding_id
+                    if *source == *editor.project.text_id
+                        || *source == *editor.project.characters_id
+                        || *source == *editor.project.worldbuilding_id
                     {
                         continue;
                     }
@@ -183,6 +174,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                             .objects
                             .get(&drag_and_drop.target)
                             .expect("objects in the tree must be in the object map")
+                            .borrow()
                             .get_base()
                             .children
                             .len(),
@@ -191,6 +183,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                             .objects
                             .get(&node)
                             .expect("objects in the tree must be in the object map")
+                            .borrow()
                             .get_base()
                             .index
                             .expect("nodes in the tree should always have indexes"),
@@ -200,6 +193,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                                 .objects
                                 .get(&node)
                                 .expect("objects in the tree must be in the object map")
+                                .borrow()
                                 .get_base()
                                 .index
                                 .expect("nodes in the tree should always have indexes")
@@ -207,20 +201,24 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                         }
                     };
 
-                    let mut source_parent: Option<String> = None;
+                    let source: FileID = Rc::new(source.clone());
+                    // TODO finish replacing the Strings with Rc everywhere to save on unnecessary clones (low priority)
+                    let mut source_parent: Option<FileID> = None;
 
                     for object in editor.project.objects.values() {
-                        if object.get_base().children.contains(source) {
-                            source_parent = Some(object.get_base().metadata.id.clone());
+                        if object.borrow().get_base().children.contains(&source) {
+                            source_parent = Some(object.borrow().id().clone());
                         }
                     }
 
+                    let target = Rc::new(drag_and_drop.target.to_string());
+
                     if let Err(err) = move_child(
-                        source,
+                        &source,
                         &source_parent.expect("moving item's parent should be in tree"),
-                        &drag_and_drop.target,
+                        &target,
                         index,
-                        &mut editor.project.objects,
+                        &editor.project.objects,
                     ) {
                         log::error!("error encountered while moving file object: {err:?}");
                     }
@@ -237,28 +235,27 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                 if let Some(tab_position) = editor.dock_state.find_tab(&deleting) {
                     editor.dock_state.remove_tab(tab_position);
                 }
-                run_with_file_object(
-                    parent.as_str(),
-                    &mut editor.project.objects,
-                    |parent, objects| {
-                        if let Err(err) = parent.remove_child(&deleting, objects) {
-                            log::error!(
-                                "Encountered error while trying to delete element: {deleting}: {err}"
-                            );
-                        }
-                    },
-                )
+                if let Err(err) =
+                    <dyn FileObject>::remove_child(&deleting, &parent, &mut editor.project.objects)
+                {
+                    log::error!(
+                        "Encountered error while trying to delete element: {deleting}: {err}"
+                    );
+                }
             }
             ContextMenuActions::Add {
                 parent,
                 position,
                 file_type,
             } => {
-                match run_with_file_object(
-                    &parent,
-                    &mut editor.project.objects,
-                    |parent, objects| parent.create_child(file_type, position, objects),
-                ) {
+                let resut = editor
+                    .project
+                    .objects
+                    .get(&parent)
+                    .unwrap()
+                    .borrow_mut()
+                    .create_child(file_type, position, &editor.project.objects);
+                match resut {
                     Ok(new_child) => editor.project.add_object(new_child),
                     Err(err) => {
                         log::error!("Encountered error while trying to add child: {err}")

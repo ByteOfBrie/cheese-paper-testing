@@ -1,18 +1,21 @@
-use egui_ltreeview::DirPosition;
+mod implementation;
+pub use implementation::*;
+
 use log::warn;
 use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::components::file_objects::utils::{
     add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
-    write_with_temp_file,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
 use crate::ui::{FileObjectEditor, RenderData};
+use std::cell::RefCell;
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::SystemTime;
 use toml_edit::DocumentMut;
 
@@ -40,7 +43,7 @@ pub struct FileObjectMetadata {
     pub name: String,
     /// ID unique across all objects. The reference implementations use UUIDv4, but any string
     /// is acceptable
-    pub id: String,
+    pub id: Rc<String>,
 }
 
 /// List of known file types in this version of the editor. File types that aren't known will not
@@ -60,7 +63,7 @@ pub struct BaseFileObject {
     pub index: Option<usize>,
     pub file: FileInfo,
     pub toml_header: DocumentMut,
-    pub children: Vec<String>,
+    pub children: Vec<FileID>,
     pub _rdata: RenderData,
 }
 
@@ -69,7 +72,7 @@ impl Default for FileObjectMetadata {
         Self {
             version: 1u32,
             name: String::new(),
-            id: Uuid::new_v4().as_hyphenated().to_string(),
+            id: Rc::new(Uuid::new_v4().as_hyphenated().to_string()),
         }
     }
 }
@@ -113,7 +116,7 @@ impl FileType {
     }
 }
 
-pub type FileObjectStore = HashMap<String, Box<dyn FileObject>>;
+// pub type FileObjectStore = HashMap<String, Box<dyn FileObject>>;
 
 #[derive(Debug)]
 pub struct FileInfo {
@@ -215,28 +218,28 @@ pub fn load_base_metadata(
     }
 
     match metadata_extract_string(metadata_table, "id")? {
-        Some(id) => metadata_object.id = id,
+        Some(id) => metadata_object.id = Rc::new(id),
         None => file_info.modified = true,
     }
 
     Ok(())
 }
 
-pub fn run_with_file_object<T>(
-    id_string: &str,
-    objects: &mut FileObjectStore,
-    func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> T,
-) -> T {
-    let (object_id_string, mut object) = objects
-        .remove_entry(id_string)
-        .expect("id_string should always be contained within objects");
+// pub fn run_with_file_object<T>(
+//     id_string: &str,
+//     objects: &mut FileObjectStore,
+//     func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> T,
+// ) -> T {
+//     let (object_id_string, mut object) = objects
+//         .remove_entry(id_string)
+//         .expect("id_string should always be contained within objects");
 
-    let result = func(&mut object, objects);
+//     let result = func(&mut object, objects);
 
-    objects.insert(object_id_string, object);
+//     objects.insert(object_id_string, object);
 
-    result
-}
+//     result
+// }
 
 /// The object that was requested,
 /// All of the descendents of that file object (including children) in a hashmap that owns them
@@ -248,23 +251,22 @@ pub enum FileObjectCreation {
     Place(Place, FileObjectStore),
 }
 
-fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectStore) -> bool {
-    run_with_file_object(parent_id, objects, |parent, objects| {
-        for child_id in parent.get_base().children.iter() {
-            // directly check if this is object we're looking for
-            if child_id == checking_id {
-                return true;
-            }
+fn parent_contains(parent_id: &FileID, checking_id: &FileID, objects: &FileObjectStore) -> bool {
+    let parent = objects.get(parent_id).unwrap();
 
-            // check all of the children
-            if parent_contains(child_id, checking_id, objects) {
-                return true;
-            }
+    for child_id in &parent.borrow().get_base().children {
+        // directly check if this is object we're looking for
+        if child_id == checking_id {
+            return true;
         }
 
-        // we didn't find the file object here, return false
-        false
-    })
+        // check all of the children
+        if parent_contains(child_id, checking_id, objects) {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Move a child between two folders, `source_file_id` and `dest_file_id`
@@ -272,11 +274,11 @@ fn parent_contains(parent_id: &str, checking_id: &str, objects: &mut FileObjectS
 /// This can't be part of the FileObject trait because ownership is complicated between
 /// the
 pub fn move_child(
-    moving_file_id: &str,
-    source_file_id: &str,
-    dest_file_id: &str,
+    moving_file_id: &FileID,
+    source_file_id: &FileID,
+    dest_file_id: &FileID,
     new_index: usize,
-    objects: &mut FileObjectStore,
+    objects: &FileObjectStore,
 ) -> Result<()> {
     // Check for it being a valid move:
     // * can't move to one of your own children
@@ -292,7 +294,7 @@ pub fn move_child(
         .get(moving_file_id)
         .expect("objects should contain moving file id");
 
-    let moving_index = match moving.get_base().index {
+    let moving_index = match moving.borrow().get_base().index {
         Some(index) => index,
         None => {
             return Err(Error::new(
@@ -322,9 +324,11 @@ pub fn move_child(
     // if we're moving within an object, we already fixed indexing a few lines above
     if source_file_id != dest_file_id {
         // We just need to clean up and re-index the source to fill in the gap we left
-        run_with_file_object(source_file_id, objects, |source, objects| {
-            source.fix_indexing(objects)
-        });
+        objects
+            .get(source_file_id)
+            .unwrap()
+            .borrow_mut()
+            .fix_indexing(objects);
     }
 
     Ok(())
@@ -333,24 +337,31 @@ pub fn move_child(
 /// Helper function called by move_child for the parts that are not safe to return early (including
 /// errors). If something goes wrong, it will panic
 fn create_index_and_move_on_disk(
-    moving_file_id: &str,
-    source_file_id: &str,
-    dest_file_id: &str,
+    moving_file_id: &FileID,
+    source_file_id: &FileID,
+    dest_file_id: &FileID,
     new_index: usize,
-    objects: &mut FileObjectStore,
+    objects: &FileObjectStore,
 ) {
     // Create index "gap" in destination (helpful to do first in case we're moving "up" and this
     // changes the path of the object being moved)
-    run_with_file_object(dest_file_id, objects, |dest, objects| {
-        dest.create_index_gap(new_index, objects).unwrap();
-    });
+    objects
+        .get(dest_file_id)
+        .unwrap()
+        .borrow_mut()
+        .create_index_gap(new_index, objects)
+        .unwrap();
+    // run_with_file_object(dest_file_id, objects, |dest, objects| {
+    //     dest.create_index_gap(new_index, objects).unwrap();
+    // });
 
     // Remove the moving object from it's current parent
     let source = objects
-        .get_mut(source_file_id)
+        .get(source_file_id)
         .expect("objects should contain source file id");
 
     let child_id_position = source
+        .borrow()
         .get_base()
         .children
         .iter()
@@ -362,33 +373,40 @@ fn create_index_and_move_on_disk(
             )
         });
 
-    let child_id_string = source.get_base_mut().children.remove(child_id_position);
+    let child_id_string = source
+        .borrow_mut()
+        .get_base_mut()
+        .children
+        .remove(child_id_position);
 
     // Object is now removed from it's current parent, although still actually there on disk
     // We should also stop using `source` or the (scary) borrow checker will get mad at us
+    // update: we have added some refcells everywhere and the borrow checker is nicer now
 
-    // avoid borrowing twice:
-    run_with_file_object(dest_file_id, objects, |dest, objects| {
-        let insertion_index = std::cmp::min(new_index, dest.get_base().children.len());
-        // Move the object into the children of dest (at the proper place)
-        dest.get_base_mut()
-            .children
-            .insert(insertion_index, child_id_string);
+    let dest = objects.get(dest_file_id).unwrap();
 
-        run_with_file_object(moving_file_id, objects, |child, objects| {
-            // Move the actual child on disk
-            if let Err(err) = child.move_object(insertion_index, dest.get_path(), objects) {
-                // We don't pass enough information around to meaninfully recover here
-                log::error!("Encountered error while trying to move {moving_file_id}");
-                panic!(
-                    "Encountered unrecoverable error while trying to move {moving_file_id}: {err}"
-                );
-            }
-        });
+    let insertion_index = std::cmp::min(new_index, dest.borrow().get_base().children.len());
+    // Move the object into the children of dest (at the proper place)
+    dest.borrow_mut()
+        .get_base_mut()
+        .children
+        .insert(insertion_index, child_id_string);
 
-        // Fix indexing in the destination (now that it has the child)
-        dest.fix_indexing(objects);
-    });
+    let child = objects.get(moving_file_id).unwrap();
+
+    // Move the actual child on disk
+    if let Err(err) =
+        child
+            .borrow_mut()
+            .move_object(insertion_index, dest.borrow().get_path(), objects)
+    {
+        // We don't pass enough information around to meaninfully recover here
+        log::error!("Encountered error while trying to move {moving_file_id}");
+        panic!("Encountered unrecoverable error while trying to move {moving_file_id}: {err}");
+    }
+
+    // Fix indexing in the destination (now that it has the child)
+    dest.borrow_mut().fix_indexing(objects);
 }
 
 /// Load an arbitrary file object from a file on disk
@@ -601,25 +619,26 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                         match from_file(&file, Some(index)) {
                             Ok(created_files) => {
                                 let (object, mut descendents): (
-                                    Box<dyn FileObject>,
+                                    Box<RefCell<dyn FileObject>>,
                                     FileObjectStore,
                                 ) = match created_files {
                                     FileObjectCreation::Scene(object, descendents) => {
-                                        (Box::new(object), descendents)
+                                        (Box::new(RefCell::new(object)), descendents)
                                     }
                                     FileObjectCreation::Folder(object, descendents) => {
-                                        (Box::new(object), descendents)
+                                        (Box::new(RefCell::new(object)), descendents)
                                     }
                                     FileObjectCreation::Character(object, descendents) => {
-                                        (Box::new(object), descendents)
+                                        (Box::new(RefCell::new(object)), descendents)
                                     }
                                     FileObjectCreation::Place(object, descendents) => {
-                                        (Box::new(object), descendents)
+                                        (Box::new(RefCell::new(object)), descendents)
                                     }
                                 };
 
-                                base.children.push(object.get_base().metadata.id.clone());
-                                objects.insert(object.get_base().metadata.id.clone(), object);
+                                let id = object.borrow().id().clone();
+                                base.children.push(id.clone());
+                                objects.insert(id, object);
 
                                 for (child_file_id, child_file) in descendents.drain() {
                                     objects.insert(child_file_id, child_file);
@@ -675,7 +694,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         FileType::Folder => {
             let mut folder = Folder::from_base(base)?;
 
-            folder.fix_indexing(&mut objects);
+            <dyn FileObject>::fix_indexing(&mut folder, &objects);
 
             Ok(FileObjectCreation::Folder(folder, objects))
         }
@@ -683,7 +702,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         FileType::Place => {
             let mut place = Place::from_base(base)?;
 
-            place.fix_indexing(&mut objects);
+            <dyn FileObject>::fix_indexing(&mut place, &objects);
 
             Ok(FileObjectCreation::Place(place, objects))
         }
@@ -711,7 +730,7 @@ impl BaseFileObject {
     fn write_metadata(&mut self) {
         self.toml_header["version"] = toml_edit::value(self.metadata.version as i64);
         self.toml_header["name"] = toml_edit::value(&self.metadata.name);
-        self.toml_header["id"] = toml_edit::value(&self.metadata.id);
+        self.toml_header["id"] = toml_edit::value(&*self.metadata.id);
     }
 }
 
@@ -742,24 +761,6 @@ pub trait FileObject: Debug {
 
     fn as_editor_mut(&mut self) -> &mut dyn FileObjectEditor;
 
-    /// Sets the index to this file, doing the move if necessary
-    fn set_index(&mut self, new_index: usize, objects: &mut FileObjectStore) -> Result<bool> {
-        if self.get_base().index == Some(new_index) {
-            let name_index = get_index_from_name(&self.get_base().file.basename.to_string_lossy());
-            if name_index == self.get_base().index {
-                // We have the index in memory and on disk, there's nothing to be done here, return early
-                // and avoid writing to disk
-                return Ok(false);
-            }
-        }
-
-        self.get_base_mut().index = Some(new_index);
-
-        self.set_filename(self.calculate_filename(), objects)?;
-
-        Ok(true)
-    }
-
     /// Calculates the filename for a particular object
     fn calculate_filename(&self) -> OsString {
         let base_name: &str = match self.get_base().metadata.name.is_empty() {
@@ -786,101 +787,6 @@ pub trait FileObject: Debug {
         basename
     }
 
-    /// Change the filename in the base object and on disk, processing any required updates
-    fn set_filename(
-        &mut self,
-        new_filename: OsString,
-        objects: &mut FileObjectStore,
-    ) -> Result<()> {
-        let old_path = self.get_path();
-        let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
-
-        if new_path == old_path {
-            // Nothing to do
-            log::warn!(
-                "tried to move {old_path:?} to itself (set_filename), harmless but shouldn't happen"
-            );
-            return Ok(());
-        }
-
-        self.get_base_mut().file.basename = new_filename;
-
-        if let Err(err) = self.move_on_disk(old_path, new_path, objects) {
-            log::error!(
-                "failed to set filename of {self:?} to {:?}",
-                self.get_base().file.basename
-            );
-            return Err(err);
-        }
-
-        Ok(())
-    }
-
-    /// Processes the actual move on disk of this file object. Does *not* handle any logic about
-    /// parents or indexes, see `move_child`
-    fn move_object(
-        &mut self,
-        new_index: usize,
-        new_path: PathBuf,
-        objects: &mut FileObjectStore,
-    ) -> Result<()> {
-        let old_path = self.get_path();
-
-        self.get_base_mut().index = Some(new_index);
-        self.get_base_mut().file.dirname = new_path;
-        self.get_base_mut().file.basename = self.calculate_filename();
-        let new_path = self.get_path();
-
-        if new_path == old_path {
-            // Nothing to do:
-            log::warn!("tried to move {old_path:?} to itself, harmless but shouldn't happen");
-            return Ok(());
-        }
-
-        log::debug!(
-            "moving {} from {:#?} to {:?}",
-            &self.get_base().metadata.name,
-            &old_path,
-            &new_path
-        );
-
-        self.move_on_disk(old_path, new_path, objects)
-    }
-
-    fn move_on_disk(
-        &mut self,
-        old_path: PathBuf,
-        new_path: PathBuf,
-        objects: &mut FileObjectStore,
-    ) -> Result<()> {
-        if new_path == old_path {
-            // Nothing to do
-            return Err(Error::new(
-                ErrorKind::InvalidFilename,
-                format!("attempted to rename {old_path:?} to itself"),
-            ));
-        }
-
-        if new_path.exists() {
-            return Err(Error::new(
-                ErrorKind::InvalidFilename,
-                format!("attempted to rename {old_path:?}, but {new_path:?} already exists"),
-            ));
-        }
-
-        if old_path.exists() {
-            std::fs::rename(old_path, new_path)?;
-        }
-
-        for child_id in self.get_base().children.iter() {
-            run_with_file_object(child_id.as_str(), objects, |child, objects| {
-                child.process_path_update(self.get_path(), objects);
-            });
-        }
-
-        Ok(())
-    }
-
     /// Calculates the object's current path. For objects in a single file, this is their path
     /// (including the extension), for folder-based objects (i.e., Folder, Place), this is the
     /// path to the folder.
@@ -901,18 +807,6 @@ pub trait FileObject: Debug {
             Path::join(&base_path, FOLDER_METADATA_FILE_NAME)
         } else {
             base_path
-        }
-    }
-
-    /// When the parent changes path, updates this dirname and any other children
-    fn process_path_update(&mut self, new_directory: PathBuf, objects: &mut FileObjectStore) {
-        self.get_base_mut().file.dirname = new_directory;
-
-        // Propogate this to any children
-        for child_id in self.get_base().children.iter() {
-            run_with_file_object(child_id.as_str(), objects, |child, objects| {
-                child.process_path_update(self.get_path(), objects);
-            });
         }
     }
 
@@ -964,224 +858,10 @@ pub trait FileObject: Debug {
 
         Ok(())
     }
-
-    fn save(&mut self, objects: &mut FileObjectStore) -> Result<()> {
-        // First, try to save children, intentionally trying all of them
-        let mut errors = vec![];
-        for child_id in self.get_base().children.iter() {
-            run_with_file_object(child_id.as_str(), objects, |child, objects| {
-                if let Err(err) = child.save(objects) {
-                    errors.push(err);
-                }
-            });
-        }
-
-        if !self.get_base().file.modified {
-            // If we had *any* errors, return one of them
-            return match errors.pop() {
-                Some(err) => Err(err),
-                None => Ok(()),
-            };
-        }
-
-        // Check if the filename is "correct", updating it if necessary
-        let calculated_filename = self.calculate_filename();
-        if self.get_base().file.basename != calculated_filename {
-            self.set_filename(calculated_filename, objects)?
-        }
-
-        // Ensure `toml_header` has the up-to-date metadata
-        self.get_base_mut().write_metadata();
-        self.write_metadata();
-
-        let mut final_str = self.get_base().toml_header.to_string();
-
-        // Add the scene body and the split (which we want to do even if there isn't any actual body)
-        if self.has_body() {
-            final_str.push_str(HEADER_SPLIT);
-            final_str.push_str("\n\n");
-            final_str.push_str(&self.get_body());
-        }
-
-        write_with_temp_file(&self.get_file(), final_str.as_bytes())?;
-
-        let new_modtime = std::fs::metadata(self.get_file())
-            .expect("attempted to load file that does not exist")
-            .modified()
-            .expect("Modtime not available");
-
-        // Update modtime based on what we just wrote
-        self.get_base_mut().file.modtime = Some(new_modtime);
-        self.get_base_mut().file.modified = false;
-
-        // If we had *any* errors, return one of them
-        match errors.pop() {
-            Some(err) => Err(err),
-            None => Ok(()),
-        }
-    }
-
-    // Helper function to create a child at the end of a directory, which is much simpler
-    #[cfg(test)]
-    fn create_child_at_end(&mut self, file_type: FileType) -> Result<Box<dyn FileObject>> {
-        assert!(self.is_folder());
-
-        // We know it's at the end, and thus we know that there aren't any children
-        self.create_child(file_type, DirPosition::Last, &mut HashMap::new())
-    }
-    /// Creates a child in this folder, returning it to be added to the list
-    fn create_child(
-        &mut self,
-        file_type: FileType,
-        position: DirPosition<String>,
-        objects: &mut FileObjectStore,
-    ) -> Result<Box<dyn FileObject>> {
-        let new_index = match position {
-            DirPosition::After(child) => {
-                self.get_base()
-                    .children
-                    .iter()
-                    .position(|id| *id == child)
-                    .unwrap()
-                    + 1
-            }
-            DirPosition::Before(child) => self
-                .get_base()
-                .children
-                .iter()
-                .position(|id| *id == child)
-                .unwrap(),
-            DirPosition::First => 0,
-            DirPosition::Last => self.get_base().children.len(),
-        };
-
-        self.create_index_gap(new_index, objects)?;
-
-        // It might not be the best behavior to recover from an error *after* a file is created on
-        // disk, but that might not even be possible, and is kinda okay since we should only ever
-        // overwrite that file by accident, even in the worst case
-        let new_object: Box<dyn FileObject> = match file_type {
-            FileType::Scene => Box::new(Scene::new(self.get_path(), new_index)?),
-            FileType::Character => Box::new(Character::new(self.get_path(), new_index)?),
-            FileType::Folder => Box::new(Folder::new(self.get_path(), new_index)?),
-            FileType::Place => Box::new(Place::new(self.get_path(), new_index)?),
-        };
-
-        self.get_base_mut()
-            .children
-            .insert(new_index, new_object.get_base().metadata.id.clone());
-
-        Ok(new_object)
-    }
-
-    fn remove_child(&mut self, child_id: &str, objects: &mut FileObjectStore) -> Result<()> {
-        let mut errors = Vec::new();
-        log::debug!(
-            "Removing child {} from {}",
-            child_id,
-            self.get_base().metadata.id
-        );
-        let mut child = objects
-            .remove(child_id)
-            .expect("all children should be in objects");
-
-        let children = child.get_base_mut().children.clone();
-
-        // Go through the list backwards, so calling `fix_indexing` at the end
-        // isn't expensive (having to do a bunch of moves)
-        for descendant in children.iter().rev() {
-            // save any errors for later
-            if let Err(err) = child.remove_child(descendant, objects) {
-                errors.push(err);
-            }
-        }
-
-        // Remove this from the list of children
-        let child_index = self
-            .get_base_mut()
-            .children
-            .iter()
-            .position(|id| id == child_id)
-            .expect("child_id must be a child of this object");
-
-        self.get_base_mut().children.remove(child_index);
-
-        // finally, we need to take care of this file
-        std::fs::remove_file(child.get_file())?;
-
-        if child.is_folder() {
-            std::fs::remove_dir(child.get_path())?;
-        }
-
-        self.fix_indexing(objects);
-
-        // If we had any errors earlier, return them
-        match errors.pop() {
-            Some(err) => Err(err),
-            None => Ok(()),
-        }
-    }
-
-    /// Creates a gap in the indexes, to be called immediately before a move
-    fn create_index_gap(&mut self, index: usize, objects: &mut FileObjectStore) -> Result<()> {
-        assert!(self.is_folder());
-
-        let children = &self.get_base().children;
-
-        // Ensure we have to do the work
-        if index < children.len() {
-            // Go backwards from the end of the list to the place where the gap is being created
-            // to ensure that we don't have collisions with names
-            for i in (index..children.len()).rev() {
-                let child_id = children[i].as_str();
-
-                run_with_file_object(child_id, objects, |child, objects| {
-                    // Try to increase the index of the child
-                    child.set_index(i + 1, objects)
-                })?;
-            }
-
-            log::debug!(
-                "created indexing gap in {} at {index}",
-                &self.get_base().metadata.id
-            );
-        } else {
-            log::debug!(
-                "indexing gap requested at the end of {}, nothing to do",
-                &self.get_base().metadata.id
-            );
-        }
-        Ok(())
-    }
-
-    /// For ease of calling, `objects` can contain arbitrary objects, only values contained
-    /// in `children` will actually be sorted.
-    fn fix_indexing(&mut self, objects: &mut FileObjectStore) {
-        for (count, child_id) in self.get_base().children.iter().enumerate() {
-            match run_with_file_object(child_id, objects, |child, objects| {
-                child.set_index(count, objects)
-            }) {
-                Ok(true) => {
-                    log::debug!("Updated index of {child_id} to {count}")
-                }
-                Ok(false) => {}
-                Err(err) => {
-                    log::error!("Error while trying to fix indexing of child {child_id}: {err}");
-                    panic!(
-                        "Error during fix_indexing, cannot be sure if we have valid indexes anymore"
-                    );
-                }
-            }
-        }
-    }
 }
 
-impl dyn FileObject {
-    pub fn get_title(&self) -> String {
-        if self.get_base().metadata.name.is_empty() {
-            self.empty_string_name().to_string()
-        } else {
-            self.get_base().metadata.name.clone()
-        }
+impl std::fmt::Display for dyn FileObject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[File Object | id={}]", self.id())
     }
 }

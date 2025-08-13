@@ -40,7 +40,7 @@ impl Folder {
         folder.base.file.basename = folder.calculate_filename();
 
         create_dir(folder.get_path())?;
-        folder.save(&mut HashMap::new())?;
+        <dyn FileObject>::save(&mut folder, &HashMap::new()).unwrap();
 
         Ok(folder)
     }
@@ -55,7 +55,7 @@ impl Folder {
         folder.get_base_mut().file.basename = OsString::from(name);
 
         create_dir(folder.get_path())?;
-        folder.save(&mut HashMap::new())?;
+        <dyn FileObject>::save(&mut folder, &HashMap::new()).unwrap();
 
         Ok(folder)
     }
@@ -150,5 +150,14 @@ impl FileObject for Folder {
 
     fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
+    }
+}
+
+// shortcuts for not having to cast every time
+
+#[cfg(test)]
+impl Folder {
+    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<()> {
+        (self as &mut dyn FileObject).save(objects)
     }
 }

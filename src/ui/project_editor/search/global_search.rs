@@ -46,11 +46,14 @@ pub fn search(project: &Project, ctx: &mut EditorContext) {
     let mut search_results = HashMap::new();
 
     for (key, object) in project.objects.iter() {
-        object.as_editor().for_each_textbox(&mut |text, box_name| {
-            let search_result =
-                textbox_search::search(text, key, box_name, &ctx.global_search.find_text);
-            search_results.insert(text.id(), search_result);
-        });
+        object
+            .borrow()
+            .as_editor()
+            .for_each_textbox(&mut |text, box_name| {
+                let search_result =
+                    textbox_search::search(text, key, box_name, &ctx.global_search.find_text);
+                search_results.insert(text.id(), search_result);
+            });
     }
 
     ctx.global_search.search_results = Some(search_results);
@@ -80,7 +83,11 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
         let mut items: Vec<(TextUID, String, &TextBoxSearchResult)> = search_results
             .iter()
             .filter_map(|(id, tbsr)| {
-                let file_object_name = project.objects.get(&tbsr.file_object_id)?.get_title();
+                let file_object_name = project
+                    .objects
+                    .get(&tbsr.file_object_id)?
+                    .borrow()
+                    .get_title();
                 Some((*id, file_object_name, tbsr))
             })
             .filter(|(_, _, tbsr)| !tbsr.finds.is_empty())

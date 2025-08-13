@@ -29,7 +29,7 @@ impl Place {
         place.base.file.basename = place.calculate_filename();
 
         create_dir(place.get_path())?;
-        place.save(&mut HashMap::new())?;
+        <dyn FileObject>::save(&mut place, &HashMap::new()).unwrap();
 
         Ok(place)
     }
@@ -136,5 +136,13 @@ impl FileObject for Place {
 
     fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
+    }
+}
+
+// shortcuts for not having to cast every time
+#[cfg(test)]
+impl Place {
+    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<()> {
+        (self as &mut dyn FileObject).save(objects)
     }
 }

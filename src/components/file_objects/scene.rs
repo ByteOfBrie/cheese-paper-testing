@@ -125,7 +125,7 @@ impl Scene {
 
         scene.base.file.basename = scene.calculate_filename();
 
-        scene.save(&mut HashMap::new())?;
+        <dyn FileObject>::save(&mut scene, &HashMap::new()).unwrap();
 
         Ok(scene)
     }
@@ -159,5 +159,14 @@ impl Scene {
     pub fn word_count(&self) -> usize {
         let re = Regex::new(r"\s+").unwrap();
         re.split(&self.text).count()
+    }
+}
+
+// shortcuts for not having to cast every time
+
+#[cfg(test)]
+impl Scene {
+    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<()> {
+        (self as &mut dyn FileObject).save(objects)
     }
 }

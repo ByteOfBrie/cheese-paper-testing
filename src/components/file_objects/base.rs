@@ -1,6 +1,7 @@
 mod implementation;
 pub use implementation::*;
 
+use bitflags::bitflags;
 use log::warn;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -131,6 +132,31 @@ pub struct FileInfo {
     pub modified: bool,
 }
 
+bitflags! {
+
+    /// The presence of this particular object in
+    #[derive(Debug)]
+    pub struct CompileStatus: u64 {
+        const INCLUDE              = 0b0000_0000_0000_0001;
+        const INCLUDE_PRESET       = 0b0000_0000_0000_0010;
+        const INCLUDE_TITLE        = 0b0000_0000_0000_0100;
+        const INCLUDE_TITLE_PRESET = 0b0000_0000_0000_1000;
+        const NO_SPLIT_AT_END      = 0b0000_0000_0001_0000;
+
+        // allow for any bits, in case a future version of cheese-paper sets more
+        const _ = !0;
+    }
+}
+
+impl Default for CompileStatus {
+    fn default() -> Self {
+        CompileStatus::INCLUDE
+            | CompileStatus::INCLUDE_PRESET
+            | CompileStatus::INCLUDE_TITLE
+            | CompileStatus::INCLUDE_TITLE_PRESET
+    }
+}
+
 pub fn metadata_extract_u64(
     table: &DocumentMut,
     field_name: &str,
@@ -164,15 +190,6 @@ pub fn metadata_extract_string(table: &DocumentMut, field_name: &str) -> Result<
                 })?
                 .to_owned(),
         ),
-        None => None,
-    })
-}
-
-pub fn metadata_extract_bool(table: &DocumentMut, field_name: &str) -> Result<Option<bool>> {
-    Ok(match table.get(field_name) {
-        Some(value) => Some(value.as_bool().ok_or_else(|| {
-            Error::new(ErrorKind::InvalidData, format!("{field_name} was not bool"))
-        })?),
         None => None,
     })
 }

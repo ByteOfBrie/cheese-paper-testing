@@ -1,28 +1,17 @@
 use crate::components::file_objects::base::{
-    BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
+    BaseFileObject, CompileStatus, FileObject, metadata_extract_string, metadata_extract_u64,
 };
 use crate::components::text::Text;
 use regex::Regex;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SceneMetadata {
     pub summary: Text,
     pub notes: Text,
     pub pov: Text, // TODO: create custom object for this
-    pub compile_status: bool,
-}
-
-impl Default for SceneMetadata {
-    fn default() -> Self {
-        Self {
-            summary: Text::default(),
-            notes: Text::default(),
-            pov: Text::default(),
-            compile_status: true,
-        }
-    }
+    pub compile_status: CompileStatus,
 }
 
 #[derive(Debug)]
@@ -51,8 +40,10 @@ impl FileObject for Scene {
             None => modified = true,
         }
 
-        match metadata_extract_bool(&self.base.toml_header, "compile_status")? {
-            Some(compile_status) => self.metadata.compile_status = compile_status,
+        match metadata_extract_u64(&self.base.toml_header, "compile_status", true)? {
+            Some(compile_status) => {
+                self.metadata.compile_status = CompileStatus::from_bits_retain(compile_status)
+            }
             None => modified = true,
         }
 
@@ -103,7 +94,8 @@ impl FileObject for Scene {
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.base.toml_header["pov"] = toml_edit::value(&*self.metadata.pov);
-        self.base.toml_header["compile_status"] = toml_edit::value(self.metadata.compile_status);
+        self.base.toml_header["compile_status"] =
+            toml_edit::value(self.metadata.compile_status.bits() as i64);
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

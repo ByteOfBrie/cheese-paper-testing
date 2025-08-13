@@ -1,5 +1,5 @@
 use crate::components::file_objects::base::{
-    BaseFileObject, FileObject, metadata_extract_bool, metadata_extract_string,
+    BaseFileObject, CompileStatus, FileObject, metadata_extract_string, metadata_extract_u64,
 };
 use crate::components::text::Text;
 use std::ffi::OsString;
@@ -7,21 +7,11 @@ use std::fs::create_dir;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FolderMetadata {
     pub summary: Text,
     pub notes: Text,
-    pub compile_status: bool,
-}
-
-impl Default for FolderMetadata {
-    fn default() -> Self {
-        Self {
-            summary: Text::default(),
-            notes: Text::default(),
-            compile_status: true,
-        }
-    }
+    pub compile_status: CompileStatus,
 }
 
 #[derive(Debug)]
@@ -100,8 +90,10 @@ impl FileObject for Folder {
             None => modified = true,
         }
 
-        match metadata_extract_bool(&self.base.toml_header, "compile_status")? {
-            Some(compile_status) => self.metadata.compile_status = compile_status,
+        match metadata_extract_u64(&self.base.toml_header, "compile_status", true)? {
+            Some(compile_status) => {
+                self.metadata.compile_status = CompileStatus::from_bits_retain(compile_status)
+            }
             None => modified = true,
         }
 
@@ -141,7 +133,8 @@ impl FileObject for Folder {
         self.base.toml_header["file_type"] = toml_edit::value("folder");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
-        self.base.toml_header["compile_status"] = toml_edit::value(self.metadata.compile_status);
+        self.base.toml_header["compile_status"] =
+            toml_edit::value(self.metadata.compile_status.bits() as i64);
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

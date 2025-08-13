@@ -38,7 +38,7 @@ const HEADER_SPLIT: &str = "++++++++";
 #[derive(Debug)]
 pub struct FileObjectMetadata {
     /// Version of the object, can eventually be used to detect compatibility changes
-    pub version: u32,
+    pub version: u64,
     /// Name of the object (e.g., title of a scene, character name)
     pub name: String,
     /// ID unique across all objects. The reference implementations use UUIDv4, but any string
@@ -70,7 +70,7 @@ pub struct BaseFileObject {
 impl Default for FileObjectMetadata {
     fn default() -> Self {
         Self {
-            version: 1u32,
+            version: 1u64,
             name: String::new(),
             id: Rc::new(Uuid::new_v4().as_hyphenated().to_string()),
         }
@@ -131,25 +131,22 @@ pub struct FileInfo {
     pub modified: bool,
 }
 
-pub fn metadata_extract_u32(table: &DocumentMut, field_name: &str) -> Result<Option<u32>> {
+pub fn metadata_extract_u64(
+    table: &DocumentMut,
+    field_name: &str,
+    allow_bool: bool,
+) -> Result<Option<u64>> {
     Ok(match table.get(field_name) {
-        Some(value) => Some(
-            value
-                .as_integer()
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidData,
-                        format!("{field_name} was not an integer"),
-                    )
-                })?
-                .try_into()
-                .map_err(|_| {
-                    Error::new(
-                        ErrorKind::InvalidData,
-                        format!("failed to convert {field_name} to u32"),
-                    )
-                })?,
-        ),
+        Some(value) => Some(if let Some(value) = value.as_integer() {
+            value as u64
+        } else if allow_bool && let Some(value) = value.as_bool() {
+            value as u64
+        } else {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("{field_name} was not an integer"),
+            ));
+        }),
         None => None,
     })
 }
@@ -207,7 +204,7 @@ pub fn load_base_metadata(
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,
 ) -> Result<()> {
-    match metadata_extract_u32(metadata_table, "version")? {
+    match metadata_extract_u64(metadata_table, "version", false)? {
         Some(version) => metadata_object.version = version,
         None => file_info.modified = true,
     }

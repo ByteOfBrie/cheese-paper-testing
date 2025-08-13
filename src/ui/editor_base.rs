@@ -1,4 +1,3 @@
-use crate::components::file_objects::utils::process_name_for_filename;
 use crate::components::{Project, file_objects::write_with_temp_file};
 use crate::ui::project_editor::ProjectEditor;
 use directories::ProjectDirs;
@@ -74,11 +73,11 @@ impl Settings {
 }
 
 #[derive(Debug)]
-struct Data {
-    recent_projects: Vec<PathBuf>,
-    last_project_parent_folder: PathBuf,
-    last_export_folder: PathBuf,
-    last_open_file_ids: HashMap<String, Vec<String>>,
+pub struct Data {
+    pub recent_projects: Vec<PathBuf>,
+    pub last_project_parent_folder: PathBuf,
+    pub last_export_folder: PathBuf,
+    pub last_open_file_ids: HashMap<String, Vec<String>>,
 }
 
 impl Default for Data {
@@ -189,10 +188,10 @@ impl Data {
     }
 }
 
-struct EditorState {
-    settings: Settings,
+pub struct EditorState {
+    pub settings: Settings,
     settings_toml: DocumentMut,
-    data: Data,
+    pub data: Data,
     data_toml: DocumentMut,
     modified: bool,
     project_dirs: ProjectDirs,
@@ -200,8 +199,8 @@ struct EditorState {
     new_project_dir: Option<PathBuf>,
     new_project_name: String,
     /// Hacky (?) variable to get around borrows (set in the state rather than close directly)
-    closing_project: bool,
-    next_project: Option<PathBuf>,
+    pub closing_project: bool,
+    pub next_project: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for EditorState {
@@ -323,57 +322,8 @@ impl eframe::App for CheesePaperApp {
             Some(project_editor) => {
                 // For now, we  create the entire menu bar here, this should probably be done
                 // inside of the project editor panels instead (TODO)
-                egui::TopBottomPanel::top("menu_bar_panel")
-                    .show_separator_line(false)
-                    .show(ctx, |ui| {
-                        egui::MenuBar::new().ui(ui, |ui| {
-                            ui.menu_button("File", |ui| {
-                                if ui.button("Close Project").clicked() {
-                                    self.state.closing_project = true;
-                                }
 
-                                ui.menu_button("Recent Projects", |ui| {
-                                    for project in self.state.data.recent_projects.iter() {
-                                        if ui.button(project.to_string_lossy()).clicked() {
-                                            self.state.closing_project = true;
-                                            self.state.next_project = Some(project.clone());
-                                        }
-                                    }
-                                });
-
-                                if ui.button("Export Outline").clicked() {
-                                    let project_title = &project_editor.project.base_metadata.name;
-                                    let suggested_title = format!(
-                                        "{}_outline",
-                                        process_name_for_filename(project_title)
-                                    );
-                                    let export_location_option = FileDialog::new()
-                                        .set_title(format!("Export {} Outline", project_title))
-                                        .set_directory(&self.state.data.last_export_folder)
-                                        .set_file_name(suggested_title)
-                                        .save_file();
-
-                                    if let Some(export_location) = export_location_option {
-                                        let outline_contents =
-                                            project_editor.project.export_outline();
-                                        if let Err(err) =
-                                            std::fs::write(export_location, outline_contents)
-                                        {
-                                            log::error!(
-                                                "Error while attempting to write outline: {err}"
-                                            );
-                                        }
-                                    }
-                                }
-
-                                if ui.button("Quit").clicked() {
-                                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                                }
-                            });
-                        });
-                    });
-
-                project_editor.panels(ctx);
+                project_editor.panels(ctx, &mut self.state);
 
                 let current_time = Instant::now();
                 if current_time.duration_since(self.last_save) > Duration::from_secs(5) {

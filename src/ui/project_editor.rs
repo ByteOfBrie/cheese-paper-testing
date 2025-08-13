@@ -4,13 +4,16 @@ pub mod search;
 
 use crate::components::Project;
 use crate::components::file_objects::base::FileObjectCreation;
+use crate::components::file_objects::utils::process_name_for_filename;
 use crate::components::file_objects::{FileObject, from_file};
+use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
+use rfd::FileDialog;
 use spellbook::Dictionary;
 use std::cell::RefCell;
 use std::ops::Range;
@@ -165,8 +168,52 @@ fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
 }
 
 impl ProjectEditor {
-    pub fn panels(&mut self, ctx: &egui::Context) {
+    pub fn panels(&mut self, ctx: &egui::Context, state: &mut EditorState) {
         self.process_state(ctx);
+
+        egui::TopBottomPanel::top("menu_bar_panel")
+            .show_separator_line(false)
+            .show(ctx, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("File", |ui| {
+                        if ui.button("Close Project").clicked() {
+                            state.closing_project = true;
+                        }
+
+                        ui.menu_button("Recent Projects", |ui| {
+                            for project in state.data.recent_projects.iter() {
+                                if ui.button(project.to_string_lossy()).clicked() {
+                                    state.closing_project = true;
+                                    state.next_project = Some(project.clone());
+                                }
+                            }
+                        });
+
+                        if ui.button("Export Outline").clicked() {
+                            let project_title = &self.project.base_metadata.name;
+                            let suggested_title =
+                                format!("{}_outline", process_name_for_filename(project_title));
+                            let export_location_option = FileDialog::new()
+                                .set_title(format!("Export {} Outline", project_title))
+                                .set_directory(&state.data.last_export_folder)
+                                .set_file_name(suggested_title)
+                                .save_file();
+
+                            if let Some(export_location) = export_location_option {
+                                let outline_contents = self.project.export_outline();
+                                if let Err(err) = std::fs::write(export_location, outline_contents)
+                                {
+                                    log::error!("Error while attempting to write outline: {err}");
+                                }
+                            }
+                        }
+
+                        if ui.button("Quit").clicked() {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
+                });
+            });
 
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
             self.side_panel(ui);

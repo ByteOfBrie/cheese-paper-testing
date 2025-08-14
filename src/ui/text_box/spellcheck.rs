@@ -26,7 +26,7 @@ pub fn get_current_word(text: &str, mut position: usize) -> Range<usize> {
         }
     }
 
-    let before_pos = before_pos_option.unwrap_or_default();
+    let before_pos = before_pos_option.unwrap_or(position);
 
     let after = &text[position..];
 

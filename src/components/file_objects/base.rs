@@ -241,22 +241,6 @@ pub fn load_base_metadata(
     Ok(())
 }
 
-// pub fn run_with_file_object<T>(
-//     id_string: &str,
-//     objects: &mut FileObjectStore,
-//     func: impl FnOnce(&mut Box<dyn FileObject>, &mut FileObjectStore) -> T,
-// ) -> T {
-//     let (object_id_string, mut object) = objects
-//         .remove_entry(id_string)
-//         .expect("id_string should always be contained within objects");
-
-//     let result = func(&mut object, objects);
-
-//     objects.insert(object_id_string, object);
-
-//     result
-// }
-
 /// The object that was requested,
 /// All of the descendents of that file object (including children) in a hashmap that owns them
 #[derive(Debug)]
@@ -367,9 +351,6 @@ fn create_index_and_move_on_disk(
         .borrow_mut()
         .create_index_gap(new_index, objects)
         .unwrap();
-    // run_with_file_object(dest_file_id, objects, |dest, objects| {
-    //     dest.create_index_gap(new_index, objects).unwrap();
-    // });
 
     // Remove the moving object from it's current parent
     let source = objects

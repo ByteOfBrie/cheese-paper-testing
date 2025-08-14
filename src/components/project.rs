@@ -41,14 +41,6 @@ pub struct ProjectMetadata {
     email: String,
 }
 
-#[allow(non_camel_case_types)]
-#[cfg(test)]
-pub enum ProjectFolder {
-    text,
-    characters,
-    worldbuilding,
-}
-
 const PROJECT_INFO_NAME: &str = "project.toml";
 
 fn load_top_level_folder(project_path: &Path, name: &str) -> Result<(Folder, FileObjectStore)> {
@@ -236,47 +228,6 @@ impl Project {
     pub fn add_object(&mut self, new_object: Box<RefCell<dyn FileObject>>) {
         let id = new_object.borrow().id().clone();
         self.objects.insert(id, new_object);
-    }
-
-    /// DEPRECATED ! I'm leaving this function here for now because
-    /// it's used 40 times in the unit tests and I don't want to re-write all that
-    ///
-    /// Intended to replace constantly doing this myself in code:
-    /// ```
-    /// let (text_id_string, mut text) = self
-    ///     .objects
-    ///     .remove_entry(&self.text_id)
-    ///     .expect("text should always be in objects");
-    ///
-    /// let text_save = text.save(&mut self.objects);
-    ///
-    /// self.objects.insert(text_id_string, text);
-    /// ```
-    /// with:
-    /// ```
-    /// self.run_with_folder(ProjectFolder::text, |text, objects| text.save(&mut objects))
-    /// ```
-    ///
-    #[cfg(test)]
-    pub fn run_with_folder<T>(
-        &mut self,
-        folder: ProjectFolder,
-        func: impl FnOnce(&mut Box<RefCell<dyn FileObject>>, &mut FileObjectStore) -> T,
-    ) -> T {
-        let id_string = match folder {
-            ProjectFolder::text => &self.text_id,
-            ProjectFolder::characters => &self.characters_id,
-            ProjectFolder::worldbuilding => &self.worldbuilding_id,
-        };
-
-        let mut object_box = self
-            .objects
-            .remove(id_string)
-            .expect("File Object should exist");
-        let res = func(&mut object_box, &mut self.objects);
-        self.objects.insert(id_string.clone(), object_box);
-
-        res
     }
 
     pub fn save(&mut self) -> Result<()> {

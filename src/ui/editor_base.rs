@@ -13,6 +13,9 @@ use std::{
 };
 use toml_edit::{DocumentMut, value};
 
+#[cfg(feature = "metrics")]
+use super::metrics::Metrics;
+
 #[derive(Debug)]
 pub struct Settings {
     font_size: f32,
@@ -304,10 +307,16 @@ pub struct CheesePaperApp {
 
     /// Dictionary for spellchecking, if we managed to load it
     dictionary: Option<Dictionary>,
+
+    #[cfg(feature = "metrics")]
+    metrics: Metrics,
 }
 
 impl eframe::App for CheesePaperApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        #[cfg(feature = "metrics")]
+        self.metrics.frame_start();
+
         if self.state.closing_project {
             self.project_editor = None;
             self.state.closing_project = false;
@@ -335,6 +344,32 @@ impl eframe::App for CheesePaperApp {
                 true => self.choose_project_ui(ctx),
                 false => self.new_project_name_ui(ctx),
             },
+        }
+
+        #[cfg(feature = "metrics")]
+        {
+            use std::thread;
+            if let Some(duration) = self.metrics.frame_stop() {
+                let ctx_clone = ctx.clone();
+                thread::spawn(move || {
+                    thread::sleep(duration);
+                    ctx_clone.request_repaint();
+                });
+            }
+            if let Some(report) = &self.metrics.report {
+                egui::Area::new(egui::Id::new("metrics"))
+                    .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])
+                    .interactable(false)
+                    .order(egui::Order::Foreground)
+                    .show(ctx, |ui| {
+                        ui.set_min_width(200.0);
+                        ui.label(
+                            egui::RichText::new(format!("{report}"))
+                                .color(egui::Color32::LIGHT_GRAY)
+                                .background_color(egui::Color32::DARK_GRAY),
+                        );
+                    });
+            }
         }
     }
 }
@@ -427,6 +462,9 @@ impl CheesePaperApp {
             state,
             last_save: Instant::now(),
             dictionary,
+
+            #[cfg(feature = "metrics")]
+            metrics: Metrics::default(),
         };
 
         if app.state.settings.reopen_last

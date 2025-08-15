@@ -1,4 +1,4 @@
-use egui::Color32;
+use egui::{Color32, Response};
 
 use super::textbox_search::TextBoxSearchResult;
 use super::*;
@@ -10,6 +10,9 @@ use std::collections::HashMap;
 #[derive(Debug, Default)]
 pub struct GlobalSearch {
     pub active: bool,
+
+    /// Search has just been activated, take focus
+    pub request_ui_focus: bool,
 
     pub find_text: String,
 
@@ -29,6 +32,7 @@ pub struct GlobalSearch {
 impl GlobalSearch {
     pub fn show(&mut self) {
         self.active = true;
+        self.request_ui_focus = true;
     }
 
     pub fn hide(&mut self) {
@@ -61,11 +65,12 @@ pub fn search(project: &Project, ctx: &mut EditorContext) {
     ctx.global_search.version += 1;
 }
 
-pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
+/// Global search ui, returns
+pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     let gs = &mut ctx.global_search;
 
     // Take up the entire area horizontally
-    ui.add_sized(
+    let response = ui.add_sized(
         egui::vec2(ui.available_width(), 0.0),
         egui::TextEdit::singleline(&mut gs.find_text).hint_text("find"),
     );
@@ -114,4 +119,5 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) {
             }
         }
     }
+    response
 }

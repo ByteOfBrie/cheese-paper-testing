@@ -3,14 +3,15 @@ mod file_tree;
 pub mod search;
 mod util;
 
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
-use crate::components::Project;
 use crate::components::file_objects::base::FileObjectCreation;
 use crate::components::file_objects::utils::process_name_for_filename;
 use crate::components::file_objects::{FileObject, from_file};
+use crate::components::{Project, Text};
 use crate::ui::editor_base::EditorState;
-use crate::ui::project_editor::search::global_search;
+use crate::ui::project_editor::search::{global_search, textbox_search};
 use crate::ui::project_tracker::ProjectTracker;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
@@ -42,7 +43,7 @@ pub struct ProjectEditor {
     pub project: Project,
 
     /// List of tabs that are open (egui::Dock requires state to be stored this way)
-    dock_state: DockState<String>,
+    dock_state: DockState<Tab>,
 
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
@@ -57,10 +58,10 @@ pub struct ProjectEditor {
     tracker: Option<ProjectTracker>,
 
     /// We need to keep track of the tree state to set selection
-    tree_state: TreeViewState<String>,
+    tree_state: TreeViewState<Tab>,
 
     /// Set by the tab viewer, used to sync the file tree
-    current_open_tab: Option<String>,
+    current_open_tab: Option<Tab>,
 }
 
 impl Debug for ProjectEditor {
@@ -91,23 +92,52 @@ pub enum TabMove {
     Next,
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
+pub enum Tab {
+    ProjectMetadata,
+    FileObject(String),
+}
+
+impl Tab {
+    pub fn from_id(id: &str) -> Self {
+        if id == "project_metadata" {
+            Tab::ProjectMetadata
+        } else {
+            Tab::FileObject(id.to_owned())
+        }
+    }
+
+    pub fn get_id(&self) -> &str {
+        match self {
+            Tab::ProjectMetadata => "project_metadata",
+            Tab::FileObject(id) => id,
+        }
+    }
+
+    pub fn is_file_object(&self) -> bool {
+        matches!(self, Tab::FileObject(_))
+    }
+}
+
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
-    pub open_tab: &'a mut Option<String>,
+    pub open_tab: &'a mut Option<Tab>,
     pub tab_move: &'a mut Option<TabMove>,
-    pub tab_to_close: &'a mut Option<String>,
+    pub tab_to_close: &'a mut Option<Tab>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
-    type Tab = String;
+    type Tab = Tab;
 
     fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
-        egui::Id::from(tab.clone())
+        egui::Id::from(tab.get_id().to_owned())
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        if let Some(object) = self.project.objects.get(tab) {
+        // to_owned isn't unnecessary, specifically need an &String not an &str
+        #[allow(clippy::unnecessary_to_owned)]
+        if let Some(object) = self.project.objects.get(&tab.get_id().to_owned()) {
             object.borrow().get_title().into()
         } else {
             // any deleted scenes should be cleaned up before we get here, but we have this
@@ -117,12 +147,8 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        // This is certainly some of the syntax of all time. I can't think of another good way to
-        // write this, but it probably exists (and I should probably go to bed)
-        if let Some(open_tab) = self.open_tab
-            && open_tab == tab
-        { // intentionally empty
-        } else {
+        // Tell the editor which tab we have open (so that the treeview selection can be updated)
+        if self.open_tab.as_ref() != Some(tab) {
             *self.open_tab = Some(tab.clone());
         }
 
@@ -185,11 +211,16 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         }
 
         // draw the actual UI for the tab open in the editor
-        if let Some(file_object) = self.project.objects.get_mut(tab) {
-            file_object
-                .borrow_mut()
-                .as_editor_mut()
-                .ui(ui, self.editor_context);
+        match tab {
+            Tab::ProjectMetadata => {}
+            Tab::FileObject(file_object_id) => {
+                if let Some(file_object) = self.project.objects.get_mut(file_object_id) {
+                    file_object
+                        .borrow_mut()
+                        .as_editor_mut()
+                        .ui(ui, self.editor_context);
+                }
+            }
         }
     }
 
@@ -218,11 +249,13 @@ impl ProjectEditor {
         });
 
         // Before rendering the tab view, clear out any deleted scenes
-        self.dock_state
-            .retain_tabs(|tab_id| self.project.objects.contains_key(tab_id));
+        self.dock_state.retain_tabs(|tab| match tab {
+            Tab::ProjectMetadata => true,
+            Tab::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
+        });
 
         let mut tab_move_option: Option<TabMove> = None;
-        let mut tab_to_close_option: Option<String> = None;
+        let mut tab_to_close_option: Option<Tab> = None;
 
         // render the tab view
         DockArea::new(&mut self.dock_state)
@@ -406,7 +439,7 @@ impl ProjectEditor {
 
         if self.editor_context.global_search.redo_search {
             self.editor_context.global_search.redo_search = false;
-            global_search::search(&self.project, &mut self.editor_context);
+            self.search();
         }
 
         // if one of the search results has been clicked, open that now
@@ -416,7 +449,7 @@ impl ProjectEditor {
             && let Some(search_results) = &self.editor_context.global_search.search_results.as_ref()
             && let Some(focused_text_box) = search_results.get(uid)
         {
-            self.set_editor_tab(&focused_text_box.file_object_id.clone());
+            self.set_editor_tab(&focused_text_box.tab.clone());
         }
     }
 
@@ -562,27 +595,29 @@ impl ProjectEditor {
         }
     }
 
-    fn set_editor_tab(&mut self, file_id: &String) {
+    fn set_editor_tab(&mut self, tab: &Tab) {
         // We don't want to open these, so just exit early
-        if *file_id == *self.project.text_id
-            || *file_id == *self.project.characters_id
-            || *file_id == *self.project.worldbuilding_id
+        if *tab.get_id() == *self.project.text_id
+            || *tab.get_id() == *self.project.characters_id
+            || *tab.get_id() == *self.project.worldbuilding_id
         {
             return;
         }
 
-        if let Some(tab_position) = self.dock_state.find_tab(file_id) {
+        if let Some(tab_position) = self.dock_state.find_tab(tab) {
             // We've already opened this, just select it
             self.dock_state.set_active_tab(tab_position);
         } else {
             // New file object, open it for editing
-            self.dock_state.push_to_first_leaf(file_id.clone());
+            self.dock_state.push_to_first_leaf(tab.clone());
         }
     }
 
-    // fn draw_tree(&mut self, ui: &mut egui::Ui)
-
-    pub fn new(project: Project, open_tabs: Vec<String>, dictionary: Option<Dictionary>) -> Self {
+    pub fn new(
+        project: Project,
+        open_tab_ids: Vec<String>,
+        dictionary: Option<Dictionary>,
+    ) -> Self {
         // this might later get wrapped in an optional block or something but not worth it right now
         let (mut watcher, file_event_rx) =
             create_watcher().expect("Should always be able to create a watcher");
@@ -604,6 +639,11 @@ impl ProjectEditor {
             }
         };
 
+        let open_tabs = open_tab_ids
+            .iter()
+            .map(|tab_id| Tab::from_id(tab_id))
+            .collect();
+
         Self {
             project,
             dock_state: DockState::new(open_tabs),
@@ -622,18 +662,65 @@ impl ProjectEditor {
         }
     }
 
-    pub fn get_open_tabs(&self) -> Vec<String> {
+    pub fn get_open_tabs(&self) -> Vec<Tab> {
         // the indexes provided to use are meaningless (I think), just put all the tabs in the
         // order it gave us.
         self.dock_state
             .iter_all_tabs()
-            .map(|((_, _), tab_id)| (*tab_id).clone())
+            .map(|((_, _), tab)| tab.clone())
             .collect()
+    }
+
+    pub fn get_searchable(&'_ self) -> impl Iterator<Item = SearchableIterValue<'_>> {
+        self.project
+            .objects
+            .iter()
+            .map(|(id, file_object)| (Tab::from_id(id), Searchable::FileObject(file_object)))
+
+        // TODO: add other searchable objects to this with iterator.chain
+    }
+
+    pub fn search(&mut self) {
+        let mut search_results = HashMap::new();
+
+        for (key, object) in self.get_searchable() {
+            object.search(&mut |text, box_name| {
+                let search_result = textbox_search::search(
+                    text,
+                    &key,
+                    box_name,
+                    &self.editor_context.global_search.find_text,
+                );
+                search_results.insert(text.id(), search_result);
+            });
+        }
+
+        self.editor_context.global_search.search_results = Some(search_results);
+        self.editor_context.global_search.clear_focus();
+        self.editor_context.global_search.version += 1;
     }
 
     pub fn save(&mut self) {
         if let Err(err) = self.project.save() {
             log::error!("encountered error while saving project: {err}");
+        }
+    }
+}
+
+type SearchableIterValue<'a> = (Tab, Searchable<'a>);
+pub enum Searchable<'a> {
+    FileObject(&'a RefCell<dyn FileObject>),
+}
+
+impl Searchable<'_> {
+    pub fn search(&self, search_function: &mut dyn FnMut(&Text, &'static str)) {
+        match self {
+            Searchable::FileObject(file_object) => {
+                file_object
+                    .borrow()
+                    .as_editor()
+                    .for_each_textbox(search_function);
+            }
         }
     }
 }

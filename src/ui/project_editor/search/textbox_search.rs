@@ -1,11 +1,11 @@
 use egui::{Color32, Label, Sense, TextFormat, Vec2, Widget, text::LayoutJob};
 
-use crate::components::Text;
+use crate::{components::Text, ui::project_editor::Tab};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct TextBoxSearchResult {
     // File object that this text box is in
-    pub file_object_id: String,
+    pub tab: Tab,
 
     pub box_name: String,
 
@@ -80,12 +80,7 @@ impl Widget for &WordFindPreview {
     }
 }
 
-pub fn search(
-    text: &Text,
-    file_object_id: &str,
-    box_name: &str,
-    search_term: &str,
-) -> TextBoxSearchResult {
+pub fn search(text: &Text, tab: &Tab, box_name: &str, search_term: &str) -> TextBoxSearchResult {
     let mut finds = Vec::new();
 
     let mut line_start = 0;
@@ -113,7 +108,7 @@ pub fn search(
     }
 
     TextBoxSearchResult {
-        file_object_id: file_object_id.to_string(),
+        tab: tab.clone(),
         box_name: box_name.to_string(),
         finds,
         text_version: text.version,

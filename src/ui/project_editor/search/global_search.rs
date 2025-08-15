@@ -3,6 +3,7 @@ use egui::{Color32, Response};
 use super::textbox_search::TextBoxSearchResult;
 use super::*;
 use crate::components::Project;
+use crate::ui::project_editor::Tab;
 use crate::ui::project_editor::search::textbox_search::WordFind;
 
 use std::collections::HashMap;
@@ -46,25 +47,6 @@ impl GlobalSearch {
     }
 }
 
-pub fn search(project: &Project, ctx: &mut EditorContext) {
-    let mut search_results = HashMap::new();
-
-    for (key, object) in project.objects.iter() {
-        object
-            .borrow()
-            .as_editor()
-            .for_each_textbox(&mut |text, box_name| {
-                let search_result =
-                    textbox_search::search(text, key, box_name, &ctx.global_search.find_text);
-                search_results.insert(text.id(), search_result);
-            });
-    }
-
-    ctx.global_search.search_results = Some(search_results);
-    ctx.global_search.clear_focus();
-    ctx.global_search.version += 1;
-}
-
 /// Global search ui, returns
 pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     let gs = &mut ctx.global_search;
@@ -87,13 +69,12 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     if let Some(search_results) = &mut ctx.global_search.search_results {
         let mut items: Vec<(TextUID, String, &TextBoxSearchResult)> = search_results
             .iter()
-            .filter_map(|(id, tbsr)| {
-                let file_object_name = project
-                    .objects
-                    .get(&tbsr.file_object_id)?
-                    .borrow()
-                    .get_title();
-                Some((*id, file_object_name, tbsr))
+            .filter_map(|(id, tbsr)| match &tbsr.tab {
+                Tab::FileObject(tab_id) => {
+                    let file_object_name = project.objects.get(tab_id)?.borrow().get_title();
+                    Some((*id, file_object_name, tbsr))
+                }
+                Tab::ProjectMetadata => Some((*id, String::from("Project Metadata"), tbsr)),
             })
             .filter(|(_, _, tbsr)| !tbsr.finds.is_empty())
             .collect();

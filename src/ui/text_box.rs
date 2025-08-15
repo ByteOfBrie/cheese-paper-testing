@@ -51,7 +51,7 @@ impl TextBox {
             {
                 *sr = textbox_search::search(
                     text,
-                    &sr.file_object_id,
+                    &sr.tab,
                     &sr.box_name,
                     &ctx.global_search.find_text,
                 );

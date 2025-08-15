@@ -688,9 +688,13 @@ impl CheesePaperApp {
 
     fn update_open_tabs(&mut self) {
         if let Some(project_editor) = &self.project_editor {
-            let open_tabs = project_editor.get_open_tabs();
+            let open_tabs_ids = project_editor
+                .get_open_tabs()
+                .iter()
+                .map(|tab| tab.get_id().to_owned())
+                .collect();
 
-            if Some(&open_tabs)
+            if Some(&open_tabs_ids)
                 != self
                     .state
                     .data
@@ -699,7 +703,7 @@ impl CheesePaperApp {
             {
                 self.state.data.last_open_file_ids.insert(
                     project_editor.project.base_metadata.id.to_string(),
-                    open_tabs,
+                    open_tabs_ids,
                 );
 
                 self.state.modified = true;

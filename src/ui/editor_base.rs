@@ -348,14 +348,9 @@ impl eframe::App for CheesePaperApp {
 
         #[cfg(feature = "metrics")]
         {
-            use std::thread;
-            if let Some(duration) = self.metrics.frame_stop() {
-                let ctx_clone = ctx.clone();
-                thread::spawn(move || {
-                    thread::sleep(duration);
-                    ctx_clone.request_repaint();
-                });
-            }
+            let next_refresh = self.metrics.frame_stop();
+            ctx.request_repaint_after(next_refresh);
+
             if let Some(report) = &self.metrics.report {
                 egui::Area::new(egui::Id::new("metrics"))
                     .anchor(egui::Align2::LEFT_BOTTOM, [0.0, 0.0])

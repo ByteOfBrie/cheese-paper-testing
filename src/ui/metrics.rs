@@ -37,6 +37,8 @@ impl Display for Report {
     }
 }
 
+const REFRESH_PERIOD: Duration = Duration::from_secs(1);
+
 impl Metrics {
     pub fn frame_start(&mut self) {
         assert!(self.frame_start_time.is_none());
@@ -44,24 +46,25 @@ impl Metrics {
         self.frame_start_time = Some(SystemTime::now());
     }
 
-    pub fn frame_stop(&mut self) -> Option<Duration> {
+    pub fn frame_stop(&mut self) -> Duration {
         self.frame_times
             .push(self.frame_start_time.unwrap().elapsed().unwrap());
         self.frame_start_time = None;
 
-        let since_last_update = self.last_update.elapsed().unwrap();
-        if since_last_update >= Duration::from_secs(1) {
+        let mut since_last_update = self.last_update.elapsed().unwrap();
+        if since_last_update >= REFRESH_PERIOD {
             let frames_since_last_update = self.frame_times.len();
             let avg_frame_duration: Duration =
                 self.frame_times.drain(..).sum::<Duration>() / (frames_since_last_update as u32);
-            self.last_update = SystemTime::now();
             self.report = Some(Report {
                 frames_since_last_update,
                 avg_frame_duration,
             });
-            return Some(Duration::from_secs(1));
+
+            self.last_update = SystemTime::now();
+            since_last_update = Duration::ZERO;
         }
 
-        None
+        REFRESH_PERIOD - since_last_update
     }
 }

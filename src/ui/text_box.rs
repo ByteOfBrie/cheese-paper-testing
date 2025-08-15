@@ -217,7 +217,7 @@ impl Text {
         output.response
     }
 
-    pub fn word_count(&mut self, ctx: &mut EditorContext) -> usize {
+    pub fn word_count(&self, ctx: &mut EditorContext) -> usize {
         let rdata = self._rdata.obtain::<TextBox>();
         let text_box: &mut TextBox = &mut rdata.borrow_mut();
 

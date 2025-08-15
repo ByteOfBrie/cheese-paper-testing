@@ -1,37 +1,31 @@
-use std::{any::Any, cell::RefCell, rc::Rc};
+use std::{
+    any::Any,
+    cell::{OnceCell, RefCell},
+    rc::Rc,
+};
 
-struct NoData();
-
-pub struct RenderData(Box<dyn Any + 'static>);
+pub struct RenderData(OnceCell<Box<dyn Any + 'static>>);
 
 impl Default for RenderData {
     fn default() -> Self {
-        Self(Box::new(NoData()))
+        Self(OnceCell::new())
     }
 }
 
 impl std::fmt::Debug for RenderData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.0.is::<NoData>() {
-            write!(f, "[no data]")
-        } else {
-            write!(f, "[data]")
-        }
+        write!(f, "[render data]")
     }
 }
 
 impl RenderData {
-    pub fn obtain<T: Default + 'static>(&mut self) -> Rc<RefCell<T>> {
-        if !self.0.is::<Rc<RefCell<T>>>() {
-            assert!(
-                self.0.is::<NoData>(),
-                "RenderData must always be accessed with the same type"
-            );
+    pub fn obtain<T: Default + 'static>(&self) -> Rc<RefCell<T>> {
+        let content = self.0.get_or_init(|| {
             let data: Rc<RefCell<T>> = Rc::new(RefCell::new(T::default()));
-            self.0 = Box::new(data);
-        }
+            Box::new(data)
+        });
 
-        let rc: &mut Rc<RefCell<T>> = self.0.downcast_mut::<Rc<RefCell<T>>>().unwrap();
+        let rc: &Rc<RefCell<T>> = content.downcast_ref::<Rc<RefCell<T>>>().unwrap();
 
         rc.clone()
     }

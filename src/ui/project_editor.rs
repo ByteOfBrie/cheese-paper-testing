@@ -171,49 +171,7 @@ impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context, state: &mut EditorState) {
         self.process_state(ctx);
 
-        egui::TopBottomPanel::top("menu_bar_panel")
-            .show_separator_line(false)
-            .show(ctx, |ui| {
-                egui::MenuBar::new().ui(ui, |ui| {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Close Project").clicked() {
-                            state.closing_project = true;
-                        }
-
-                        ui.menu_button("Recent Projects", |ui| {
-                            for project in state.data.recent_projects.iter() {
-                                if ui.button(project.to_string_lossy()).clicked() {
-                                    state.closing_project = true;
-                                    state.next_project = Some(project.clone());
-                                }
-                            }
-                        });
-
-                        if ui.button("Export Outline").clicked() {
-                            let project_title = &self.project.base_metadata.name;
-                            let suggested_title =
-                                format!("{}_outline", process_name_for_filename(project_title));
-                            let export_location_option = FileDialog::new()
-                                .set_title(format!("Export {} Outline", project_title))
-                                .set_directory(&state.data.last_export_folder)
-                                .set_file_name(suggested_title)
-                                .save_file();
-
-                            if let Some(export_location) = export_location_option {
-                                let outline_contents = self.project.export_outline();
-                                if let Err(err) = std::fs::write(export_location, outline_contents)
-                                {
-                                    log::error!("Error while attempting to write outline: {err}");
-                                }
-                            }
-                        }
-
-                        if ui.button("Quit").clicked() {
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                });
-            });
+        self.draw_menu(ctx, state);
 
         egui::SidePanel::left("project tree panel").show(ctx, |ui| {
             self.side_panel(ui);
@@ -269,6 +227,58 @@ impl ProjectEditor {
                 self.set_editor_tab(open_tabs.get(new_pos).unwrap());
             }
         }
+    }
+
+    fn draw_menu(&mut self, ctx: &egui::Context, state: &mut EditorState) {
+        egui::TopBottomPanel::top("menu_bar_panel")
+            .show_separator_line(false)
+            .show(ctx, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
+                    ui.menu_button("File", |ui| {
+                        if ui.button("Close Project").clicked() {
+                            state.closing_project = true;
+                        }
+
+                        ui.menu_button("Recent Projects", |ui| {
+                            for project in state.data.recent_projects.iter() {
+                                if ui.button(project.to_string_lossy()).clicked() {
+                                    state.closing_project = true;
+                                    state.next_project = Some(project.clone());
+                                }
+                            }
+                        });
+
+                        if ui.button("Export Outline").clicked() {
+                            let project_title = &self.project.base_metadata.name;
+                            let suggested_title =
+                                format!("{}_outline", process_name_for_filename(project_title));
+                            let export_location_option = FileDialog::new()
+                                .set_title(format!("Export {} Outline", project_title))
+                                .set_directory(&state.data.last_export_folder)
+                                .set_file_name(suggested_title)
+                                .save_file();
+
+                            if let Some(export_location) = export_location_option {
+                                let outline_contents = self.project.export_outline();
+                                if let Err(err) = std::fs::write(export_location, outline_contents)
+                                {
+                                    log::error!("Error while attempting to write outline: {err}");
+                                }
+                            }
+                        }
+
+                        if ui.button("Quit").clicked() {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
+
+                    ui.menu_button("Edit", |ui| {
+                        if ui.button("Find (Global)").clicked() {
+                            self.editor_context.global_search.show();
+                        }
+                    });
+                });
+            });
     }
 
     // the side panel containing the tree view or the global search

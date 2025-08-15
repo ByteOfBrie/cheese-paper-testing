@@ -1,6 +1,7 @@
 pub mod file_object_editor;
 mod file_tree;
 pub mod search;
+mod util;
 
 use std::fmt::{Debug, Formatter};
 

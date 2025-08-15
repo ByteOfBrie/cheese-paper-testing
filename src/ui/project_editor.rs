@@ -2,6 +2,8 @@ pub mod file_object_editor;
 mod file_tree;
 pub mod search;
 
+use std::fmt::{Debug, Formatter};
+
 use crate::components::Project;
 use crate::components::file_objects::base::FileObjectCreation;
 use crate::components::file_objects::utils::process_name_for_filename;
@@ -11,6 +13,7 @@ use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
+use egui_ltreeview::TreeViewState;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use rfd::FileDialog;
@@ -34,18 +37,44 @@ pub struct TypingStatus {
     pub current_word: Range<usize>,
 }
 
-#[derive(Debug)]
 pub struct ProjectEditor {
     pub project: Project,
+
+    /// List of tabs that are open (egui::Dock requires state to be stored this way)
     dock_state: DockState<String>,
+
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
     title_needs_update: bool,
+
     editor_context: EditorContext,
+
     file_event_rx: WatcherReceiver,
+
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
     _watcher: RecommendedDebouncer,
     tracker: Option<ProjectTracker>,
+
+    /// We need to keep track of the tree state to set selection
+    tree_state: TreeViewState<String>,
+
+    /// Set by the tab viewer, used to sync the file tree
+    current_open_tab: Option<String>,
+}
+
+impl Debug for ProjectEditor {
+    /// Manual implementation because TreeViewState doesn't implement debug
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectEditor")
+            .field("project", &self.project)
+            .field("dock_state", &self.dock_state)
+            .field("title_needs_update", &self.title_needs_update)
+            .field("editor_context", &self.editor_context)
+            .field("file_event_rx", &self.file_event_rx)
+            .field("_watcher", &self._watcher)
+            .field("tracker", &self.tracker)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
@@ -64,6 +93,7 @@ pub enum TabMove {
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
+    pub open_tab: &'a mut Option<String>,
     pub tab_move: &'a mut Option<TabMove>,
     pub tab_to_close: &'a mut Option<String>,
 }
@@ -86,6 +116,15 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+        // This is certainly some of the syntax of all time. I can't think of another good way to
+        // write this, but it probably exists (and I should probably go to bed)
+        if let Some(open_tab) = self.open_tab
+            && open_tab == tab
+        { // intentionally empty
+        } else {
+            *self.open_tab = Some(tab.clone());
+        }
+
         // hotkeys for tab movement
         if ui.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut {
@@ -194,17 +233,31 @@ impl ProjectEditor {
                 &mut TabViewer {
                     project: &mut self.project,
                     editor_context: &mut self.editor_context,
+                    open_tab: &mut self.current_open_tab,
                     tab_move: &mut tab_move_option,
                     tab_to_close: &mut tab_to_close_option,
                 },
             );
 
+        // If there aren't any tabs open, reflect that state
+        if self.dock_state.iter_all_tabs().next().is_none() {
+            self.current_open_tab = None
+        }
+
+        if self.current_open_tab.as_ref() != self.tree_state.selected().first()
+            && let Some(open_tab) = &self.current_open_tab
+        {
+            self.tree_state.set_one_selected(open_tab.clone());
+        }
+
+        // Remove tabs if necessary
         if let Some(tab_to_close) = tab_to_close_option
             && let Some(tab_position) = self.dock_state.find_tab(&tab_to_close)
         {
             self.dock_state.remove_tab(tab_position);
         }
 
+        // Move between tabs (ctrl-tab or ctrl-shift-tab)
         if let Some(tab_move) = tab_move_option {
             let open_tabs: Vec<_> = self.get_open_tabs();
 
@@ -563,6 +616,8 @@ impl ProjectEditor {
             file_event_rx,
             _watcher: watcher,
             tracker,
+            tree_state: Default::default(),
+            current_open_tab: None,
         }
     }
 

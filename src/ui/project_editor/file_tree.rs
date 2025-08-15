@@ -143,7 +143,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
     let mut context_menu_actions: Vec<ContextMenuActions> = Vec::new();
     let (_response, actions) = TreeView::new(ui.make_persistent_id("project tree"))
         .allow_multi_selection(false)
-        .show(ui, |builder| {
+        .show_state(ui, &mut editor.tree_state, |builder| {
             editor
                 .project
                 .build_tree(builder, &mut context_menu_actions);

@@ -6,7 +6,6 @@ use crate::ui::EditorContext;
 use crate::ui::project_editor::search::textbox_search;
 use egui::text::LayoutJob;
 use egui::{Response, TextBuffer};
-use spellcheck::*;
 
 type SavedRegex = std::sync::LazyLock<regex::Regex>;
 
@@ -16,6 +15,8 @@ pub struct TextBox {
 
     // Memoized Layout Job
     layout_job: LayoutJob,
+
+    word_count: usize,
 
     // manually force the layout to be redone
     redo_layout: bool,
@@ -28,20 +29,13 @@ pub struct TextBox {
 }
 
 impl TextBox {
-    fn get_layout(
-        &mut self,
-        ui: &egui::Ui,
-        text: &dyn TextBuffer,
-        ctx: &mut EditorContext,
-    ) -> LayoutJob {
-        let text = Text::downcast(text);
-
+    fn refresh(&mut self, text: &Text, ctx: &mut EditorContext) {
         let signature = (text.struct_uid, text.version);
 
-        if (signature, ui.style().as_ref()) != (self.text_signature, &self.style) {
+        if signature != self.text_signature {
             self.text_signature = signature;
-            self.style = ui.style().as_ref().clone();
 
+            self.word_count = spellcheck::word_count(text.as_str());
             self.redo_layout = true;
         }
 
@@ -64,6 +58,23 @@ impl TextBox {
                 ctx.global_search.clear_focus();
                 self.redo_layout = true;
             }
+        }
+    }
+
+    fn get_layout(
+        &mut self,
+        ui: &egui::Ui,
+        text: &dyn TextBuffer,
+        ctx: &mut EditorContext,
+    ) -> LayoutJob {
+        let text = Text::downcast(text);
+
+        self.refresh(text, ctx);
+
+        if ui.style().as_ref() != &self.style {
+            self.style = ui.style().as_ref().clone();
+
+            self.redo_layout = true;
         }
 
         let (mut search_result, mut search_result_focus) = (None, None);
@@ -123,7 +134,7 @@ impl Text {
 
         if let Some(cursor_range) = output.cursor_range {
             let primary_cursor_pos = cursor_range.primary.index;
-            let current_word_pos = get_current_word(&self.text, primary_cursor_pos);
+            let current_word_pos = spellcheck::get_current_word(&self.text, primary_cursor_pos);
 
             if current_word_pos.is_empty() || current_word_pos.end == self.text.len() {
                 ctx.typing_status.is_new_word = true;
@@ -155,12 +166,12 @@ impl Text {
         {
             let clicked_pos = cursor_range.primary.index;
 
-            let word_boundaries = get_current_word(&self.text, clicked_pos);
+            let word_boundaries = spellcheck::get_current_word(&self.text, clicked_pos);
 
             let raw_word = &self.text[word_boundaries];
 
             // Will need word_range when spellcheck corrections are implemented, but it's not needed now
-            let (check_word, _word_range) = trim_word_for_spellcheck(raw_word);
+            let (check_word, _word_range) = spellcheck::trim_word_for_spellcheck(raw_word);
 
             ctx.spellcheck_status.selected_word = check_word.to_string();
 
@@ -204,5 +215,13 @@ impl Text {
         });
 
         output.response
+    }
+
+    pub fn word_count(&mut self, ctx: &mut EditorContext) -> usize {
+        let rdata = self._rdata.obtain::<TextBox>();
+        let text_box: &mut TextBox = &mut rdata.borrow_mut();
+
+        text_box.refresh(self, ctx);
+        text_box.word_count
     }
 }

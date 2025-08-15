@@ -3,7 +3,6 @@ use crate::components::file_objects::base::{
 };
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
-use regex::Regex;
 use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -160,11 +159,6 @@ impl Scene {
         }
 
         Ok(scene)
-    }
-
-    pub fn word_count(&self) -> usize {
-        let re = Regex::new(r"\s+").unwrap();
-        re.split(&self.text).count()
     }
 }
 

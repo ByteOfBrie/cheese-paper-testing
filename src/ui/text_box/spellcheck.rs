@@ -124,3 +124,8 @@ pub fn find_misspelled_words(text: &str, ctx: &EditorContext) -> Vec<(usize, usi
 
     misspelled_words
 }
+
+pub fn word_count(text: &str) -> usize {
+    static WORD_COUNT_REGEX: SavedRegex = SavedRegex::new(|| Regex::new(r"\s+").unwrap());
+    WORD_COUNT_REGEX.split(text).count()
+}

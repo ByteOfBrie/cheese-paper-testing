@@ -60,7 +60,7 @@ impl Scene {
             self.process_response(response);
 
             egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
-                let words = self.word_count();
+                let words = self.text.word_count(ctx);
                 let text = format!("{words} Words");
                 ui.vertical_centered(|ui| {
                     let response = ui.label(text);

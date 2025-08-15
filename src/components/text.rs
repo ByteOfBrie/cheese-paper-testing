@@ -6,7 +6,7 @@ use egui::TextBuffer;
 
 use crate::ui::RenderData;
 
-static GLOBAL_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static GLOBAL_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 fn get_uid() -> usize {
     GLOBAL_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)

@@ -8,7 +8,7 @@ use std::fmt::{Debug, Formatter};
 
 use crate::components::file_objects::base::FileObjectCreation;
 use crate::components::file_objects::utils::process_name_for_filename;
-use crate::components::file_objects::{FileObject, from_file};
+use crate::components::file_objects::{FileID, FileObject, from_file};
 use crate::components::{Project, Text};
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::{global_search, textbox_search};
@@ -95,23 +95,29 @@ pub enum TabMove {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Tab {
     ProjectMetadata,
-    FileObject(String),
+    FileObject(FileID),
 }
 
 impl Tab {
+    const PROJECT_METADATA_ID: &str = "project_metadata";
+
     pub fn from_id(id: &str) -> Self {
-        if id == "project_metadata" {
+        if id == Self::PROJECT_METADATA_ID {
             Tab::ProjectMetadata
         } else {
-            Tab::FileObject(id.to_owned())
+            Tab::FileObject(FileID::new(id.to_owned()))
         }
     }
 
     pub fn get_id(&self) -> &str {
         match self {
-            Tab::ProjectMetadata => "project_metadata",
+            Tab::ProjectMetadata => Self::PROJECT_METADATA_ID,
             Tab::FileObject(id) => id,
         }
+    }
+
+    pub fn from_file_id(file_id: &FileID) -> Self {
+        Tab::FileObject(file_id.clone())
     }
 
     pub fn is_file_object(&self) -> bool {
@@ -135,14 +141,17 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        // to_owned isn't unnecessary, specifically need an &String not an &str
-        #[allow(clippy::unnecessary_to_owned)]
-        if let Some(object) = self.project.objects.get(&tab.get_id().to_owned()) {
-            object.borrow().get_title().into()
-        } else {
-            // any deleted scenes should be cleaned up before we get here, but we have this
-            // logic instead of panicking anyway
-            "<Deleted>".into()
+        match tab {
+            Tab::FileObject(file_id) => {
+                if let Some(object) = self.project.objects.get(file_id) {
+                    object.borrow().get_title().into()
+                } else {
+                    // any deleted scenes should be cleaned up before we get here, but we have this
+                    // logic instead of panicking anyway
+                    "<Deleted>".into()
+                }
+            }
+            Tab::ProjectMetadata => "Project Metadata".into(),
         }
     }
 
@@ -675,7 +684,7 @@ impl ProjectEditor {
         self.project
             .objects
             .iter()
-            .map(|(id, file_object)| (Tab::from_id(id), Searchable::FileObject(file_object)))
+            .map(|(id, file_object)| (Tab::from_file_id(id), Searchable::FileObject(file_object)))
 
         // TODO: add other searchable objects to this with iterator.chain
     }

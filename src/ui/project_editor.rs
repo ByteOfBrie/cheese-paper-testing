@@ -242,6 +242,7 @@ fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
 
 impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context, state: &mut EditorState) {
+        self.process_input(ctx);
         self.process_state(ctx);
 
         self.draw_menu(ctx, state);
@@ -256,6 +257,34 @@ impl ProjectEditor {
             Tab::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
         });
 
+        // render the tab view
+        DockArea::new(&mut self.dock_state)
+            .allowed_splits(egui_dock::AllowedSplits::None)
+            .show_leaf_collapse_buttons(false)
+            .show_leaf_close_all_buttons(false)
+            .show(
+                ctx,
+                &mut TabViewer {
+                    project: &mut self.project,
+                    editor_context: &mut self.editor_context,
+                    open_tab: &mut self.current_open_tab,
+                },
+            );
+
+        // If there aren't any tabs open, reflect that state
+        if self.dock_state.iter_all_tabs().next().is_none() {
+            self.current_open_tab = None
+        }
+
+        if self.current_open_tab.as_ref() != self.tree_state.selected().first()
+            && let Some(open_tab) = &self.current_open_tab
+        {
+            self.tree_state.set_one_selected(open_tab.clone());
+        }
+    }
+
+    /// Get input that the project editor itself will read (hotkeys to switch or close tabs)
+    fn process_input(&mut self, ctx: &egui::Context) {
         // close current tab if ctrl-w is pressed
         if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut {
@@ -287,31 +316,6 @@ impl ProjectEditor {
         }) {
             // ctrl-tab was pressed, move fowards
             self.move_tab(TabMove::Next)
-        }
-
-        // render the tab view
-        DockArea::new(&mut self.dock_state)
-            .allowed_splits(egui_dock::AllowedSplits::None)
-            .show_leaf_collapse_buttons(false)
-            .show_leaf_close_all_buttons(false)
-            .show(
-                ctx,
-                &mut TabViewer {
-                    project: &mut self.project,
-                    editor_context: &mut self.editor_context,
-                    open_tab: &mut self.current_open_tab,
-                },
-            );
-
-        // If there aren't any tabs open, reflect that state
-        if self.dock_state.iter_all_tabs().next().is_none() {
-            self.current_open_tab = None
-        }
-
-        if self.current_open_tab.as_ref() != self.tree_state.selected().first()
-            && let Some(open_tab) = &self.current_open_tab
-        {
-            self.tree_state.set_one_selected(open_tab.clone());
         }
     }
 

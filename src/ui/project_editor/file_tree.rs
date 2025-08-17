@@ -37,10 +37,11 @@ impl dyn FileObject {
 
         // first, construct the node. we avoid a lot of duplication by putting it into a variable
         // before sticking it in the nodebuilder
-        let base_node = if self.is_folder() {
-            NodeBuilder::dir(Tab::from_id(self.id()))
+        let base_node_id: Tab = self.id().clone().into();
+        let base_node_builder = if self.is_folder() {
+            NodeBuilder::dir(base_node_id)
         } else {
-            NodeBuilder::leaf(Tab::from_id(self.id()))
+            NodeBuilder::leaf(base_node_id)
         };
 
         // compute some stuff for our context menu:
@@ -50,7 +51,7 @@ impl dyn FileObject {
             (parent_id.clone(), DirPosition::After(self.id().to_string()))
         };
 
-        let node = base_node
+        let node = base_node_builder
             .height(NODE_HEIGHT)
             .label(node_name)
             .context_menu(|ui| {
@@ -258,16 +259,30 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
     for action in context_menu_actions {
         match action {
             ContextMenuActions::Delete { parent, deleting } => {
+                let deleting_tab: Tab = deleting.into();
+
+                // Remove the current tab before deleting it
                 // TODO: find better way of doing this, prune elements before calling the viewer?
-                if let Some(tab_position) = editor.dock_state.find_tab(&Tab::from_id(&deleting)) {
+                if let Some(tab_position) = editor.dock_state.find_tab(&deleting_tab) {
                     editor.dock_state.remove_tab(tab_position);
                 }
-                if let Err(err) =
-                    <dyn FileObject>::remove_child(&deleting, &parent, &mut editor.project.objects)
-                {
-                    log::error!(
-                        "Encountered error while trying to delete element: {deleting}: {err}"
-                    );
+
+                match deleting_tab {
+                    Tab::FileObject(deleting_tab_id) => {
+                        // Delete the actual file object (removes from other objects and file on disk)
+                        if let Err(err) = <dyn FileObject>::remove_child(
+                            &deleting_tab_id,
+                            &parent,
+                            &mut editor.project.objects,
+                        ) {
+                            log::error!(
+                                "Encountered error while trying to delete element: {deleting_tab_id:?}: {err}"
+                            );
+                        }
+                    }
+                    _ => log::error!(
+                        "Attempted to delete something that wasn't a file object: {deleting_tab:?}"
+                    ),
                 }
             }
             ContextMenuActions::Add {

@@ -5,6 +5,7 @@ mod util;
 
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
+use std::rc::Rc;
 
 use crate::components::file_objects::base::FileObjectCreation;
 use crate::components::file_objects::utils::process_name_for_filename;
@@ -136,6 +137,15 @@ impl Tab {
 impl From<&mut Tab> for egui::Id {
     fn from(val: &mut Tab) -> Self {
         egui::Id::new(val)
+    }
+}
+
+impl From<Rc<String>> for Tab {
+    fn from(id: Rc<String>) -> Self {
+        match id.as_str() {
+            Self::PROJECT_METADATA_ID => Tab::ProjectMetadata,
+            _ => Tab::FileObject(id),
+        }
     }
 }
 

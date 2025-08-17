@@ -154,7 +154,6 @@ pub struct TabViewer<'a> {
     pub editor_context: &'a mut EditorContext,
     pub open_tab: &'a mut Option<Tab>,
     pub tab_move: &'a mut Option<TabMove>,
-    pub tab_to_close: &'a mut Option<Tab>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -212,16 +211,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             })
         }) {
             self.editor_context.global_search.show();
-        }
-
-        // closing current tab
-        if ui.input_mut(|i| {
-            i.consume_shortcut(&egui::KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                logical_key: Key::W,
-            })
-        }) {
-            *self.tab_to_close = Some(tab.clone());
         }
 
         // lock tab presses to the current window
@@ -288,7 +277,20 @@ impl ProjectEditor {
         });
 
         let mut tab_move_option: Option<TabMove> = None;
-        let mut tab_to_close_option: Option<Tab> = None;
+
+        // close current tab if ctrl-w is pressed
+        if ctx.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                logical_key: Key::W,
+            })
+        }) && let Some((_, current_tab_ref)) = self.dock_state.find_active_focused()
+        {
+            // We get an &mut reference so we have to clone it ;)
+            let current_tab = current_tab_ref.clone();
+            let tab_position = self.dock_state.find_tab(&current_tab).unwrap();
+            self.dock_state.remove_tab(tab_position);
+        }
 
         // render the tab view
         DockArea::new(&mut self.dock_state)
@@ -302,7 +304,6 @@ impl ProjectEditor {
                     editor_context: &mut self.editor_context,
                     open_tab: &mut self.current_open_tab,
                     tab_move: &mut tab_move_option,
-                    tab_to_close: &mut tab_to_close_option,
                 },
             );
 
@@ -315,13 +316,6 @@ impl ProjectEditor {
             && let Some(open_tab) = &self.current_open_tab
         {
             self.tree_state.set_one_selected(open_tab.clone());
-        }
-
-        // Remove tabs if necessary
-        if let Some(tab_to_close) = tab_to_close_option
-            && let Some(tab_position) = self.dock_state.find_tab(&tab_to_close)
-        {
-            self.dock_state.remove_tab(tab_position);
         }
 
         // Move between tabs (ctrl-tab or ctrl-shift-tab)

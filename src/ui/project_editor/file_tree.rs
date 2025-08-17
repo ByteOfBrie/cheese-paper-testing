@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use super::ProjectEditor;
 
 use crate::components::Project;
@@ -159,86 +157,98 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                 }
             }
             Action::Move(drag_and_drop) => {
-                if let Some(source) = drag_and_drop.source.first() {
+                // Moves only make sense if the source and target are both file objects.
+                // This logic only allows for moving individual file objects,
+                if let Some(source) = drag_and_drop.source.first()
+                    && let Tab::FileObject(source_file_id) = source
+                    && let Tab::FileObject(target_file_id) = &drag_and_drop.target
+                {
                     // Don't move one of the roots
-                    if *source.get_id() == *editor.project.text_id
-                        || *source.get_id() == *editor.project.characters_id
-                        || *source.get_id() == *editor.project.worldbuilding_id
+                    if *source_file_id == editor.project.text_id
+                        || *source_file_id == editor.project.characters_id
+                        || *source_file_id == editor.project.worldbuilding_id
                     {
-                        continue;
-                    }
-
-                    if !source.is_file_object() || !drag_and_drop.target.is_file_object() {
                         continue;
                     }
 
                     let index: usize = match drag_and_drop.position {
                         egui_ltreeview::DirPosition::First => 0,
-                        // to_owned isn't unnecessary, specifically need an &String not an &str
-                        #[allow(clippy::unnecessary_to_owned)]
                         egui_ltreeview::DirPosition::Last => editor
                             .project
                             .objects
-                            .get(&drag_and_drop.target.get_id().to_owned())
+                            .get(target_file_id)
                             .expect("objects in the tree must be in the object map")
                             .borrow()
                             .get_base()
                             .children
                             .len(),
                         egui_ltreeview::DirPosition::Before(node) => {
-                            assert!(node.is_file_object());
-                            // to_owned isn't unnecessary, specifically need an &String not an &str
-                            #[allow(clippy::unnecessary_to_owned)]
-                            editor
-                                .project
-                                .objects
-                                .get(&node.get_id().to_owned())
-                                .expect("objects in the tree must be in the object map")
-                                .borrow()
-                                .get_base()
-                                .index
-                                .expect("nodes in the tree should always have indexes")
+                            if let Tab::FileObject(node_id) = node {
+                                editor
+                                    .project
+                                    .objects
+                                    .get(&node_id)
+                                    .expect("objects in the tree must be in the object map")
+                                    .borrow()
+                                    .get_base()
+                                    .index
+                                    .expect("nodes in the tree should always have indexes")
+                            } else {
+                                log::error!(
+                                    "Encountered invalid move to {target_file_id:?}: found file object with\
+                                    a child that was not a file object"
+                                );
+                                continue;
+                            }
                         }
                         egui_ltreeview::DirPosition::After(node) => {
-                            assert!(node.is_file_object());
+                            if let Tab::FileObject(node_id) = node {
+                                let node_position = editor
+                                    .project
+                                    .objects
+                                    .get(&node_id)
+                                    .expect("objects in the tree must be in the object map")
+                                    .borrow()
+                                    .get_base()
+                                    .index
+                                    .expect("nodes in the tree should always have indexes");
 
-                            // to_owned isn't unnecessary, specifically need an &String not an &str
-                            #[allow(clippy::unnecessary_to_owned)]
-                            let node_position = editor
-                                .project
-                                .objects
-                                .get(&node.get_id().to_owned())
-                                .expect("objects in the tree must be in the object map")
-                                .borrow()
-                                .get_base()
-                                .index
-                                .expect("nodes in the tree should always have indexes");
-
-                            node_position + 1
+                                node_position + 1
+                            } else {
+                                log::error!(
+                                    "Encountered invalid move to {target_file_id:?}: found file object with\
+                                    a child that was not a file object"
+                                );
+                                continue;
+                            }
                         }
                     };
 
-                    let source_id: FileID = Rc::new(source.get_id().to_owned());
-                    // TODO finish replacing the Strings with Rc everywhere to save on unnecessary clones (low priority)
-                    let mut source_parent: Option<FileID> = None;
-
                     for object in editor.project.objects.values() {
-                        if object.borrow().get_base().children.contains(&source_id) {
-                            source_parent = Some(object.borrow().id().clone());
+                        if object.borrow().get_base().children.contains(source_file_id) {
+                            match move_child(
+                                source_file_id,
+                                object.borrow().id(),
+                                target_file_id,
+                                index,
+                                &editor.project.objects,
+                            ) {
+                                Ok(()) => continue,
+                                Err(err) => {
+                                    log::error!(
+                                        "error encountered while moving file object: {err:?}"
+                                    );
+                                }
+                            }
                         }
                     }
 
-                    let target = Rc::new(drag_and_drop.target.get_id().to_string());
-
-                    if let Err(err) = move_child(
-                        &source_id,
-                        &source_parent.expect("moving item's parent should be in tree"),
-                        &target,
-                        index,
-                        &editor.project.objects,
-                    ) {
-                        log::error!("error encountered while moving file object: {err:?}");
-                    }
+                    // If the move above was successful, we would continue, so this will only be
+                    // reached in error scenarios
+                    log::error!(
+                        "failed to move {source_file_id} to {target_file_id}: could not find source \
+                        object parent in tree"
+                    );
                 }
             }
             _ => {}

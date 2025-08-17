@@ -92,6 +92,12 @@ pub enum TabMove {
     Next,
 }
 
+/// An identifier for something that can be drawn as a tab
+///
+/// We currently have to have a string representation for every tab value so that
+/// `update_open_tabs` can write the list of open tabs for them to be reopened next
+/// time. If that requirement isn't present, we should be able to avoid having strings
+/// entirely
 #[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
 pub enum Tab {
     ProjectMetadata,
@@ -101,11 +107,12 @@ pub enum Tab {
 impl Tab {
     const PROJECT_METADATA_ID: &str = "project_metadata";
 
+    /// Get an id from a string. This (and its reverse, `get_id`) could be replaced by `From`
+    /// (and `Into`), but this seems like it might be more explicit?
     pub fn from_id(id: &str) -> Self {
-        if id == Self::PROJECT_METADATA_ID {
-            Tab::ProjectMetadata
-        } else {
-            Tab::FileObject(FileID::new(id.to_owned()))
+        match id {
+            Self::PROJECT_METADATA_ID => Tab::ProjectMetadata,
+            _ => Tab::FileObject(FileID::new(id.to_owned())),
         }
     }
 
@@ -125,6 +132,13 @@ impl Tab {
     }
 }
 
+// Needs to be &mut Tab since `egui_dock::TabViewer::id` gives us a mut reference
+impl From<&mut Tab> for egui::Id {
+    fn from(val: &mut Tab) -> Self {
+        egui::Id::new(val)
+    }
+}
+
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
@@ -137,11 +151,12 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     type Tab = Tab;
 
     fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
-        egui::Id::from(tab.get_id().to_owned())
+        tab.into()
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         match tab {
+            Tab::ProjectMetadata => "Project Metadata".into(),
             Tab::FileObject(file_id) => {
                 if let Some(object) = self.project.objects.get(file_id) {
                     object.borrow().get_title().into()
@@ -151,7 +166,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                     "<Deleted>".into()
                 }
             }
-            Tab::ProjectMetadata => "Project Metadata".into(),
         }
     }
 
@@ -606,9 +620,10 @@ impl ProjectEditor {
 
     fn set_editor_tab(&mut self, tab: &Tab) {
         // We don't want to open these, so just exit early
-        if *tab.get_id() == *self.project.text_id
-            || *tab.get_id() == *self.project.characters_id
-            || *tab.get_id() == *self.project.worldbuilding_id
+        if let Tab::FileObject(id) = tab
+            && (*id == self.project.text_id
+                || *id == self.project.characters_id
+                || *id == self.project.worldbuilding_id)
         {
             return;
         }

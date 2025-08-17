@@ -153,7 +153,6 @@ pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
     pub open_tab: &'a mut Option<Tab>,
-    pub tab_move: &'a mut Option<TabMove>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
@@ -182,25 +181,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         // Tell the editor which tab we have open (so that the treeview selection can be updated)
         if self.open_tab.as_ref() != Some(tab) {
             *self.open_tab = Some(tab.clone());
-        }
-
-        // hotkeys for tab movement
-        if ui.input_mut(|i| {
-            i.consume_shortcut(&egui::KeyboardShortcut {
-                modifiers: Modifiers::CTRL | Modifiers::SHIFT,
-                logical_key: Key::Tab,
-            })
-        }) {
-            // ctrl-shift-tab was pressed, move backwards
-            *self.tab_move = Some(TabMove::Previous);
-        } else if ui.input_mut(|i| {
-            i.consume_shortcut(&egui::KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                logical_key: Key::Tab,
-            })
-        }) {
-            // ctrl-tab was pressed, move fowards
-            *self.tab_move = Some(TabMove::Next);
         }
 
         // check for ctrl-shift-f for search
@@ -276,8 +256,6 @@ impl ProjectEditor {
             Tab::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
         });
 
-        let mut tab_move_option: Option<TabMove> = None;
-
         // close current tab if ctrl-w is pressed
         if ctx.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut {
@@ -292,6 +270,25 @@ impl ProjectEditor {
             self.dock_state.remove_tab(tab_position);
         }
 
+        // Move between tabs (ctrl-tab or ctrl-shift-tab)
+        if ctx.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL | Modifiers::SHIFT,
+                logical_key: Key::Tab,
+            })
+        }) {
+            // ctrl-shift-tab was pressed, move backwards
+            self.move_tab(TabMove::Previous)
+        } else if ctx.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                logical_key: Key::Tab,
+            })
+        }) {
+            // ctrl-tab was pressed, move fowards
+            self.move_tab(TabMove::Next)
+        }
+
         // render the tab view
         DockArea::new(&mut self.dock_state)
             .allowed_splits(egui_dock::AllowedSplits::None)
@@ -303,7 +300,6 @@ impl ProjectEditor {
                     project: &mut self.project,
                     editor_context: &mut self.editor_context,
                     open_tab: &mut self.current_open_tab,
-                    tab_move: &mut tab_move_option,
                 },
             );
 
@@ -317,29 +313,30 @@ impl ProjectEditor {
         {
             self.tree_state.set_one_selected(open_tab.clone());
         }
+    }
 
-        // Move between tabs (ctrl-tab or ctrl-shift-tab)
-        if let Some(tab_move) = tab_move_option {
-            let open_tabs: Vec<_> = self.get_open_tabs();
+    fn move_tab(&mut self, tab_move: TabMove) {
+        // We could probably get around this by learning how dock_state works better, but
+        // this is easy and reliable
+        let open_tabs: Vec<_> = self.get_open_tabs();
 
-            // Make sure we have something to do
-            if open_tabs.len() > 1
-                && let Some((_, current_tab)) = self.dock_state.find_active_focused()
-            {
-                let current_pos = open_tabs
-                    .iter()
-                    .position(|val| val == current_tab)
-                    .expect("focused tab should be in list of tabs");
+        // Make sure we have something to do
+        if open_tabs.len() > 1
+            && let Some((_, current_tab)) = self.dock_state.find_active_focused()
+        {
+            let current_pos = open_tabs
+                .iter()
+                .position(|val| val == current_tab)
+                .expect("focused tab should be in list of tabs");
 
-                let new_pos = match tab_move {
-                    TabMove::Next => (current_pos + 1) % open_tabs.len(),
-                    TabMove::Previous => current_pos
-                        .checked_sub(1)
-                        .unwrap_or_else(|| open_tabs.len() - 1),
-                };
+            let new_pos = match tab_move {
+                TabMove::Next => (current_pos + 1) % open_tabs.len(),
+                TabMove::Previous => current_pos
+                    .checked_sub(1)
+                    .unwrap_or_else(|| open_tabs.len() - 1),
+            };
 
-                self.set_editor_tab(open_tabs.get(new_pos).unwrap());
-            }
+            self.set_editor_tab(open_tabs.get(new_pos).unwrap());
         }
     }
 

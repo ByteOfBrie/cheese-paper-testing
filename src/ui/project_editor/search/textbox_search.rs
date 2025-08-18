@@ -1,6 +1,6 @@
 use egui::{Color32, Label, Sense, TextFormat, Vec2, Widget, text::LayoutJob};
 
-use crate::{components::Text, ui::project_editor::Tab};
+use crate::ui::prelude::*;
 
 #[derive(Debug)]
 pub struct TextBoxSearchResult {

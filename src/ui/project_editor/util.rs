@@ -1,5 +1,4 @@
-use crate::components::{Project, Text};
-use crate::ui::EditorContext;
+use crate::ui::prelude::*;
 
 #[allow(dead_code)]
 pub fn project_word_count(project: &Project, ctx: &mut EditorContext) -> usize {

@@ -1,8 +1,6 @@
-use cow_utils::CowUtils;
-use regex::Regex;
+use crate::ui::prelude::*;
 
-use super::SavedRegex;
-use crate::ui::EditorContext;
+use cow_utils::CowUtils;
 
 use std::borrow::Cow;
 use std::ops::Range;

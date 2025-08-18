@@ -1,14 +1,7 @@
 pub mod global_search;
 pub mod textbox_search;
 
-use egui::Ui;
-
-use super::EditorContext;
-use crate::components::{Text, TextUID, file_objects::FileObject};
-use crate::ui::project_editor::{ProjectEditor, Tab};
-
-use std::cell::RefCell;
-use std::collections::HashMap;
+use crate::ui::prelude::*;
 
 type SearchableIterValue<'a> = (Tab, Searchable<'a>);
 pub enum Searchable<'a> {

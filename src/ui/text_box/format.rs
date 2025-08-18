@@ -1,12 +1,10 @@
-use egui::{Color32, TextFormat, text::LayoutJob};
-use regex::Regex;
-
-use super::SavedRegex;
+use crate::ui::prelude::*;
 use crate::ui::{
-    EditorContext,
     project_editor::search::textbox_search::{TextBoxSearchResult, WordFind},
     text_box::spellcheck::find_misspelled_words,
 };
+
+use egui::{Color32, TextFormat, text::LayoutJob};
 
 use egui::{FontFamily, FontId, Stroke};
 

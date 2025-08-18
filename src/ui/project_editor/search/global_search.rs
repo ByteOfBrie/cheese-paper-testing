@@ -1,12 +1,9 @@
 use egui::{Color32, Response};
 
-use super::textbox_search::TextBoxSearchResult;
-use super::*;
-use crate::components::Project;
-use crate::ui::project_editor::Tab;
-use crate::ui::project_editor::search::textbox_search::WordFind;
+use crate::ui::prelude::*;
 
-use std::collections::HashMap;
+use super::textbox_search::TextBoxSearchResult;
+use crate::ui::project_editor::search::textbox_search::WordFind;
 
 #[derive(Debug, Default)]
 pub struct GlobalSearch {

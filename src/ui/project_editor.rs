@@ -4,17 +4,18 @@ mod project_metadata_editor;
 pub mod search;
 mod util;
 
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::rc::Rc;
+use crate::ui::prelude::*;
 
-use crate::components::file_objects::base::FileObjectCreation;
-use crate::components::file_objects::utils::process_name_for_filename;
-use crate::components::file_objects::{FileID, FileObject, from_file};
-use crate::components::{Project, Text};
+use crate::components::file_objects::{
+    base::FileObjectCreation, from_file, utils::process_name_for_filename,
+};
 use crate::ui::editor_base::EditorState;
-use crate::ui::project_editor::search::{global_search, textbox_search};
+use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
+
+use std::fmt::{Debug, Formatter};
+use std::ops::Range;
+
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::TreeViewState;
@@ -22,8 +23,6 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use rfd::FileDialog;
 use spellbook::Dictionary;
-use std::cell::RefCell;
-use std::ops::Range;
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 type WatcherReceiver = std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>;

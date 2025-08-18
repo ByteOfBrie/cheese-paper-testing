@@ -3,9 +3,7 @@ mod folder_editor;
 mod place_editor;
 mod scene_editor;
 
-use crate::components::Text;
-
-use crate::{components::file_objects::FileObject, ui::project_editor::EditorContext};
+use crate::ui::prelude::*;
 
 pub trait FileObjectEditor: FileObject {
     fn ui<'a>(&'a mut self, ui: &'a mut egui::Ui, ctx: &'a mut EditorContext) -> egui::Response;

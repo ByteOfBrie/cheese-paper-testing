@@ -1,8 +1,8 @@
-use crate::components::Text;
 use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
     write_with_temp_file,
 };
+use crate::components::text::Text;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsString;

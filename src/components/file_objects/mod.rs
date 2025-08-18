@@ -6,7 +6,8 @@ mod scene;
 pub mod utils;
 
 pub use base::{
-    FileID, FileInfo, FileObject, FileObjectMetadata, FileObjectStore, from_file, move_child,
+    FileID, FileInfo, FileObject, FileObjectMetadata, FileObjectStore, FileType, from_file,
+    move_child,
 };
 pub use character::Character;
 pub use folder::Folder;

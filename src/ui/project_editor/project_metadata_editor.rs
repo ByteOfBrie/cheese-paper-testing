@@ -1,7 +1,4 @@
-use crate::components::Project;
-use crate::components::Text;
-use crate::ui::EditorContext;
-use egui::{Response, Ui};
+use crate::ui::prelude::*;
 
 use egui::ScrollArea;
 

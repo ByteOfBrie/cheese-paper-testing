@@ -1,13 +1,10 @@
 mod format;
 mod spellcheck;
 
-use crate::components::Text;
-use crate::ui::EditorContext;
+use crate::ui::prelude::*;
 use crate::ui::project_editor::search::textbox_search;
+use egui::TextBuffer;
 use egui::text::LayoutJob;
-use egui::{Response, TextBuffer};
-
-type SavedRegex = std::sync::LazyLock<regex::Regex>;
 
 #[derive(Debug, Default)]
 pub struct TextBox {

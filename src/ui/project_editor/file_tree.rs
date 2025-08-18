@@ -1,9 +1,7 @@
 use super::ProjectEditor;
 
-use crate::components::Project;
-use crate::components::file_objects::base::{FileID, FileType};
-use crate::components::file_objects::{FileObject, FileObjectStore, move_child};
-use crate::ui::project_editor::Tab;
+use crate::components::file_objects::move_child;
+use crate::ui::prelude::*;
 
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 

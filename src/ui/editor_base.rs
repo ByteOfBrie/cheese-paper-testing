@@ -1,17 +1,18 @@
-use crate::components::{Project, file_objects::write_with_temp_file};
-use crate::ui::project_editor::ProjectEditor;
+use crate::ui::prelude::*;
+use spellbook::Dictionary;
+
+use crate::components::file_objects::write_with_temp_file;
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
 use rfd::FileDialog;
-use spellbook::Dictionary;
+use toml_edit::{DocumentMut, value};
+
 use std::{
-    collections::HashMap,
     fs::read_to_string,
     io::Result,
     path::PathBuf,
     time::{Duration, Instant},
 };
-use toml_edit::{DocumentMut, value};
 
 #[cfg(feature = "metrics")]
 use super::metrics::Metrics;

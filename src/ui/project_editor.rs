@@ -368,7 +368,7 @@ impl ProjectEditor {
                             let suggested_title =
                                 format!("{}_outline", process_name_for_filename(project_title));
                             let export_location_option = FileDialog::new()
-                                .set_title(format!("Export {} Outline", project_title))
+                                .set_title(format!("Export {project_title} Outline"))
                                 .set_directory(&state.data.last_export_folder)
                                 .set_file_name(suggested_title)
                                 .save_file();

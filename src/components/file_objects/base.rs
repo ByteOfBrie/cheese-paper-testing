@@ -78,12 +78,9 @@ impl Default for FileObjectMetadata {
     }
 }
 
-// We have to we can safely convert from FileType to str, but not the reverse
-// (which has a TryFrom) implementation
-#[allow(clippy::from_over_into)]
-impl Into<&str> for FileType {
-    fn into(self) -> &'static str {
-        match self {
+impl From<FileType> for &str {
+    fn from(val: FileType) -> Self {
+        match val {
             FileType::Scene => "scene",
             FileType::Folder => "folder",
             FileType::Character => "character",

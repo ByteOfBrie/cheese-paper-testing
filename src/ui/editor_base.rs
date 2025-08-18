@@ -329,9 +329,6 @@ impl eframe::App for CheesePaperApp {
 
         match &mut self.project_editor {
             Some(project_editor) => {
-                // For now, we  create the entire menu bar here, this should probably be done
-                // inside of the project editor panels instead (TODO)
-
                 project_editor.panels(ctx, &mut self.state);
 
                 let current_time = Instant::now();

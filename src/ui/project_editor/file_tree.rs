@@ -121,6 +121,8 @@ impl Project {
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, Tab>,
         actions: &mut Vec<ContextMenuActions>,
     ) {
+        builder.leaf(Tab::ProjectMetadata, "Project");
+
         self.objects
             .get(&self.text_id)
             .unwrap()

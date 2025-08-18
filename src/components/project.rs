@@ -1,3 +1,4 @@
+use crate::components::Text;
 use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
     write_with_temp_file,
@@ -34,11 +35,11 @@ pub struct Project {
 
 #[derive(Debug, Default)]
 pub struct ProjectMetadata {
-    summary: String,
-    notes: String,
-    genre: String,
-    author: String,
-    email: String,
+    pub summary: Text,
+    pub notes: Text,
+    pub genre: String,
+    pub author: String,
+    pub email: String,
 }
 
 const PROJECT_INFO_NAME: &str = "project.toml";
@@ -284,8 +285,8 @@ impl Project {
         self.toml_header["name"] = toml_edit::value(&self.base_metadata.name);
         self.toml_header["id"] = toml_edit::value(&*self.base_metadata.id);
 
-        self.toml_header["summary"] = toml_edit::value(&self.metadata.summary);
-        self.toml_header["notes"] = toml_edit::value(&self.metadata.notes);
+        self.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
+        self.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.toml_header["genre"] = toml_edit::value(&self.metadata.genre);
         self.toml_header["author"] = toml_edit::value(&self.metadata.author);
         self.toml_header["email"] = toml_edit::value(&self.metadata.email);
@@ -306,12 +307,12 @@ impl Project {
         let mut modified = false;
 
         match metadata_extract_string(&self.toml_header, "summary")? {
-            Some(summary) => self.metadata.summary = summary,
+            Some(summary) => self.metadata.summary = summary.into(),
             None => modified = true,
         }
 
         match metadata_extract_string(&self.toml_header, "notes")? {
-            Some(notes) => self.metadata.notes = notes,
+            Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 

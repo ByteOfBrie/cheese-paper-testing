@@ -1,5 +1,6 @@
 pub mod file_object_editor;
 mod file_tree;
+mod project_metadata_editor;
 pub mod search;
 mod util;
 
@@ -214,7 +215,9 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
         // draw the actual UI for the tab open in the editor
         match tab {
-            Tab::ProjectMetadata => {}
+            Tab::ProjectMetadata => {
+                self.project.metadata_ui(ui, self.editor_context);
+            }
             Tab::FileObject(file_object_id) => {
                 if let Some(file_object) = self.project.objects.get_mut(file_object_id) {
                     file_object

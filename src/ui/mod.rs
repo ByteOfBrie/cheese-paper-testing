@@ -1,6 +1,7 @@
 mod render_data;
 
 mod editor_base;
+mod settings;
 mod text_box;
 
 mod project_editor;

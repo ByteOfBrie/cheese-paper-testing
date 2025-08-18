@@ -4,7 +4,10 @@ pub use {
         project::Project,
         text::{Text, TextUID},
     },
-    crate::ui::project_editor::{EditorContext, ProjectEditor, Tab},
+    crate::ui::{
+        project_editor::{EditorContext, ProjectEditor, Tab},
+        settings::Settings,
+    },
     egui::{Response, Ui},
     regex::Regex,
     std::{cell::RefCell, collections::HashMap, rc::Rc},

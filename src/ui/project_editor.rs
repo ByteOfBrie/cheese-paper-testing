@@ -82,6 +82,8 @@ impl Debug for ProjectEditor {
 
 #[derive(Debug)]
 pub struct EditorContext {
+    #[allow(dead_code)]
+    pub settings: Settings,
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
     pub typing_status: TypingStatus,
@@ -648,6 +650,7 @@ impl ProjectEditor {
         project: Project,
         open_tab_ids: Vec<String>,
         dictionary: Option<Dictionary>,
+        settings: Settings,
     ) -> Self {
         // this might later get wrapped in an optional block or something but not worth it right now
         let (mut watcher, file_event_rx) =
@@ -680,6 +683,7 @@ impl ProjectEditor {
             dock_state: DockState::new(open_tabs),
             title_needs_update: true,
             editor_context: EditorContext {
+                settings,
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),

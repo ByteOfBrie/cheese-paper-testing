@@ -18,65 +18,6 @@ use std::{
 use super::metrics::Metrics;
 
 #[derive(Debug)]
-pub struct Settings {
-    font_size: f32,
-    reopen_last: bool,
-    dictionary_location: PathBuf,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            font_size: 18.0,
-            reopen_last: true,
-            dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
-        }
-    }
-}
-
-impl Settings {
-    fn load(&mut self, table: &DocumentMut) -> bool {
-        let mut modified = false;
-
-        match table.get("font_size") {
-            Some(font_size_item) => {
-                if let Some(font_size) = font_size_item.as_float() {
-                    self.font_size = font_size as f32;
-                } else if let Some(font_size) = font_size_item.as_integer() {
-                    self.font_size = font_size as f32;
-                } else {
-                    modified = true;
-                }
-            }
-            None => modified = true,
-        }
-
-        match table.get("reopen_last").and_then(|val| val.as_bool()) {
-            Some(reopen_last) => self.reopen_last = reopen_last,
-            None => modified = true,
-        }
-
-        if let Some(dictionary_location) = table
-            .get("dictionary_location")
-            .and_then(|location| location.as_str())
-        {
-            self.dictionary_location = PathBuf::from(dictionary_location);
-        }
-
-        modified
-    }
-
-    fn save(&self, table: &mut DocumentMut) {
-        table.insert("font_size", value(self.font_size as f64));
-        table.insert("reopen_last", value(self.reopen_last));
-    }
-
-    fn get_path(project_dirs: &ProjectDirs) -> PathBuf {
-        project_dirs.config_dir().join("settings.toml")
-    }
-}
-
-#[derive(Debug)]
 pub struct Data {
     pub recent_projects: Vec<PathBuf>,
     pub last_project_parent_folder: PathBuf,
@@ -407,14 +348,14 @@ impl CheesePaperApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let state = EditorState::default();
 
-        configure_text_styles(&cc.egui_ctx, state.settings.font_size);
+        configure_text_styles(&cc.egui_ctx, state.settings.font_size());
 
         let mut dictionary = None;
 
         // Attempt to load dictionary:
-        let mut aff_path = state.settings.dictionary_location.clone();
+        let mut aff_path = state.settings.dictionary_location();
         aff_path.set_extension("aff");
-        let mut dic_path = state.settings.dictionary_location.clone();
+        let mut dic_path = state.settings.dictionary_location();
         dic_path.set_extension("dic");
 
         if aff_path.exists() && dic_path.exists() {
@@ -431,13 +372,13 @@ impl CheesePaperApp {
                 (Err(aff_err), _) => {
                     log::warn!(
                         "Error while trying to read aff in {:?}: {aff_err}",
-                        state.settings.dictionary_location
+                        state.settings.dictionary_location()
                     )
                 }
                 (_, Err(dic_err)) => {
                     log::warn!(
                         "Error while trying to read dic in {:?}: {dic_err}",
-                        state.settings.dictionary_location
+                        state.settings.dictionary_location()
                     )
                 }
             }
@@ -460,7 +401,7 @@ impl CheesePaperApp {
             metrics: Metrics::default(),
         };
 
-        if app.state.settings.reopen_last
+        if app.state.settings.reopen_last()
             && let Some(last_open_project) = app.state.data.recent_projects.first()
         {
             let last_open_project = last_open_project.clone();
@@ -518,7 +459,7 @@ impl CheesePaperApp {
 
             ui.vertical_centered(|ui| {
                 let checkbox_response = ui.checkbox(
-                    &mut self.state.settings.reopen_last,
+                    &mut self.state.settings.reopen_last(),
                     "Automatically reopen project",
                 );
                 if checkbox_response.clicked() {
@@ -592,6 +533,7 @@ impl CheesePaperApp {
                                         project,
                                         Vec::new(),
                                         self.dictionary.clone(),
+                                        self.state.settings.clone(),
                                     ));
                                 }
                                 Err(err) => {
@@ -665,11 +607,13 @@ impl CheesePaperApp {
                         project,
                         open_tabs.clone(),
                         self.dictionary.clone(),
+                        self.state.settings.clone(),
                     )),
                     None => Some(ProjectEditor::new(
                         project,
                         Vec::new(),
                         self.dictionary.clone(),
+                        self.state.settings.clone(),
                     )),
                 };
 

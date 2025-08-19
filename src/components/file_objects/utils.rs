@@ -72,10 +72,21 @@ pub fn get_index_from_name(name: &str) -> Option<usize> {
     }
 }
 
+pub fn create_dir_if_missing(dest_path: &Path) -> std::io::Result<&Path> {
+    let dirname = dest_path.parent().expect("Must pass a path with a parent");
+
+    if !std::fs::exists(dirname)? {
+        std::fs::create_dir(dirname)?;
+    }
+
+    Ok(dest_path)
+}
+
 /// Atomically write a file
 pub fn write_with_temp_file(dest_path: &Path, contents: &[u8]) -> std::io::Result<()> {
     let dirname = dest_path.parent().expect("Must pass a path with a parent");
     let basename = dest_path.file_name().expect("Must write to a file");
+
     let mut file = Builder::new().suffix(".tmp").tempfile_in(dirname)?;
 
     file.write_all(contents)?;

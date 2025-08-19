@@ -1,7 +1,7 @@
 use crate::ui::prelude::*;
 use spellbook::Dictionary;
 
-use crate::components::file_objects::write_with_temp_file;
+use crate::components::file_objects::{create_dir_if_missing, write_with_temp_file};
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
 use rfd::FileDialog;
@@ -219,14 +219,14 @@ impl EditorState {
         if self.modified {
             self.data.save(&mut self.data_toml);
             write_with_temp_file(
-                &Data::get_path(&self.project_dirs),
+                create_dir_if_missing(&Data::get_path(&self.project_dirs))?,
                 self.data_toml.to_string().as_bytes(),
             )
             .map_err(|err| cheese_error!("Error while saving app data\n{}", err))?;
 
             self.settings.save(&mut self.settings_toml);
             write_with_temp_file(
-                &Settings::get_path(&self.project_dirs),
+                create_dir_if_missing(&Settings::get_path(&self.project_dirs))?,
                 self.settings_toml.to_string().as_bytes(),
             )
             .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;

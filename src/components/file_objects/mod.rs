@@ -14,4 +14,4 @@ pub use folder::Folder;
 pub use place::Place;
 pub use scene::Scene;
 
-pub use utils::write_with_temp_file;
+pub use utils::{create_dir_if_missing, write_with_temp_file};

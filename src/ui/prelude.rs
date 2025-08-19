@@ -5,7 +5,7 @@ pub use {
         text::{Text, TextUID},
     },
     crate::ui::{
-        project_editor::{EditorContext, ProjectEditor, Tab},
+        project_editor::{EditorContext, Page, ProjectEditor},
         settings::Settings,
     },
     egui::{Response, Ui},

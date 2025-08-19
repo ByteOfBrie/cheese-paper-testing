@@ -3,7 +3,7 @@ pub mod textbox_search;
 
 use crate::{components::project::ProjectMetadata, ui::prelude::*};
 
-type SearchableIterValue<'a> = (Tab, Searchable<'a>);
+type SearchableIterValue<'a> = (Page, Searchable<'a>);
 pub enum Searchable<'a> {
     FileObject(&'a RefCell<dyn FileObject>),
     ProjectMetadata(&'a ProjectMetadata),
@@ -27,11 +27,11 @@ impl ProjectEditor {
     pub fn get_searchable(&'_ self) -> impl Iterator<Item = SearchableIterValue<'_>> {
         let object_iter =
             self.project.objects.iter().map(|(id, file_object)| {
-                (Tab::from_file_id(id), Searchable::FileObject(file_object))
+                (Page::from_file_id(id), Searchable::FileObject(file_object))
             });
 
         let metadata_iter = std::iter::once((
-            Tab::ProjectMetadata,
+            Page::ProjectMetadata,
             Searchable::ProjectMetadata(&self.project.metadata),
         ));
 

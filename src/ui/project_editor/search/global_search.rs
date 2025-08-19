@@ -67,11 +67,11 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
         let mut items: Vec<(TextUID, String, &TextBoxSearchResult)> = search_results
             .iter()
             .filter_map(|(id, tbsr)| match &tbsr.tab {
-                Tab::FileObject(tab_id) => {
+                Page::FileObject(tab_id) => {
                     let file_object_name = project.objects.get(tab_id)?.borrow().get_title();
                     Some((*id, file_object_name, tbsr))
                 }
-                Tab::ProjectMetadata => Some((*id, String::from("Project Metadata"), tbsr)),
+                Page::ProjectMetadata => Some((*id, String::from("Project Metadata"), tbsr)),
             })
             .filter(|(_, _, tbsr)| !tbsr.finds.is_empty())
             .collect();

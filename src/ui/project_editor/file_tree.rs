@@ -22,7 +22,7 @@ impl dyn FileObject {
     fn build_tree(
         &self,
         objects: &FileObjectStore,
-        builder: &mut egui_ltreeview::TreeViewBuilder<'_, Tab>,
+        builder: &mut egui_ltreeview::TreeViewBuilder<'_, Page>,
         actions: &mut Vec<ContextMenuActions>,
         parent_id: Option<FileID>,
     ) {
@@ -36,7 +36,7 @@ impl dyn FileObject {
 
         // first, construct the node. we avoid a lot of duplication by putting it into a variable
         // before sticking it in the nodebuilder
-        let base_node_id: Tab = self.id().clone().into();
+        let base_node_id: Page = self.id().clone().into();
         let base_node_builder = if self.is_folder() {
             NodeBuilder::dir(base_node_id)
         } else {
@@ -117,11 +117,11 @@ impl dyn FileObject {
 impl Project {
     fn build_tree(
         &mut self,
-        builder: &mut egui_ltreeview::TreeViewBuilder<'_, Tab>,
+        builder: &mut egui_ltreeview::TreeViewBuilder<'_, Page>,
         actions: &mut Vec<ContextMenuActions>,
     ) {
         // Add special project metadata to the tree
-        builder.leaf(Tab::ProjectMetadata, "Project");
+        builder.leaf(Page::ProjectMetadata, "Project");
 
         // Create the rest of the top level tree
         self.objects
@@ -164,8 +164,8 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                 // Moves only make sense if the source and target are both file objects.
                 // This logic only allows for moving individual file objects,
                 if let Some(source) = drag_and_drop.source.first()
-                    && let Tab::FileObject(source_file_id) = source
-                    && let Tab::FileObject(target_file_id) = &drag_and_drop.target
+                    && let Page::FileObject(source_file_id) = source
+                    && let Page::FileObject(target_file_id) = &drag_and_drop.target
                 {
                     // Don't move one of the roots
                     if *source_file_id == editor.project.text_id
@@ -187,7 +187,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                             .children
                             .len(),
                         egui_ltreeview::DirPosition::Before(node) => {
-                            if let Tab::FileObject(node_id) = node {
+                            if let Page::FileObject(node_id) = node {
                                 editor
                                     .project
                                     .objects
@@ -206,7 +206,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                             }
                         }
                         egui_ltreeview::DirPosition::After(node) => {
-                            if let Tab::FileObject(node_id) = node {
+                            if let Page::FileObject(node_id) = node {
                                 let node_position = editor
                                     .project
                                     .objects

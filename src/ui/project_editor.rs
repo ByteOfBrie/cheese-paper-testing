@@ -44,7 +44,7 @@ pub struct ProjectEditor {
     pub project: Project,
 
     /// List of tabs that are open (egui::Dock requires state to be stored this way)
-    dock_state: DockState<Tab>,
+    dock_state: DockState<Page>,
 
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
@@ -59,10 +59,10 @@ pub struct ProjectEditor {
     tracker: Option<ProjectTracker>,
 
     /// We need to keep track of the tree state to set selection
-    tree_state: TreeViewState<Tab>,
+    tree_state: TreeViewState<Page>,
 
     /// Set by the tab viewer, used to sync the file tree
-    current_open_tab: Option<Tab>,
+    current_open_tab: Option<Page>,
 }
 
 impl Debug for ProjectEditor {
@@ -102,51 +102,51 @@ pub enum TabMove {
 /// time. If that requirement isn't present, we should be able to avoid having strings
 /// entirely
 #[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
-pub enum Tab {
+pub enum Page {
     ProjectMetadata,
     FileObject(FileID),
 }
 
-impl Tab {
+impl Page {
     const PROJECT_METADATA_ID: &str = "project_metadata";
 
     /// Get an id from a string. This (and its reverse, `get_id`) could be replaced by `From`
     /// (and `Into`), but this seems like it might be more explicit?
     pub fn from_id(id: &str) -> Self {
         match id {
-            Self::PROJECT_METADATA_ID => Tab::ProjectMetadata,
-            _ => Tab::FileObject(FileID::new(id.to_owned())),
+            Self::PROJECT_METADATA_ID => Page::ProjectMetadata,
+            _ => Page::FileObject(FileID::new(id.to_owned())),
         }
     }
 
     pub fn get_id(&self) -> &str {
         match self {
-            Tab::ProjectMetadata => Self::PROJECT_METADATA_ID,
-            Tab::FileObject(id) => id,
+            Page::ProjectMetadata => Self::PROJECT_METADATA_ID,
+            Page::FileObject(id) => id,
         }
     }
 
     pub fn from_file_id(file_id: &FileID) -> Self {
-        Tab::FileObject(file_id.clone())
+        Page::FileObject(file_id.clone())
     }
 
     pub fn is_file_object(&self) -> bool {
-        matches!(self, Tab::FileObject(_))
+        matches!(self, Page::FileObject(_))
     }
 }
 
 // Needs to be &mut Tab since `egui_dock::TabViewer::id` gives us a mut reference
-impl From<&mut Tab> for egui::Id {
-    fn from(val: &mut Tab) -> Self {
+impl From<&mut Page> for egui::Id {
+    fn from(val: &mut Page) -> Self {
         egui::Id::new(val)
     }
 }
 
-impl From<Rc<String>> for Tab {
+impl From<Rc<String>> for Page {
     fn from(id: Rc<String>) -> Self {
         match id.as_str() {
-            Self::PROJECT_METADATA_ID => Tab::ProjectMetadata,
-            _ => Tab::FileObject(id),
+            Self::PROJECT_METADATA_ID => Page::ProjectMetadata,
+            _ => Page::FileObject(id),
         }
     }
 }
@@ -154,11 +154,11 @@ impl From<Rc<String>> for Tab {
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
-    pub open_tab: &'a mut Option<Tab>,
+    pub open_tab: &'a mut Option<Page>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
-    type Tab = Tab;
+    type Tab = Page;
 
     fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
         tab.into()
@@ -166,8 +166,8 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         match tab {
-            Tab::ProjectMetadata => "Project Metadata".into(),
-            Tab::FileObject(file_id) => {
+            Page::ProjectMetadata => "Project Metadata".into(),
+            Page::FileObject(file_id) => {
                 if let Some(object) = self.project.objects.get(file_id) {
                     object.borrow().get_title().into()
                 } else {
@@ -216,10 +216,10 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
         // draw the actual UI for the tab open in the editor
         match tab {
-            Tab::ProjectMetadata => {
+            Page::ProjectMetadata => {
                 self.project.metadata_ui(ui, self.editor_context);
             }
-            Tab::FileObject(file_object_id) => {
+            Page::FileObject(file_object_id) => {
                 if let Some(file_object) = self.project.objects.get_mut(file_object_id) {
                     file_object
                         .borrow_mut()
@@ -257,8 +257,8 @@ impl ProjectEditor {
 
         // Before rendering the tab view, clear out any deleted scenes
         self.dock_state.retain_tabs(|tab| match tab {
-            Tab::ProjectMetadata => true,
-            Tab::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
+            Page::ProjectMetadata => true,
+            Page::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
         });
 
         // render the tab view
@@ -627,9 +627,9 @@ impl ProjectEditor {
         }
     }
 
-    fn set_editor_tab(&mut self, tab: &Tab) {
+    fn set_editor_tab(&mut self, tab: &Page) {
         // We don't want to open these, so just exit early
-        if let Tab::FileObject(id) = tab
+        if let Page::FileObject(id) = tab
             && (*id == self.project.text_id
                 || *id == self.project.characters_id
                 || *id == self.project.worldbuilding_id)
@@ -675,7 +675,7 @@ impl ProjectEditor {
 
         let open_tabs = open_tab_ids
             .iter()
-            .map(|tab_id| Tab::from_id(tab_id))
+            .map(|tab_id| Page::from_id(tab_id))
             .collect();
 
         Self {
@@ -697,7 +697,7 @@ impl ProjectEditor {
         }
     }
 
-    pub fn get_open_tabs(&self) -> Vec<Tab> {
+    pub fn get_open_tabs(&self) -> Vec<Page> {
         // the indexes provided to use are meaningless (I think), just put all the tabs in the
         // order it gave us.
         self.dock_state

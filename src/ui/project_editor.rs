@@ -95,6 +95,7 @@ pub struct EditorContext {
 #[derive(Debug, Default)]
 pub struct Stores {
     pub text_box: crate::ui::text_box::Store,
+    pub page: page::Store,
 }
 
 pub enum TabMove {
@@ -423,7 +424,7 @@ impl ProjectEditor {
             && let Some(search_results) = &self.editor_context.search.search_results.as_ref()
             && let Some(focused_text_box) = search_results.get(uid)
         {
-            self.set_editor_tab(&focused_text_box.tab.clone());
+            self.set_editor_tab(&focused_text_box.page.clone());
         }
     }
 

@@ -1,9 +1,11 @@
 mod file_object_editor;
 mod project_metadata_editor;
 
+use crate::ui::prelude::*;
+
 pub use file_object_editor::FileObjectEditor;
 
-use crate::ui::prelude::*;
+use egui::{Key, Modifiers};
 
 /// An identifier for something that can be drawn as a tab
 ///
@@ -43,8 +45,67 @@ impl Page {
     pub fn is_file_object(&self) -> bool {
         matches!(self, Page::FileObject(_))
     }
+}
 
+#[derive(Debug, Default)]
+pub struct PageData {
+    search: Search,
+}
+
+pub type Store = RenderDataStore<Page, PageData>;
+
+impl Page {
     pub fn ui(&self, ui: &mut Ui, project: &mut Project, ctx: &mut EditorContext) {
+        let rdata = ctx.stores.page.get(self);
+        let page_data: &mut PageData = &mut rdata.borrow_mut();
+
+        // check for ctrl-f for page search
+        if ui.input_mut(|i| {
+            i.consume_shortcut(&egui::KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                logical_key: Key::F,
+            })
+        }) {
+            page_data.search.show();
+        }
+
+        if page_data.search.active {
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::TextEdit::singleline(&mut page_data.search.find_text)
+                        .hint_text("find")
+                        .return_key(None), // keep focus when Enter is pressed)
+                );
+                ui.add(
+                    egui::TextEdit::singleline(&mut page_data.search.replace_text)
+                        .hint_text("replace")
+                        .return_key(None),
+                );
+                if ui.button("search").clicked() {
+                    page_data.search.redo_search = true;
+                }
+                if ui.button("close").clicked() {
+                    page_data.search.active = false;
+                    ctx.version += 1;
+                }
+            });
+
+            if page_data.search.redo_search {
+                page_data.search.search_results = Some(HashMap::new());
+                project
+                    .get_searchable(self)
+                    .search(self, &mut page_data.search);
+                ctx.version += 1;
+                page_data.search.redo_search = false;
+            }
+        }
+
+        let page_search_active = page_data.search.active;
+        if page_search_active {
+            /* Hack-y solution: swap in the file search object for the file-local search */
+            std::mem::swap(&mut ctx.search, &mut page_data.search);
+        }
+
         match self {
             Page::ProjectMetadata => {
                 project.metadata_ui(ui, ctx);
@@ -54,6 +115,10 @@ impl Page {
                     file_object.borrow_mut().as_editor_mut().ui(ui, ctx);
                 }
             }
+        }
+
+        if page_search_active {
+            std::mem::swap(&mut ctx.search, &mut page_data.search);
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::ui::prelude::*;
 #[derive(Debug)]
 pub struct TextBoxSearchResult {
     // File object that this text box is in
-    pub tab: Page,
+    pub page: Page,
 
     pub box_name: String,
 
@@ -80,7 +80,7 @@ impl Widget for &WordFindPreview {
     }
 }
 
-pub fn search(text: &Text, tab: &Page, box_name: &str, search_term: &str) -> TextBoxSearchResult {
+pub fn search(text: &Text, page: &Page, box_name: &str, search_term: &str) -> TextBoxSearchResult {
     let mut finds = Vec::new();
 
     let mut line_start = 0;
@@ -108,7 +108,7 @@ pub fn search(text: &Text, tab: &Page, box_name: &str, search_term: &str) -> Tex
     }
 
     TextBoxSearchResult {
-        tab: tab.clone(),
+        page: page.clone(),
         box_name: box_name.to_string(),
         finds,
         text_version: text.version,

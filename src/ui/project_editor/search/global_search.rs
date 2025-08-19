@@ -4,23 +4,6 @@ use crate::ui::prelude::*;
 
 use super::textbox_search::TextBoxSearchResult;
 
-impl Search {
-    pub fn show(&mut self) {
-        self.active = true;
-        self.request_ui_focus = true;
-    }
-
-    pub fn hide(&mut self) {
-        self.active = false;
-        // TODO: #85: do something about highlighters here
-    }
-
-    pub fn clear_focus(&mut self) {
-        self.focus = None;
-        self.goto_focus = false;
-    }
-}
-
 /// Global search ui, returns
 pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     let gs = &mut ctx.search;
@@ -48,7 +31,7 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     if let Some(search_results) = &mut ctx.search.search_results {
         let mut items: Vec<(TextUID, String, &TextBoxSearchResult)> = search_results
             .iter()
-            .filter_map(|(id, tbsr)| match &tbsr.tab {
+            .filter_map(|(id, tbsr)| match &tbsr.page {
                 Page::FileObject(tab_id) => {
                     let file_object_name = project.objects.get(tab_id)?.borrow().get_title();
                     Some((*id, file_object_name, tbsr))

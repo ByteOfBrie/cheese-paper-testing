@@ -38,20 +38,19 @@ impl TextBox {
             self.redo_layout = true;
         }
 
-        if ctx.search.active {
-            if ctx.version != self.editor_signature {
-                self.editor_signature = ctx.version;
-                self.redo_layout = true;
-            }
+        if ctx.version != self.editor_signature {
+            self.editor_signature = ctx.version;
+            self.redo_layout = true;
+        }
 
-            if let Some(search_results) = ctx.search.search_results.as_mut()
-                && let Some(sr) = search_results.get_mut(&text.struct_uid)
-                && sr.text_version != text.version
-            {
-                *sr = textbox_search::search(text, &sr.tab, &sr.box_name, &ctx.search.find_text);
-                ctx.search.clear_focus();
-                self.redo_layout = true;
-            }
+        if ctx.search.active
+            && let Some(search_results) = ctx.search.search_results.as_mut()
+            && let Some(sr) = search_results.get_mut(&text.struct_uid)
+            && sr.text_version != text.version
+        {
+            *sr = textbox_search::search(text, &sr.page, &sr.box_name, &ctx.search.find_text);
+            ctx.search.clear_focus();
+            self.redo_layout = true;
         }
     }
 

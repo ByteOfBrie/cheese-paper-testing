@@ -25,28 +25,57 @@ pub struct Search {
     pub goto_focus: bool,
 }
 
-type SearchableIterValue<'a> = (Page, Searchable<'a>);
+impl Search {
+    pub fn show(&mut self) {
+        self.active = true;
+        self.request_ui_focus = true;
+    }
+
+    pub fn hide(&mut self) {
+        self.active = false;
+        // TODO: #85: do something about highlighters here
+    }
+
+    pub fn clear_focus(&mut self) {
+        self.focus = None;
+        self.goto_focus = false;
+    }
+}
+
 pub enum Searchable<'a> {
     FileObject(&'a RefCell<dyn FileObject>),
     ProjectMetadata(&'a ProjectMetadata),
 }
 
 impl Searchable<'_> {
-    pub fn search(&self, search_function: &mut dyn FnMut(&Text, &'static str)) {
+    pub fn search(&self, page: &Page, search: &mut Search) {
+        let mut search_function = |text: &'_ Text, box_name: &'_ str| {
+            let search_result = textbox_search::search(text, page, box_name, &search.find_text);
+            search
+                .search_results
+                .as_mut()
+                .unwrap()
+                .insert(text.id(), search_result);
+        };
+
         match self {
             Searchable::FileObject(file_object) => {
                 file_object
                     .borrow()
                     .as_editor()
-                    .for_each_textbox(search_function);
+                    .for_each_textbox(&mut search_function);
             }
-            Searchable::ProjectMetadata(metadata) => metadata.for_each_textbox(search_function),
+            Searchable::ProjectMetadata(metadata) => {
+                metadata.for_each_textbox(&mut search_function)
+            }
         }
     }
 }
 
 impl ProjectEditor {
-    pub fn get_searchable(&'_ self) -> impl Iterator<Item = SearchableIterValue<'_>> {
+    pub fn search(&mut self) {
+        self.editor_context.search.search_results = Some(HashMap::new());
+
         let object_iter =
             self.project.objects.iter().map(|(id, file_object)| {
                 (Page::from_file_id(id), Searchable::FileObject(file_object))
@@ -57,28 +86,22 @@ impl ProjectEditor {
             Searchable::ProjectMetadata(&self.project.metadata),
         ));
 
-        object_iter.chain(metadata_iter)
-    }
-
-    pub fn search(&mut self) {
-        let mut search_results = HashMap::new();
-
-        for (key, object) in self.get_searchable() {
-            object.search(&mut |text, box_name| {
-                let search_result = textbox_search::search(
-                    text,
-                    &key,
-                    box_name,
-                    &self.editor_context.search.find_text,
-                );
-                search_results.insert(text.id(), search_result);
-            });
+        for (key, object) in object_iter.chain(metadata_iter) {
+            object.search(&key, &mut self.editor_context.search);
         }
 
-        self.editor_context.search.search_results = Some(search_results);
         self.editor_context.search.clear_focus();
 
         // trigger a formatting refresh
         self.editor_context.version += 1;
+    }
+}
+
+impl Project {
+    pub fn get_searchable<'a>(&'a self, page: &Page) -> Searchable<'a> {
+        match page {
+            Page::FileObject(file_id) => Searchable::FileObject(self.objects.get(file_id).unwrap()),
+            Page::ProjectMetadata => Searchable::ProjectMetadata(&self.metadata),
+        }
     }
 }

@@ -5,6 +5,7 @@ use crate::ui::prelude::*;
 
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
 
+/// Context menu actions for file objects, should only be constructed by file objects
 enum ContextMenuActions {
     Delete {
         parent: FileID,
@@ -261,24 +262,13 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
     for action in context_menu_actions {
         match action {
             ContextMenuActions::Delete { parent, deleting } => {
-                let deleting_tab: Tab = deleting.into();
-
-                match deleting_tab {
-                    Tab::FileObject(deleting_tab_id) => {
-                        // Delete the actual file object (removes from other objects and file on disk)
-                        if let Err(err) = <dyn FileObject>::remove_child(
-                            &deleting_tab_id,
-                            &parent,
-                            &mut editor.project.objects,
-                        ) {
-                            log::error!(
-                                "Encountered error while trying to delete element: {deleting_tab_id:?}: {err}"
-                            );
-                        }
-                    }
-                    _ => log::error!(
-                        "Attempted to delete something that wasn't a file object: {deleting_tab:?}"
-                    ),
+                // Delete the actual file object (removes from other objects and file on disk)
+                if let Err(err) =
+                    <dyn FileObject>::remove_child(&deleting, &parent, &mut editor.project.objects)
+                {
+                    log::error!(
+                        "Encountered error while trying to delete element: {deleting:?}: {err}"
+                    );
                 }
             }
             ContextMenuActions::Add {

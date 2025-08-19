@@ -86,6 +86,9 @@ pub struct EditorContext {
     pub spellcheck_status: SpellCheckStatus,
     pub typing_status: TypingStatus,
     pub global_search: global_search::GlobalSearch,
+
+    // version number. increment to trigger a project-wide formatting refresh
+    pub version: usize,
 }
 
 pub enum TabMove {
@@ -618,6 +621,7 @@ impl ProjectEditor {
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),
                 global_search: global_search::GlobalSearch::default(),
+                version: 0,
             },
             file_event_rx,
             _watcher: watcher,

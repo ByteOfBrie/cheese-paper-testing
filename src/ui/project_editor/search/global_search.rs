@@ -23,8 +23,6 @@ pub struct GlobalSearch {
     pub focus: Option<(TextUID, WordFind)>,
 
     pub goto_focus: bool,
-
-    pub version: usize,
 }
 
 impl GlobalSearch {
@@ -92,7 +90,9 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
                 if word_find.ui(ui).clicked() {
                     ctx.global_search.focus = Some((id, word_find.clone()));
                     ctx.global_search.goto_focus = true;
-                    ctx.global_search.version += 1;
+
+                    // trigger a formatting refresh
+                    ctx.version += 1;
                 }
             }
         }

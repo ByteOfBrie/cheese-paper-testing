@@ -55,6 +55,8 @@ impl ProjectEditor {
 
         self.editor_context.global_search.search_results = Some(search_results);
         self.editor_context.global_search.clear_focus();
-        self.editor_context.global_search.version += 1;
+
+        // trigger a formatting refresh
+        self.editor_context.version += 1;
     }
 }

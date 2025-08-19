@@ -21,7 +21,7 @@ pub struct TextBox {
     // formatting information that the highlight job was for
     // used to know when highlight needs to be redone
     text_signature: (usize, usize),
-    search_signature: usize,
+    editor_signature: usize,
     style: egui::Style,
 }
 
@@ -37,8 +37,8 @@ impl TextBox {
         }
 
         if ctx.global_search.active {
-            if ctx.global_search.version != self.search_signature {
-                self.search_signature = ctx.global_search.version;
+            if ctx.version != self.editor_signature {
+                self.editor_signature = ctx.version;
                 self.redo_layout = true;
             }
 

@@ -1,7 +1,7 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
-use std::io::Result;
+use crate::util::CheeseError;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Default)]
@@ -22,7 +22,7 @@ pub struct Character {
 }
 
 impl Character {
-    pub fn new(dirname: PathBuf, index: usize) -> Result<Self> {
+    pub fn new(dirname: PathBuf, index: usize) -> Result<Self, CheeseError> {
         let mut character = Self {
             base: BaseFileObject::new(dirname, Some(index)),
             metadata: CharacterMetadata::default(),
@@ -35,7 +35,7 @@ impl Character {
         Ok(character)
     }
 
-    pub fn from_base(base: BaseFileObject) -> Result<Self> {
+    pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {
         let mut character = Self {
             base,
             metadata: Default::default(),
@@ -62,7 +62,7 @@ impl Character {
 }
 
 impl FileObject for Character {
-    fn load_metadata(&mut self) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
         match metadata_extract_string(&self.base.toml_header, "summary")? {
@@ -173,7 +173,9 @@ impl FileObject for Character {
 
 #[cfg(test)]
 impl Character {
-    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<()> {
-        (self as &mut dyn FileObject).save(objects)
+    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
+        (self as &mut dyn FileObject)
+            .save(objects)
+            .map_err(CheeseError::from)
     }
 }

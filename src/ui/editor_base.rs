@@ -9,7 +9,6 @@ use toml_edit::{DocumentMut, value};
 
 use std::{
     fs::read_to_string,
-    io::Result,
     path::PathBuf,
     time::{Duration, Instant},
 };
@@ -216,19 +215,21 @@ impl Default for EditorState {
 }
 
 impl EditorState {
-    fn save(&mut self) -> std::io::Result<()> {
+    fn save(&mut self) -> Result<(), CheeseError> {
         if self.modified {
             self.data.save(&mut self.data_toml);
             write_with_temp_file(
                 &Data::get_path(&self.project_dirs),
                 self.data_toml.to_string().as_bytes(),
-            )?;
+            )
+            .map_err(|err| cheese_error!("Error while saving app data\n{}", err))?;
 
             self.settings.save(&mut self.settings_toml);
             write_with_temp_file(
                 &Settings::get_path(&self.project_dirs),
                 self.settings_toml.to_string().as_bytes(),
-            )?;
+            )
+            .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;
         }
 
         Ok(())
@@ -557,7 +558,7 @@ impl CheesePaperApp {
         });
     }
 
-    fn load_project(&mut self, project_path: PathBuf) -> Result<()> {
+    fn load_project(&mut self, project_path: PathBuf) -> Result<(), CheeseError> {
         match Project::load(project_path) {
             Ok(project) => {
                 // open the project
@@ -623,7 +624,7 @@ impl CheesePaperApp {
                 log::error!("encountered error while trying to load project: {err}");
                 let error_message = format!("unable to load project: {err}");
                 self.state.error_message = Some((error_message, Instant::now()));
-                Err(err)
+                Err(cheese_error!("unable to load project\n{}", err))
             }
         }
     }

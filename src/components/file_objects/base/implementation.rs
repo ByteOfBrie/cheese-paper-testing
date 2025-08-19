@@ -2,11 +2,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::cheese_error;
 use crate::components::file_objects::utils::{get_index_from_name, write_with_temp_file};
 use crate::components::file_objects::{Character, Folder, Place, Scene};
+use crate::util::CheeseError;
 use egui_ltreeview::DirPosition;
 use std::ffi::OsString;
-use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 
 use super::{FileType, HEADER_SPLIT};
@@ -41,7 +42,7 @@ impl dyn FileObject {
     pub fn create_child_at_end(
         &mut self,
         file_type: FileType,
-    ) -> Result<Box<RefCell<dyn FileObject>>> {
+    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
         assert!(self.is_folder());
 
         // We know it's at the end, and thus we know that there aren't any children
@@ -54,7 +55,7 @@ impl dyn FileObject {
         file_type: FileType,
         position: DirPosition<FileID>,
         objects: &FileObjectStore,
-    ) -> Result<Box<RefCell<dyn FileObject>>> {
+    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
         let new_index = match position {
             DirPosition::After(child) => {
                 self.get_base()
@@ -94,7 +95,11 @@ impl dyn FileObject {
     }
 
     /// Creates a gap in the indexes, to be called immediately before a move
-    pub fn create_index_gap(&mut self, index: usize, objects: &FileObjectStore) -> Result<()> {
+    pub fn create_index_gap(
+        &mut self,
+        index: usize,
+        objects: &FileObjectStore,
+    ) -> Result<(), CheeseError> {
         assert!(self.is_folder());
 
         let children = &self.get_base().children;
@@ -172,19 +177,15 @@ impl dyn FileObject {
         old_path: PathBuf,
         new_path: PathBuf,
         objects: &FileObjectStore,
-    ) -> Result<()> {
+    ) -> Result<(), CheeseError> {
         if new_path == old_path {
             // Nothing to do
-            return Err(Error::new(
-                ErrorKind::InvalidFilename,
-                format!("attempted to rename {old_path:?} to itself"),
-            ));
+            return Err(cheese_error!("attempted to rename {old_path:?} to itself"));
         }
 
         if new_path.exists() {
-            return Err(Error::new(
-                ErrorKind::InvalidFilename,
-                format!("attempted to rename {old_path:?}, but {new_path:?} already exists"),
+            return Err(cheese_error!(
+                "attempted to rename {old_path:?}, but {new_path:?} already exists"
             ));
         }
 
@@ -218,7 +219,7 @@ impl dyn FileObject {
         &mut self,
         new_filename: OsString,
         objects: &FileObjectStore,
-    ) -> Result<()> {
+    ) -> Result<(), CheeseError> {
         let old_path = self.get_path();
         let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
 
@@ -250,7 +251,7 @@ impl dyn FileObject {
         new_index: usize,
         new_path: PathBuf,
         objects: &FileObjectStore,
-    ) -> Result<()> {
+    ) -> Result<(), CheeseError> {
         let old_path = self.get_path();
 
         self.get_base_mut().index = Some(new_index);
@@ -274,7 +275,7 @@ impl dyn FileObject {
         self.move_on_disk(old_path, new_path, objects)
     }
 
-    pub fn save(&mut self, objects: &FileObjectStore) -> Result<()> {
+    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
         // First, try to save children, intentionally trying all of them
         let mut errors = vec![];
         for child in self.children(objects) {
@@ -332,7 +333,7 @@ impl dyn FileObject {
         child_id: &FileID,
         parent_id: &FileID,
         objects: &mut FileObjectStore,
-    ) -> Result<()> {
+    ) -> Result<(), CheeseError> {
         let removed_child = objects.remove(child_id).unwrap();
 
         removed_child.borrow_mut().remove_file_object(objects)?;
@@ -359,7 +360,7 @@ impl dyn FileObject {
         Ok(())
     }
 
-    pub fn remove_file_object(&mut self, objects: &mut FileObjectStore) -> Result<()> {
+    pub fn remove_file_object(&mut self, objects: &mut FileObjectStore) -> Result<(), CheeseError> {
         let mut errors = Vec::new();
         log::debug!("Removing file object {}", self.get_base().metadata.id);
 
@@ -390,7 +391,11 @@ impl dyn FileObject {
     }
 
     /// Sets the index to this file, doing the move if necessary
-    pub fn set_index(&mut self, new_index: usize, objects: &FileObjectStore) -> Result<bool> {
+    pub fn set_index(
+        &mut self,
+        new_index: usize,
+        objects: &FileObjectStore,
+    ) -> Result<bool, CheeseError> {
         if self.get_base().index == Some(new_index) {
             let name_index = get_index_from_name(&self.get_base().file.basename.to_string_lossy());
             if name_index == self.get_base().index {

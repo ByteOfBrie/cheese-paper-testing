@@ -1,11 +1,12 @@
+use crate::cheese_error;
 use crate::components::file_objects::base::{
     BaseFileObject, CompileStatus, FileObject, metadata_extract_string, metadata_extract_u64,
 };
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
+use crate::util::CheeseError;
 use std::ffi::OsString;
 use std::fs::create_dir;
-use std::io::Result;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Default)]
@@ -22,7 +23,7 @@ pub struct Folder {
 }
 
 impl Folder {
-    pub fn new(dirname: PathBuf, index: usize) -> Result<Self> {
+    pub fn new(dirname: PathBuf, index: usize) -> Result<Self, CheeseError> {
         let mut folder = Self {
             base: BaseFileObject::new(dirname, Some(index)),
             metadata: FolderMetadata::default(),
@@ -36,7 +37,7 @@ impl Folder {
         Ok(folder)
     }
 
-    pub fn new_top_level(dirname: PathBuf, name: &str) -> Result<Self> {
+    pub fn new_top_level(dirname: PathBuf, name: &str) -> Result<Self, CheeseError> {
         let mut folder = Self {
             base: BaseFileObject::new(dirname, None),
             metadata: FolderMetadata::default(),
@@ -46,44 +47,38 @@ impl Folder {
         folder.get_base_mut().file.basename = OsString::from(name);
 
         if let Err(err) = create_dir(folder.get_path()) {
-            log::error!(
+            return Err(cheese_error!(
                 "Failed to create top level directory: {:?}: {err}",
                 folder.get_path()
-            );
-            return Err(err);
+            ));
         }
 
         if let Err(err) = <dyn FileObject>::save(&mut folder, &HashMap::new()) {
-            log::error!(
+            return Err(cheese_error!(
                 "Failed to save newly created top level directory: {}: {err}",
                 &folder.get_base().metadata.name
-            );
-            return Err(err);
+            ));
         }
 
         Ok(folder)
     }
 
-    pub fn from_base(base: BaseFileObject) -> Result<Self> {
+    pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {
         let mut folder = Self {
             base,
             metadata: Default::default(),
         };
 
-        match folder.load_metadata() {
-            Ok(modified) => {
-                if modified {
-                    folder.base.file.modified = true;
-                }
-            }
-            Err(err) => {
-                log::error!(
-                    "Error while loading object-specific metadata for {:?}: {}",
-                    folder.get_path(),
-                    &err
-                );
-                return Err(err);
-            }
+        let modified = folder.load_metadata().map_err(|err| {
+            cheese_error!(
+                "Error while loading object-specific metadata for {:?}:\n{}",
+                folder.get_path(),
+                err
+            )
+        })?;
+
+        if modified {
+            folder.base.file.modified = true;
         }
 
         Ok(folder)
@@ -91,7 +86,7 @@ impl Folder {
 }
 
 impl FileObject for Folder {
-    fn load_metadata(&mut self) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
         match metadata_extract_string(&self.base.toml_header, "summary")? {
@@ -184,7 +179,7 @@ impl FileObject for Folder {
 
 #[cfg(test)]
 impl Folder {
-    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<()> {
+    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
         (self as &mut dyn FileObject).save(objects)
     }
 }

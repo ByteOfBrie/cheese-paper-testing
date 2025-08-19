@@ -9,13 +9,13 @@ use crate::components::file_objects::{
 #[cfg(test)]
 use crate::components::project::Project;
 #[cfg(test)]
+use crate::util::CheeseError;
+#[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
 use std::ffi::OsString;
 #[cfg(test)]
 use std::fs::{read_dir, read_to_string};
-#[cfg(test)]
-use std::io::Result;
 #[cfg(test)]
 use std::path::Path;
 
@@ -58,7 +58,7 @@ fn test_basic_create_project() {
 
 #[test]
 /// Ensure that file_objects are created properly
-fn test_basic_create_file_object() -> Result<()> {
+fn test_basic_create_file_object() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
     let scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
@@ -100,7 +100,7 @@ fn test_basic_create_file_object() -> Result<()> {
 
 #[test]
 /// Ensure that top level folders work the way we want
-fn test_create_top_level_folder() -> Result<()> {
+fn test_create_top_level_folder() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
     let text = Folder::new_top_level(base_dir.path().to_path_buf(), "text")?;
@@ -2248,10 +2248,10 @@ fn test_move_to_child() {
         &project.objects,
     );
 
-    assert_eq!(
-        immediate_move.err().unwrap().to_string(),
-        format!("attempted to move {} into itself", &top_level_folder_id)
-    );
+    assert!(immediate_move.err().unwrap().to_string().contains(&format!(
+        "attempted to move {} into itself",
+        &top_level_folder_id
+    )));
 
     // Try to move into a folder contained within a child:
     let child_move = move_child(
@@ -2262,10 +2262,10 @@ fn test_move_to_child() {
         &project.objects,
     );
 
-    assert_eq!(
-        child_move.err().unwrap().to_string(),
-        format!("attempted to move {} into itself", &top_level_folder_id)
-    );
+    assert!(child_move.err().unwrap().to_string().contains(&format!(
+        "attempted to move {} into itself",
+        &top_level_folder_id
+    )));
 
     // Make sure nothing moved on disk:
     assert_eq!(

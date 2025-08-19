@@ -1,4 +1,5 @@
 pub use {
+    crate::cheese_error,
     crate::components::{
         file_objects::{FileID, FileObject, FileObjectStore, FileType},
         project::Project,
@@ -9,6 +10,7 @@ pub use {
         project_editor::{EditorContext, ProjectEditor},
         settings::Settings,
     },
+    crate::util::CheeseError,
     egui::{Response, Ui},
     regex::Regex,
     std::{cell::RefCell, collections::HashMap, rc::Rc},

@@ -6,15 +6,16 @@ use log::warn;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+use crate::cheese_error;
 use crate::components::file_objects::utils::{
     add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
 use crate::ui::{FileObjectEditor, RenderData};
+use crate::util::CheeseError;
 use std::cell::RefCell;
 use std::ffi::OsString;
 use std::fmt::Debug;
-use std::io::{Error, ErrorKind, Result};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -90,7 +91,7 @@ impl From<FileType> for &str {
 }
 
 impl TryFrom<&str> for FileType {
-    type Error = &'static str;
+    type Error = CheeseError;
 
     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         match value {
@@ -98,7 +99,7 @@ impl TryFrom<&str> for FileType {
             "folder" => Ok(FileType::Folder),
             "character" => Ok(FileType::Character),
             "worldbuilding" => Ok(FileType::Place),
-            _ => Err("Unknown file type"),
+            _ => Err(cheese_error!("Unknown file type")),
         }
     }
 }
@@ -158,7 +159,7 @@ pub fn metadata_extract_u64(
     table: &DocumentMut,
     field_name: &str,
     allow_bool: bool,
-) -> Result<Option<u64>> {
+) -> Result<Option<u64>, CheeseError> {
     match table.get(field_name) {
         Some(value) => {
             if let Some(value) = value.as_integer() {
@@ -166,27 +167,22 @@ pub fn metadata_extract_u64(
             } else if allow_bool && let Some(value) = value.as_bool() {
                 Ok(Some(value as u64))
             } else {
-                Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("{field_name} was not an integer"),
-                ))
+                Err(cheese_error!("{field_name} was not an integer"))
             }
         }
         None => Ok(None),
     }
 }
 
-pub fn metadata_extract_string(table: &DocumentMut, field_name: &str) -> Result<Option<String>> {
+pub fn metadata_extract_string(
+    table: &DocumentMut,
+    field_name: &str,
+) -> Result<Option<String>, CheeseError> {
     Ok(match table.get(field_name) {
         Some(value) => Some(
             value
                 .as_str()
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidData,
-                        format!("{field_name} was not string"),
-                    )
-                })?
+                .ok_or_else(|| cheese_error!("{field_name} was not string"))?
                 .to_owned(),
         ),
         None => None,
@@ -194,10 +190,10 @@ pub fn metadata_extract_string(table: &DocumentMut, field_name: &str) -> Result<
 }
 
 /// Reads the contents of a file from disk
-pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String)> {
+pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String), CheeseError> {
     let extension = match file_to_read.extension() {
         Some(val) => val,
-        None => return Err(Error::new(ErrorKind::InvalidData, "value was not string")),
+        None => return Err(cheese_error!("value was not string")),
     };
 
     let file_data = std::fs::read_to_string(file_to_read).expect("could not read file");
@@ -219,7 +215,7 @@ pub fn load_base_metadata(
     metadata_table: &DocumentMut,
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,
-) -> Result<()> {
+) -> Result<(), CheeseError> {
     match metadata_extract_u64(metadata_table, "version", false)? {
         Some(version) => metadata_object.version = version,
         None => file_info.modified = true,
@@ -276,13 +272,12 @@ pub fn move_child(
     dest_file_id: &FileID,
     new_index: usize,
     objects: &FileObjectStore,
-) -> Result<()> {
+) -> Result<(), CheeseError> {
     // Check for it being a valid move:
     // * can't move to one of your own children
     if parent_contains(moving_file_id, dest_file_id, objects) {
-        return Err(Error::new(
-            ErrorKind::InvalidInput,
-            format!("attempted to move {moving_file_id} into itself"),
+        return Err(cheese_error!(
+            "attempted to move {moving_file_id} into itself"
         ));
     }
 
@@ -294,9 +289,8 @@ pub fn move_child(
     let moving_index = match moving.borrow().get_base().index {
         Some(index) => index,
         None => {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                format!("attempted to move {moving_file_id:} into itself"),
+            return Err(cheese_error!(
+                "attempted to move {moving_file_id:} into itself"
             ));
         }
     };
@@ -404,14 +398,13 @@ fn create_index_and_move_on_disk(
 }
 
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCreation> {
+pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCreation, CheeseError> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
             Some(dirname) => dirname,
             None => {
-                return Err(Error::new(
-                    ErrorKind::InvalidFilename,
+                return Err(cheese_error!(
                     "filename supplied to from_file should have a dirname component",
                 ));
             }
@@ -420,8 +413,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         basename: match filename.file_name() {
             Some(basename) => basename,
             None => {
-                return Err(Error::new(
-                    ErrorKind::InvalidFilename,
+                return Err(cheese_error!(
                     "filename supplied to from_file should have a basename component",
                 ));
             }
@@ -456,7 +448,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         Ok(toml_header) => toml_header,
         Err(err) => {
             log::error!("Error parsing {underlying_file:?}: {err}");
-            return Err(Error::new(ErrorKind::InvalidData, err));
+            return Err(cheese_error!("Error parsing {underlying_file:?}\n{}", err));
         }
     };
 
@@ -514,7 +506,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                     &filename,
                     err
                 );
-                return Err(Error::new(ErrorKind::InvalidData, "unknown file type"));
+                return Err(cheese_error!("unknown file type"));
             }
         }
     };
@@ -654,7 +646,11 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                         &filename,
                         &err
                     );
-                    return Err(err);
+                    return Err(cheese_error!(
+                        "Error while attempt to read folder {:?}\n{}",
+                        &filename,
+                        err
+                    ));
                 }
             }
         } else {
@@ -662,12 +658,9 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                 "attempted to construct a folder-type from a non-folder filename {:?}",
                 &filename
             );
-            return Err(Error::new(
-                ErrorKind::InvalidFilename,
-                format!(
-                    "{:?} is a folder-type file object, but doesn't have a directory",
-                    &filename
-                ),
+            return Err(cheese_error!(
+                "{:?} is a folder-type file object, but doesn't have a directory",
+                &filename
             ));
         }
         // We fix the indexing at the end when returning a folder or place
@@ -751,7 +744,7 @@ pub trait FileObject: Debug {
     /// Loads the file-specific metadata from the toml document
     ///
     /// pulls from the file object instead of an argument (otherwise it's slightly tricky to do ownership)
-    fn load_metadata(&mut self) -> Result<bool>;
+    fn load_metadata(&mut self) -> Result<bool, CheeseError>;
 
     /// Writes the current type-specific metadata to the BaseFileObjects toml_header
     fn write_metadata(&mut self);
@@ -810,7 +803,7 @@ pub trait FileObject: Debug {
     }
 
     /// Determine if the file should be loaded
-    fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
+    fn should_load(&mut self, file_to_read: &Path) -> Result<bool, CheeseError> {
         let current_modtime = std::fs::metadata(file_to_read)
             .expect("attempted to load file that does not exist")
             .modified()
@@ -828,7 +821,7 @@ pub trait FileObject: Debug {
 
     /// Reloads the contents of this file object from disk. Assumes that the file has been properly
     /// initialized already
-    fn reload_file(&mut self) -> Result<()> {
+    fn reload_file(&mut self) -> Result<(), CheeseError> {
         let file_to_read = self.get_file();
 
         if !self.should_load(&file_to_read)? {

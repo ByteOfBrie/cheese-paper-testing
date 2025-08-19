@@ -3,6 +3,7 @@
 
 mod components;
 mod ui;
+mod util;
 
 use crate::ui::CheesePaperApp;
 

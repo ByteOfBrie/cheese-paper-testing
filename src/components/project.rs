@@ -1,12 +1,13 @@
+use crate::cheese_error;
 use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, from_file,
     write_with_temp_file,
 };
 use crate::components::text::Text;
+use crate::util::CheeseError;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::io::{Error, ErrorKind, Result};
 use std::path::Path;
 use std::path::PathBuf;
 use toml_edit::DocumentMut;
@@ -57,28 +58,31 @@ impl ProjectMetadata {
 
 const PROJECT_INFO_NAME: &str = "project.toml";
 
-fn load_top_level_folder(project_path: &Path, name: &str) -> Result<(Folder, FileObjectStore)> {
+fn load_top_level_folder(
+    project_path: &Path,
+    name: &str,
+) -> Result<(Folder, FileObjectStore), CheeseError> {
     log::debug!("loading top level folder: {name}");
 
     let folder_path = &Path::join(project_path, name);
     if folder_path.exists() {
-        match from_file(folder_path, None) {
-            Ok(created_object) => match created_object {
-                FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
-                _ => Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "somehow loaded a non-folder as a top level folder",
-                )),
-            },
-            Err(err) => {
-                log::error!("failed to load top level folder {name}");
-                Err(err)
-            }
+        let created_object = from_file(folder_path, None)
+            .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
+        match created_object {
+            FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
+            _ => Err(cheese_error!(
+                "somehow loaded a non-folder as a top level folder",
+            )),
         }
     } else {
         log::debug!("top level folder {name} does not exist, creating...");
         Ok((
-            Folder::new_top_level(project_path.to_owned(), name)?,
+            Folder::new_top_level(project_path.to_owned(), name).map_err(|err| {
+                cheese_error!(
+                    "An error occured while creating the top level folder\n{}",
+                    err
+                )
+            })?,
             HashMap::new(),
         ))
     }
@@ -86,15 +90,14 @@ fn load_top_level_folder(project_path: &Path, name: &str) -> Result<(Folder, Fil
 
 impl Project {
     /// Create a new project
-    pub fn new(dirname: PathBuf, project_name: String) -> Result<Self> {
+    pub fn new(dirname: PathBuf, project_name: String) -> Result<Self, CheeseError> {
         // Not truncating here (for now)
         let file_safe_name = process_name_for_filename(&project_name);
         let project_path = dirname.join(&file_safe_name);
 
         if project_path.exists() {
-            return Err(Error::new(
-                ErrorKind::AlreadyExists,
-                format!("attempted to initialize {project_path:?}, which already exists"),
+            return Err(cheese_error!(
+                "attempted to initialize {project_path:?}, which already exists"
             ));
         } else {
             std::fs::create_dir(&project_path)?;
@@ -133,11 +136,10 @@ impl Project {
     }
 
     /// Load an existing project from disk
-    pub fn load(path: PathBuf) -> Result<Self> {
+    pub fn load(path: PathBuf) -> Result<Self, CheeseError> {
         if !path.exists() {
-            return Err(Error::new(
-                ErrorKind::NotADirectory,
-                format!("attempted to load {path:?}, was not a directory"),
+            return Err(cheese_error!(
+                "attempted to load {path:?}, was not a directory"
             ));
         }
 
@@ -145,20 +147,14 @@ impl Project {
             dirname: match path.parent() {
                 Some(dirname) => dirname,
                 None => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidFilename,
-                        format!("no directory component in {path:?}"),
-                    ));
+                    return Err(cheese_error!("no directory component in {path:?}"));
                 }
             }
             .to_path_buf(),
             basename: match path.file_name() {
                 Some(basename) => basename,
                 None => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidFilename,
-                        format!("no filename component in {path:?}"),
-                    ));
+                    return Err(cheese_error!("no filename component in {path:?}"));
                 }
             }
             .to_owned(),
@@ -190,12 +186,9 @@ impl Project {
                      Consider creating a new project instead. If this was intended, please create \
                      one of the expected artifacts in that folder."
                 );
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!(
-                        "attempted to load {path:?}, did not \
+                return Err(cheese_error!(
+                    "attempted to load {path:?}, did not \
                          contain {PROJECT_INFO_NAME} or text folder"
-                    ),
                 ));
             }
             log::debug!("Found `text/` but no project info file, creating it and continuing");
@@ -244,7 +237,7 @@ impl Project {
         self.objects.insert(id, new_object);
     }
 
-    pub fn save(&mut self) -> Result<()> {
+    pub fn save(&mut self) -> Result<(), CheeseError> {
         // First, try saving the children
 
         let text_result = self
@@ -316,7 +309,7 @@ impl Project {
         path
     }
 
-    fn load_metadata(&mut self) -> std::io::Result<bool> {
+    fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
         match metadata_extract_string(&self.toml_header, "summary")? {
@@ -348,7 +341,7 @@ impl Project {
     }
 
     /// Determine if the file should be loaded
-    fn should_load(&mut self, file_to_read: &Path) -> Result<bool> {
+    fn should_load(&mut self, file_to_read: &Path) -> Result<bool, CheeseError> {
         let current_modtime = std::fs::metadata(file_to_read)
             .expect("attempted to load file that does not exist")
             .modified()
@@ -364,7 +357,7 @@ impl Project {
         Ok(true)
     }
 
-    pub fn reload_file(&mut self) -> Result<()> {
+    pub fn reload_file(&mut self) -> Result<(), CheeseError> {
         let file_to_read = self.get_project_info_file();
 
         if !self.should_load(&file_to_read)? {

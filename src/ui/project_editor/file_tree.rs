@@ -18,6 +18,9 @@ enum ContextMenuActions {
     },
 }
 
+// TODO: scale off of font size
+const NODE_HEIGHT: f32 = 26.0;
+
 impl dyn FileObject {
     fn build_tree(
         &self,
@@ -26,8 +29,6 @@ impl dyn FileObject {
         actions: &mut Vec<ContextMenuActions>,
         parent_id: Option<FileID>,
     ) {
-        // TODO: scale off of font size
-        const NODE_HEIGHT: f32 = 26.0;
         let node_name = if self.get_base().metadata.name.is_empty() {
             self.empty_string_name().to_string()
         } else {
@@ -121,7 +122,11 @@ impl Project {
         actions: &mut Vec<ContextMenuActions>,
     ) {
         // Add special project metadata to the tree
-        builder.leaf(Page::ProjectMetadata, "Project");
+        builder.node(
+            NodeBuilder::leaf(Page::ProjectMetadata)
+                .label("Project")
+                .height(NODE_HEIGHT),
+        );
 
         // Create the rest of the top level tree
         self.objects

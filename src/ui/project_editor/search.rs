@@ -1,7 +1,29 @@
 pub mod global_search;
 pub mod textbox_search;
 
+use crate::ui::project_editor::search::textbox_search::WordFind;
 use crate::{components::project::ProjectMetadata, ui::prelude::*};
+use textbox_search::TextBoxSearchResult;
+
+#[derive(Debug, Default)]
+pub struct Search {
+    pub active: bool,
+
+    /// Search has just been activated, take focus
+    pub request_ui_focus: bool,
+
+    pub find_text: String,
+
+    pub replace_text: String,
+
+    pub redo_search: bool,
+
+    pub search_results: Option<HashMap<TextUID, TextBoxSearchResult>>,
+
+    pub focus: Option<(TextUID, WordFind)>,
+
+    pub goto_focus: bool,
+}
 
 type SearchableIterValue<'a> = (Page, Searchable<'a>);
 pub enum Searchable<'a> {
@@ -47,14 +69,14 @@ impl ProjectEditor {
                     text,
                     &key,
                     box_name,
-                    &self.editor_context.global_search.find_text,
+                    &self.editor_context.search.find_text,
                 );
                 search_results.insert(text.id(), search_result);
             });
         }
 
-        self.editor_context.global_search.search_results = Some(search_results);
-        self.editor_context.global_search.clear_focus();
+        self.editor_context.search.search_results = Some(search_results);
+        self.editor_context.search.clear_focus();
 
         // trigger a formatting refresh
         self.editor_context.version += 1;

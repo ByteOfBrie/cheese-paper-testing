@@ -36,23 +36,18 @@ impl TextBox {
             self.redo_layout = true;
         }
 
-        if ctx.global_search.active {
+        if ctx.search.active {
             if ctx.version != self.editor_signature {
                 self.editor_signature = ctx.version;
                 self.redo_layout = true;
             }
 
-            if let Some(search_results) = ctx.global_search.search_results.as_mut()
+            if let Some(search_results) = ctx.search.search_results.as_mut()
                 && let Some(sr) = search_results.get_mut(&text.struct_uid)
                 && sr.text_version != text.version
             {
-                *sr = textbox_search::search(
-                    text,
-                    &sr.tab,
-                    &sr.box_name,
-                    &ctx.global_search.find_text,
-                );
-                ctx.global_search.clear_focus();
+                *sr = textbox_search::search(text, &sr.tab, &sr.box_name, &ctx.search.find_text);
+                ctx.search.clear_focus();
                 self.redo_layout = true;
             }
         }
@@ -76,24 +71,20 @@ impl TextBox {
 
         let (mut search_result, mut search_result_focus) = (None, None);
 
-        if ctx.global_search.active {
+        if ctx.search.active {
             search_result = ctx
-                .global_search
+                .search
                 .search_results
                 .as_ref()
                 .and_then(|sr| sr.get(&text.struct_uid));
 
-            search_result_focus = ctx
-                .global_search
-                .focus
-                .as_ref()
-                .and_then(|(uid, word_find)| {
-                    if *uid == text.struct_uid {
-                        Some(word_find)
-                    } else {
-                        None
-                    }
-                });
+            search_result_focus = ctx.search.focus.as_ref().and_then(|(uid, word_find)| {
+                if *uid == text.struct_uid {
+                    Some(word_find)
+                } else {
+                    None
+                }
+            });
         }
 
         if self.redo_layout {

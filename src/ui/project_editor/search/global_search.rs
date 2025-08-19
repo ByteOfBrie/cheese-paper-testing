@@ -3,29 +3,8 @@ use egui::{Color32, Response};
 use crate::ui::prelude::*;
 
 use super::textbox_search::TextBoxSearchResult;
-use crate::ui::project_editor::search::textbox_search::WordFind;
 
-#[derive(Debug, Default)]
-pub struct GlobalSearch {
-    pub active: bool,
-
-    /// Search has just been activated, take focus
-    pub request_ui_focus: bool,
-
-    pub find_text: String,
-
-    pub replace_text: String,
-
-    pub redo_search: bool,
-
-    pub search_results: Option<HashMap<TextUID, TextBoxSearchResult>>,
-
-    pub focus: Option<(TextUID, WordFind)>,
-
-    pub goto_focus: bool,
-}
-
-impl GlobalSearch {
+impl Search {
     pub fn show(&mut self) {
         self.active = true;
         self.request_ui_focus = true;
@@ -44,7 +23,7 @@ impl GlobalSearch {
 
 /// Global search ui, returns
 pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
-    let gs = &mut ctx.global_search;
+    let gs = &mut ctx.search;
 
     // Take up the entire area horizontally
     let search_box_response = ui.add_sized(
@@ -66,7 +45,7 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
         gs.redo_search = true;
     }
 
-    if let Some(search_results) = &mut ctx.global_search.search_results {
+    if let Some(search_results) = &mut ctx.search.search_results {
         let mut items: Vec<(TextUID, String, &TextBoxSearchResult)> = search_results
             .iter()
             .filter_map(|(id, tbsr)| match &tbsr.tab {
@@ -93,8 +72,8 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
 
             for word_find in &tbsr.finds {
                 if word_find.ui(ui).clicked() {
-                    ctx.global_search.focus = Some((id, word_find.clone()));
-                    ctx.global_search.goto_focus = true;
+                    ctx.search.focus = Some((id, word_find.clone()));
+                    ctx.search.goto_focus = true;
 
                     // trigger a formatting refresh
                     ctx.version += 1;

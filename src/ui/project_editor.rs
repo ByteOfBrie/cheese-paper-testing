@@ -85,7 +85,7 @@ pub struct EditorContext {
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,
     pub typing_status: TypingStatus,
-    pub global_search: global_search::GlobalSearch,
+    pub search: Search,
 
     // version number. increment to trigger a project-wide formatting refresh
     pub version: usize,
@@ -137,7 +137,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 logical_key: Key::F,
             })
         }) {
-            self.editor_context.global_search.show();
+            self.editor_context.search.show();
         }
 
         // lock tab presses to the current window
@@ -333,7 +333,7 @@ impl ProjectEditor {
 
                     ui.menu_button("Edit", |ui| {
                         if ui.button("Find (Global)").clicked() {
-                            self.editor_context.global_search.show();
+                            self.editor_context.search.show();
                         }
                     });
                 });
@@ -342,13 +342,13 @@ impl ProjectEditor {
 
     // the side panel containing the tree view or the global search
     fn side_panel(&mut self, ui: &mut egui::Ui) {
-        if self.editor_context.global_search.active {
+        if self.editor_context.search.active {
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-                self.editor_context.global_search.hide();
+                self.editor_context.search.hide();
             }
             let response = global_search::ui(ui, &self.project, &mut self.editor_context);
-            if self.editor_context.global_search.request_ui_focus {
-                self.editor_context.global_search.request_ui_focus = false;
+            if self.editor_context.search.request_ui_focus {
+                self.editor_context.search.request_ui_focus = false;
                 ui.memory_mut(|i| i.request_focus(response.id));
             }
         } else {
@@ -405,16 +405,16 @@ impl ProjectEditor {
             log::warn!("Failed to track changes: {err}");
         }
 
-        if self.editor_context.global_search.redo_search {
-            self.editor_context.global_search.redo_search = false;
+        if self.editor_context.search.redo_search {
+            self.editor_context.search.redo_search = false;
             self.search();
         }
 
         // if one of the search results has been clicked, open that now
         // BY THE POWER OF IF LET CHAINS
-        if self.editor_context.global_search.goto_focus
-            && let Some((uid, _word_find)) = &self.editor_context.global_search.focus.as_ref()
-            && let Some(search_results) = &self.editor_context.global_search.search_results.as_ref()
+        if self.editor_context.search.goto_focus
+            && let Some((uid, _word_find)) = &self.editor_context.search.focus.as_ref()
+            && let Some(search_results) = &self.editor_context.search.search_results.as_ref()
             && let Some(focused_text_box) = search_results.get(uid)
         {
             self.set_editor_tab(&focused_text_box.tab.clone());
@@ -623,7 +623,7 @@ impl ProjectEditor {
                 dictionary,
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),
-                global_search: global_search::GlobalSearch::default(),
+                search: Search::default(),
                 version: 0,
             },
             file_event_rx,

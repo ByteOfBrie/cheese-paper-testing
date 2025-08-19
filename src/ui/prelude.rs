@@ -7,7 +7,7 @@ pub use {
     },
     crate::ui::{
         project_editor::page::Page,
-        project_editor::{EditorContext, ProjectEditor},
+        project_editor::{EditorContext, ProjectEditor, search::Search},
         settings::Settings,
     },
     crate::util::CheeseError,

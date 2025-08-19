@@ -9,16 +9,6 @@ impl Project {
             .response
     }
 
-    fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
-        f(&self.metadata.summary, "summary");
-        f(&self.metadata.notes, "notes");
-    }
-
-    fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str)) {
-        f(&mut self.metadata.summary, "summary");
-        f(&mut self.metadata.notes, "notes");
-    }
-
     fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(

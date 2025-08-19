@@ -42,6 +42,19 @@ pub struct ProjectMetadata {
     pub email: String,
 }
 
+impl ProjectMetadata {
+    pub fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
+        f(&self.summary, "summary");
+        f(&self.notes, "notes");
+    }
+
+    #[allow(dead_code)] // included for the sake of completeness
+    pub fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str)) {
+        f(&mut self.summary, "summary");
+        f(&mut self.notes, "notes");
+    }
+}
+
 const PROJECT_INFO_NAME: &str = "project.toml";
 
 fn load_top_level_folder(project_path: &Path, name: &str) -> Result<(Folder, FileObjectStore)> {

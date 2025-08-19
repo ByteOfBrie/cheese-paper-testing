@@ -1,11 +1,12 @@
 pub mod global_search;
 pub mod textbox_search;
 
-use crate::ui::prelude::*;
+use crate::{components::project::ProjectMetadata, ui::prelude::*};
 
 type SearchableIterValue<'a> = (Tab, Searchable<'a>);
 pub enum Searchable<'a> {
     FileObject(&'a RefCell<dyn FileObject>),
+    ProjectMetadata(&'a ProjectMetadata),
 }
 
 impl Searchable<'_> {
@@ -17,18 +18,24 @@ impl Searchable<'_> {
                     .as_editor()
                     .for_each_textbox(search_function);
             }
+            Searchable::ProjectMetadata(metadata) => metadata.for_each_textbox(search_function),
         }
     }
 }
 
 impl ProjectEditor {
     pub fn get_searchable(&'_ self) -> impl Iterator<Item = SearchableIterValue<'_>> {
-        self.project
-            .objects
-            .iter()
-            .map(|(id, file_object)| (Tab::from_file_id(id), Searchable::FileObject(file_object)))
+        let object_iter =
+            self.project.objects.iter().map(|(id, file_object)| {
+                (Tab::from_file_id(id), Searchable::FileObject(file_object))
+            });
 
-        // TODO: add other searchable objects to this with iterator.chain
+        let metadata_iter = std::iter::once((
+            Tab::ProjectMetadata,
+            Searchable::ProjectMetadata(&self.project.metadata),
+        ));
+
+        object_iter.chain(metadata_iter)
     }
 
     pub fn search(&mut self) {

@@ -12,7 +12,7 @@ enum ContextMenuActions {
     },
     Add {
         parent: FileID,
-        position: DirPosition<String>,
+        position: DirPosition<FileID>,
         file_type: FileType,
     },
 }
@@ -46,7 +46,7 @@ impl dyn FileObject {
         let (add_parent, position) = if self.is_folder() {
             (Some(self.id().clone()), DirPosition::Last)
         } else {
-            (parent_id.clone(), DirPosition::After(self.id().to_string()))
+            (parent_id.clone(), DirPosition::After(self.id().clone()))
         };
 
         let node = base_node_builder
@@ -119,8 +119,10 @@ impl Project {
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, Tab>,
         actions: &mut Vec<ContextMenuActions>,
     ) {
+        // Add special project metadata to the tree
         builder.leaf(Tab::ProjectMetadata, "Project");
 
+        // Create the rest of the top level tree
         self.objects
             .get(&self.text_id)
             .unwrap()
@@ -261,12 +263,6 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
             ContextMenuActions::Delete { parent, deleting } => {
                 let deleting_tab: Tab = deleting.into();
 
-                // Remove the current tab before deleting it
-                // TODO: find better way of doing this, prune elements before calling the viewer?
-                if let Some(tab_position) = editor.dock_state.find_tab(&deleting_tab) {
-                    editor.dock_state.remove_tab(tab_position);
-                }
-
                 match deleting_tab {
                     Tab::FileObject(deleting_tab_id) => {
                         // Delete the actual file object (removes from other objects and file on disk)
@@ -290,14 +286,15 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                 position,
                 file_type,
             } => {
-                let resut = editor
+                let result = editor
                     .project
                     .objects
                     .get(&parent)
                     .unwrap()
                     .borrow_mut()
                     .create_child(file_type, position, &editor.project.objects);
-                match resut {
+
+                match result {
                     Ok(new_child) => editor.project.add_object(new_child),
                     Err(err) => {
                         log::error!("Encountered error while trying to add child: {err}")

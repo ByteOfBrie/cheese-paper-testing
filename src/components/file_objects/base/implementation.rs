@@ -52,7 +52,7 @@ impl dyn FileObject {
     pub fn create_child(
         &mut self,
         file_type: FileType,
-        position: DirPosition<String>,
+        position: DirPosition<FileID>,
         objects: &FileObjectStore,
     ) -> Result<Box<RefCell<dyn FileObject>>> {
         let new_index = match position {
@@ -60,7 +60,7 @@ impl dyn FileObject {
                 self.get_base()
                     .children
                     .iter()
-                    .position(|id| **id == child)
+                    .position(|id| *id == child)
                     .unwrap()
                     + 1
             }
@@ -68,7 +68,7 @@ impl dyn FileObject {
                 .get_base()
                 .children
                 .iter()
-                .position(|id| **id == child)
+                .position(|id| *id == child)
                 .unwrap(),
             DirPosition::First => 0,
             DirPosition::Last => self.get_base().children.len(),

@@ -10,7 +10,7 @@ mod project_tracker;
 mod prelude;
 
 pub use editor_base::CheesePaperApp;
-pub use project_editor::file_object_editor::FileObjectEditor;
+pub use project_editor::page::FileObjectEditor;
 pub use render_data::RenderData;
 
 #[cfg(feature = "metrics")]

@@ -4,8 +4,6 @@ use std::sync::atomic::AtomicUsize;
 
 use egui::TextBuffer;
 
-use crate::ui::RenderData;
-
 static GLOBAL_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 fn get_uid() -> usize {
@@ -20,8 +18,6 @@ pub struct Text {
     // underlying text buffer
     pub text: String,
 
-    pub _rdata: RenderData,
-
     // version number for knowing if the text has been updated
     pub version: usize,
 
@@ -33,7 +29,6 @@ impl Text {
     fn new() -> Self {
         Self {
             text: String::new(),
-            _rdata: RenderData::default(),
             version: 0,
             struct_uid: get_uid(),
         }
@@ -59,7 +54,6 @@ impl From<String> for Text {
     fn from(s: String) -> Text {
         Text {
             text: s,
-            _rdata: RenderData::default(),
             version: 0,
             struct_uid: get_uid(),
         }

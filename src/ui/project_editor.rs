@@ -86,9 +86,15 @@ pub struct EditorContext {
     pub spellcheck_status: SpellCheckStatus,
     pub typing_status: TypingStatus,
     pub search: Search,
+    pub stores: Stores,
 
     // version number. increment to trigger a project-wide formatting refresh
     pub version: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct Stores {
+    pub text_box: crate::ui::text_box::Store,
 }
 
 pub enum TabMove {
@@ -624,6 +630,7 @@ impl ProjectEditor {
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
+                stores: Stores::default(),
                 version: 0,
             },
             file_event_rx,

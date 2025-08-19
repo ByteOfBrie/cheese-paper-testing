@@ -6,6 +6,8 @@ use crate::ui::project_editor::search::textbox_search;
 use egui::TextBuffer;
 use egui::text::LayoutJob;
 
+pub type Store = RenderDataStore<usize, TextBox>;
+
 #[derive(Debug, Default)]
 pub struct TextBox {
     // highlighter: MemoizedMarkdownHighlighter,
@@ -104,7 +106,7 @@ impl TextBox {
 
 impl Text {
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
-        let rdata = self._rdata.obtain::<TextBox>();
+        let rdata = ctx.stores.text_box.get(&self.struct_uid);
         let text_box: &mut TextBox = &mut rdata.borrow_mut();
 
         let mut layouter = |ui: &egui::Ui, text: &dyn TextBuffer, wrap_width: f32| {
@@ -222,7 +224,7 @@ impl Text {
     }
 
     pub fn word_count(&self, ctx: &mut EditorContext) -> usize {
-        let rdata = self._rdata.obtain::<TextBox>();
+        let rdata = ctx.stores.text_box.get(&self.struct_uid);
         let text_box: &mut TextBox = &mut rdata.borrow_mut();
 
         text_box.refresh(self, ctx);

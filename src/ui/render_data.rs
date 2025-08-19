@@ -1,32 +1,30 @@
-use std::{
-    any::Any,
-    cell::{OnceCell, RefCell},
-    rc::Rc,
-};
+use crate::ui::prelude::*;
 
-pub struct RenderData(OnceCell<Box<dyn Any + 'static>>);
+use std::hash::Hash;
 
-impl Default for RenderData {
+#[derive(Debug)]
+pub struct RenderDataStore<K, V>(HashMap<K, Rc<RefCell<V>>>);
+
+impl<K, V> Default for RenderDataStore<K, V> {
     fn default() -> Self {
-        Self(OnceCell::new())
+        Self(HashMap::new())
     }
 }
 
-impl std::fmt::Debug for RenderData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[render data]")
-    }
-}
+impl<K, V> RenderDataStore<K, V>
+where
+    K: Eq + Hash + Clone,
+    V: Default,
+{
+    pub fn get(&mut self, k: &K) -> Rc<RefCell<V>> {
+        let v = self.0.get(k);
+        if let Some(val) = v {
+            return val.clone();
+        }
+        let new_val = Rc::new(RefCell::new(V::default()));
+        let new_key = k.clone();
 
-impl RenderData {
-    pub fn obtain<T: Default + 'static>(&self) -> Rc<RefCell<T>> {
-        let content = self.0.get_or_init(|| {
-            let data: Rc<RefCell<T>> = Rc::new(RefCell::new(T::default()));
-            Box::new(data)
-        });
-
-        let rc: &Rc<RefCell<T>> = content.downcast_ref::<Rc<RefCell<T>>>().unwrap();
-
-        rc.clone()
+        self.0.insert(new_key, new_val.clone());
+        new_val
     }
 }

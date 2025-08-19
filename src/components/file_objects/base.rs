@@ -11,7 +11,7 @@ use crate::components::file_objects::utils::{
     add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
-use crate::ui::{FileObjectEditor, RenderData};
+use crate::ui::FileObjectEditor;
 use crate::util::CheeseError;
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -66,7 +66,6 @@ pub struct BaseFileObject {
     pub file: FileInfo,
     pub toml_header: DocumentMut,
     pub children: Vec<FileID>,
-    pub _rdata: RenderData,
 }
 
 impl Default for FileObjectMetadata {
@@ -517,7 +516,6 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         file: file_info,
         toml_header,
         children: Vec::new(),
-        _rdata: RenderData::default(),
     };
 
     // Will eventually return this and all children
@@ -710,7 +708,6 @@ impl BaseFileObject {
             },
             toml_header: DocumentMut::new(),
             children: Vec::new(),
-            _rdata: RenderData::default(),
         }
     }
 

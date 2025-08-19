@@ -255,7 +255,11 @@ pub fn compute_layout_job(
         debug_assert!(end <= text.len());
 
         if end > start {
-            let leading_space = if text_style.newline { 20.0 } else { 0.0 };
+            let leading_space = if text_style.newline && ctx.settings.indent_line_start() {
+                20.0
+            } else {
+                0.0
+            };
 
             job.append(
                 &text[start..end],

@@ -81,7 +81,6 @@ impl Debug for ProjectEditor {
 
 #[derive(Debug)]
 pub struct EditorContext {
-    #[allow(dead_code)]
     pub settings: Settings,
     pub dictionary: Option<Dictionary>,
     pub spellcheck_status: SpellCheckStatus,

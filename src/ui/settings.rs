@@ -7,8 +7,16 @@ use toml_edit::{DocumentMut, value};
 
 #[derive(Debug)]
 struct SettingsData {
+    /// size of the text font
     font_size: f32,
+
+    /// auto indentation at the start of lines ?
+    indent_line_start: bool,
+
+    /// re-open the last project when launching the app ?
     reopen_last: bool,
+
+    /// Location of the Dictionary
     dictionary_location: PathBuf,
 }
 
@@ -17,6 +25,7 @@ impl Default for SettingsData {
         Self {
             font_size: 18.0,
             reopen_last: true,
+            indent_line_start: true,
             dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
         }
     }
@@ -49,6 +58,11 @@ impl Settings {
             None => modified = true,
         }
 
+        match table.get("indent_line_start").and_then(|val| val.as_bool()) {
+            Some(indent_line_start) => data.indent_line_start = indent_line_start,
+            None => modified = true,
+        }
+
         if let Some(dictionary_location) = table
             .get("dictionary_location")
             .and_then(|location| location.as_str())
@@ -63,6 +77,7 @@ impl Settings {
         let data = self.0.borrow();
         table.insert("font_size", value(data.font_size as f64));
         table.insert("reopen_last", value(data.reopen_last));
+        table.insert("indent_line_start", value(data.indent_line_start));
     }
 
     pub fn get_path(project_dirs: &ProjectDirs) -> PathBuf {
@@ -75,6 +90,10 @@ impl Settings {
 
     pub fn reopen_last(&self) -> bool {
         self.0.borrow().reopen_last
+    }
+
+    pub fn indent_line_start(&self) -> bool {
+        self.0.borrow().indent_line_start
     }
 
     pub fn dictionary_location(&self) -> PathBuf {

@@ -129,6 +129,7 @@ impl Text {
             .lock_focus(true)
             .show(ui);
 
+        // Keep track of where we're typing and if it's new, used in spellcheck logic later on
         if let Some(cursor_range) = output.cursor_range {
             let primary_cursor_pos = cursor_range.primary.index;
             let current_word_pos = spellcheck::get_current_word(&self.text, primary_cursor_pos);
@@ -158,6 +159,21 @@ impl Text {
             text_box.redo_layout = true;
         }
 
+        // Check for paste events that contain smart quotes, and remove them from the text
+        ui.input_mut(|i| {
+            for event in &i.events {
+                if let egui::Event::Paste(contents) = event
+                    && contents.contains(['“', '”', '‘', '’'])
+                {
+                    self.clean_up_quotes();
+
+                    // We've changed the text, so we need to update the layout once again
+                    text_box.redo_layout = true;
+                }
+            }
+        });
+
+        // Draw spellcheck menu for the current word
         if output.response.clicked_by(egui::PointerButton::Secondary)
             && let Some(cursor_range) = output.cursor_range
         {
@@ -220,5 +236,35 @@ impl Text {
 
         text_box.refresh(self, ctx);
         text_box.word_count
+    }
+
+    /// Remove *all* smart quotes from text that was just pasted into. This could probably be made
+    /// more efficient (e.g., we technically don't need to do this in a separate pass from formatting),
+    /// but this works.
+    fn clean_up_quotes(&mut self) {
+        static SMART_QUOTE_REMOVAL_REGEX: SavedRegex =
+            SavedRegex::new(|| Regex::new(r#"[“”‘’]"#).unwrap());
+
+        // Iterate through the string backwards so we don't invalidate our own indexes
+        for (replacement, replace_range) in SMART_QUOTE_REMOVAL_REGEX
+            .find_iter(&self.text)
+            .collect::<Vec<_>>()
+            .iter()
+            .rev()
+            .map(|quote_match| {
+                let replacement = if quote_match.as_str() == "“" || quote_match.as_str() == "”"
+                {
+                    "\""
+                } else {
+                    "\'"
+                };
+
+                (replacement, quote_match.range())
+            })
+            .collect::<Vec<_>>()
+        {
+            // Replace the string text in place
+            self.text.replace_range(replace_range, replacement);
+        }
     }
 }

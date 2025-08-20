@@ -18,9 +18,6 @@ enum ContextMenuActions {
     },
 }
 
-// TODO: scale off of font size
-const NODE_HEIGHT: f32 = 26.0;
-
 impl dyn FileObject {
     fn build_tree(
         &self,
@@ -28,6 +25,7 @@ impl dyn FileObject {
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, Page>,
         actions: &mut Vec<ContextMenuActions>,
         parent_id: Option<FileID>,
+        node_height: f32,
     ) {
         let node_name = if self.get_base().metadata.name.is_empty() {
             self.empty_string_name().to_string()
@@ -52,7 +50,7 @@ impl dyn FileObject {
         };
 
         let node = base_node_builder
-            .height(NODE_HEIGHT)
+            .height(node_height)
             .label(node_name)
             .context_menu(|ui| {
                 // We can safely call unwrap on parent here because children can't be root nodes
@@ -105,9 +103,13 @@ impl dyn FileObject {
 
         if self.is_folder() {
             for child in self.children(objects) {
-                child
-                    .borrow_mut()
-                    .build_tree(objects, builder, actions, Some(self.id().clone()));
+                child.borrow_mut().build_tree(
+                    objects,
+                    builder,
+                    actions,
+                    Some(self.id().clone()),
+                    node_height,
+                );
             }
 
             builder.close_dir();
@@ -120,12 +122,13 @@ impl Project {
         &mut self,
         builder: &mut egui_ltreeview::TreeViewBuilder<'_, Page>,
         actions: &mut Vec<ContextMenuActions>,
+        node_height: f32,
     ) {
         // Add special project metadata to the tree
         builder.node(
             NodeBuilder::leaf(Page::ProjectMetadata)
                 .label("Project")
-                .height(NODE_HEIGHT),
+                .height(node_height),
         );
 
         // Create the rest of the top level tree
@@ -133,28 +136,36 @@ impl Project {
             .get(&self.text_id)
             .unwrap()
             .borrow_mut()
-            .build_tree(&self.objects, builder, actions, None);
+            .build_tree(&self.objects, builder, actions, None, node_height);
         self.objects
             .get(&self.characters_id)
             .unwrap()
             .borrow_mut()
-            .build_tree(&self.objects, builder, actions, None);
+            .build_tree(&self.objects, builder, actions, None, node_height);
         self.objects
             .get(&self.worldbuilding_id)
             .unwrap()
             .borrow_mut()
-            .build_tree(&self.objects, builder, actions, None);
+            .build_tree(&self.objects, builder, actions, None, node_height);
     }
 }
 
 pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
+    let font_size = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .unwrap()
+        .size;
+    let node_height = (font_size * 1.1).ceil();
     let mut context_menu_actions: Vec<ContextMenuActions> = Vec::new();
+
     let (_response, actions) = TreeView::new(ui.make_persistent_id("project tree"))
         .allow_multi_selection(false)
         .show_state(ui, &mut editor.tree_state, |builder| {
             editor
                 .project
-                .build_tree(builder, &mut context_menu_actions);
+                .build_tree(builder, &mut context_menu_actions, node_height);
         });
 
     for action in actions {

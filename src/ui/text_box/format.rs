@@ -4,9 +4,7 @@ use crate::ui::{
     text_box::spellcheck::find_misspelled_words,
 };
 
-use egui::{Color32, TextFormat, text::LayoutJob};
-
-use egui::{FontFamily, FontId, Stroke};
+use egui::{Color32, Stroke, TextFormat, text::LayoutJob};
 
 #[derive(Debug, Clone, Copy)]
 enum StyleOption {
@@ -51,12 +49,14 @@ impl Style {
 }
 
 fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text::TextFormat {
+    let font_id = egui_style
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .unwrap()
+        .clone();
+
     let mut format = TextFormat {
-        font_id: FontId {
-            // TODO: update this based on actual font size (or figure out why it doesn't update)
-            size: 24.0,
-            family: FontFamily::Proportional,
-        },
+        font_id,
         ..Default::default()
     };
 

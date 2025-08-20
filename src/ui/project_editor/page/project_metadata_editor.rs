@@ -1,4 +1,4 @@
-use crate::ui::prelude::*;
+use crate::ui::{prelude::*, project_editor::update_title};
 
 use egui::ScrollArea;
 
@@ -17,7 +17,12 @@ impl Project {
                     .hint_text("Story Title")
                     .desired_width(f32::INFINITY),
             );
-            self.process_response(response);
+            self.process_response(&response);
+
+            // Special case: update the title if we've changed it:
+            if response.changed() {
+                update_title(&self.base_metadata.name, ui.ctx());
+            }
 
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.metadata.genre)
@@ -25,7 +30,7 @@ impl Project {
                     .hint_text("Genre")
                     .desired_width(f32::INFINITY),
             );
-            self.process_response(response);
+            self.process_response(&response);
 
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.metadata.author)
@@ -33,7 +38,7 @@ impl Project {
                     .hint_text("Author Name")
                     .desired_width(f32::INFINITY),
             );
-            self.process_response(response);
+            self.process_response(&response);
 
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.metadata.email)
@@ -41,25 +46,25 @@ impl Project {
                     .hint_text("Author Email")
                     .desired_width(f32::INFINITY),
             );
-            self.process_response(response);
+            self.process_response(&response);
 
             egui::CollapsingHeader::new("Story Description/Summary")
                 .default_open(true)
                 .show(ui, |ui| {
                     let response = ui.add(|ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx));
-                    self.process_response(response);
+                    self.process_response(&response);
                 });
 
             egui::CollapsingHeader::new("Notes")
                 .default_open(true)
                 .show(ui, |ui| {
                     let response = ui.add(|ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx));
-                    self.process_response(response);
+                    self.process_response(&response);
                 });
         });
     }
 
-    fn process_response(&mut self, response: egui::Response) {
+    fn process_response(&mut self, response: &egui::Response) {
         if response.changed() {
             self.file.modified = true;
         }

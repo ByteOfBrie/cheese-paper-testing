@@ -263,6 +263,7 @@ impl eframe::App for CheesePaperApp {
         if self.state.closing_project {
             self.project_editor = None;
             self.state.closing_project = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title("Cheese Paper".to_string()));
             if let Some(new_project_path) = self.state.next_project.take()
                 && let Err(err) = self.load_project(new_project_path)
             {

@@ -177,6 +177,13 @@ fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
     Ok((watcher, rx))
 }
 
+/// Update the title of the project
+fn update_title(project_name: &str, ctx: &egui::Context) {
+    ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
+        "Cheese Paper - {project_name}",
+    )));
+}
+
 impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context, state: &mut EditorState) {
         self.process_input(ctx);
@@ -359,11 +366,7 @@ impl ProjectEditor {
         // since we don't have the `egui::Context`. This will also need to happen once we can actually
         // set project names
         if self.title_needs_update {
-            // Set the window title properly
-            ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-                "Cheese Paper - {}",
-                self.project.base_metadata.name
-            )));
+            update_title(&self.project.base_metadata.name, ctx);
             self.title_needs_update = false;
         }
 

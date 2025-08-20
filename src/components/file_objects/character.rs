@@ -174,8 +174,6 @@ impl FileObject for Character {
 #[cfg(test)]
 impl Character {
     pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
-        (self as &mut dyn FileObject)
-            .save(objects)
-            .map_err(CheeseError::from)
+        (self as &mut dyn FileObject).save(objects)
     }
 }

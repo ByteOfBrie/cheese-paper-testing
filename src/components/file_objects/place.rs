@@ -167,8 +167,6 @@ impl FileObject for Place {
 #[cfg(test)]
 impl Place {
     pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
-        (self as &mut dyn FileObject)
-            .save(objects)
-            .map_err(CheeseError::from)
+        (self as &mut dyn FileObject).save(objects)
     }
 }

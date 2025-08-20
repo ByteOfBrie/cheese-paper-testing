@@ -5,11 +5,11 @@ use egui::ScrollArea;
 impl Project {
     pub fn metadata_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
         egui::CentralPanel::default()
-            .show_inside(ui, |ui| self.show_editor(ui, ctx))
+            .show_inside(ui, |ui| self.show_project_metadata_editor(ui, ctx))
             .response
     }
 
-    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_project_metadata_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.base_metadata.name)

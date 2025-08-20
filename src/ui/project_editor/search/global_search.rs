@@ -47,9 +47,11 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     let gs = &mut ctx.global_search;
 
     // Take up the entire area horizontally
-    let response = ui.add_sized(
+    let search_box_response = ui.add_sized(
         egui::vec2(ui.available_width(), 0.0),
-        egui::TextEdit::singleline(&mut gs.find_text).hint_text("find"),
+        egui::TextEdit::singleline(&mut gs.find_text)
+            .hint_text("find")
+            .return_key(None), // keep focus when Enter is pressed
     );
 
     ui.add_sized(
@@ -57,7 +59,10 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
         egui::TextEdit::singleline(&mut gs.replace_text).hint_text("replace (not implemented)"),
     );
 
-    if ui.button("search").clicked() {
+    // check if we need to search
+    if ui.button("search").clicked()
+        || (search_box_response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+    {
         gs.redo_search = true;
     }
 
@@ -97,5 +102,5 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
             }
         }
     }
-    response
+    search_box_response
 }

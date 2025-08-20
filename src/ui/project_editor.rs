@@ -377,6 +377,10 @@ impl ProjectEditor {
             self.title_needs_update = false;
         }
 
+        if self.editor_context.search.exiting_search {
+            self.editor_context.version += 1;
+        }
+
         // check for file system events and process them
         if let Ok(response) = self.file_event_rx.try_recv() {
             match response {
@@ -425,6 +429,7 @@ impl ProjectEditor {
             && let Some(focused_text_box) = search_results.get(uid)
         {
             self.set_editor_tab(&focused_text_box.page.clone());
+            self.editor_context.search.goto_focus = false;
         }
     }
 

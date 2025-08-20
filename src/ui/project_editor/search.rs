@@ -23,6 +23,10 @@ pub struct Search {
     pub focus: Option<(TextUID, WordFind)>,
 
     pub goto_focus: bool,
+
+    /// When search is closed, signal to the rest of the editor that it needs to redraw
+    /// (which is also responsible for unsetting this)
+    pub exiting_search: bool,
 }
 
 impl Search {
@@ -33,7 +37,7 @@ impl Search {
 
     pub fn hide(&mut self) {
         self.active = false;
-        // TODO: #85: do something about highlighters here
+        self.exiting_search = true;
     }
 
     pub fn clear_focus(&mut self) {

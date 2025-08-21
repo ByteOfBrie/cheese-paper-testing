@@ -4,7 +4,7 @@ use crate::ui::prelude::*;
 
 use super::textbox_search::TextBoxSearchResult;
 
-/// Global search ui, returns
+/// Global search ui, returns the search box response output
 pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
     let gs = &mut ctx.search;
 
@@ -15,6 +15,23 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
             .hint_text("find")
             .return_key(None), // keep focus when Enter is pressed
     );
+
+    if gs.request_ui_focus {
+        gs.request_ui_focus = false;
+        ui.scroll_to_cursor(Some(egui::Align::Center));
+
+        // Select all of the text
+        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), search_box_response.id) {
+            let ccursor = egui::text::CCursorRange::two(
+                egui::text::CCursor::new(0),
+                egui::text::CCursor::new(gs.find_text.chars().count()),
+            );
+
+            state.cursor.set_char_range(Some(ccursor));
+            state.store(ui.ctx(), search_box_response.id);
+        }
+        ui.memory_mut(|i| i.request_focus(search_box_response.id));
+    }
 
     ui.add_sized(
         egui::vec2(ui.available_width(), 0.0),
@@ -64,5 +81,6 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
             }
         }
     }
+
     search_box_response
 }

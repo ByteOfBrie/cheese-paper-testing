@@ -357,11 +357,7 @@ impl ProjectEditor {
                 .id_salt("search scroll")
                 .max_height(ui.available_height())
                 .show(ui, |ui| {
-                    let response = global_search::ui(ui, &self.project, &mut self.editor_context);
-                    if self.editor_context.search.request_ui_focus {
-                        self.editor_context.search.request_ui_focus = false;
-                        ui.memory_mut(|i| i.request_focus(response.id));
-                    }
+                    global_search::ui(ui, &self.project, &mut self.editor_context);
                 });
         } else {
             egui::ScrollArea::both()

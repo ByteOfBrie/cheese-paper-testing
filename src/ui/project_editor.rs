@@ -353,11 +353,16 @@ impl ProjectEditor {
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
                 self.editor_context.search.hide();
             }
-            let response = global_search::ui(ui, &self.project, &mut self.editor_context);
-            if self.editor_context.search.request_ui_focus {
-                self.editor_context.search.request_ui_focus = false;
-                ui.memory_mut(|i| i.request_focus(response.id));
-            }
+            egui::ScrollArea::vertical()
+                .id_salt("search scroll")
+                .max_height(ui.available_height())
+                .show(ui, |ui| {
+                    let response = global_search::ui(ui, &self.project, &mut self.editor_context);
+                    if self.editor_context.search.request_ui_focus {
+                        self.editor_context.search.request_ui_focus = false;
+                        ui.memory_mut(|i| i.request_focus(response.id));
+                    }
+                });
         } else {
             egui::ScrollArea::both()
                 .id_salt("tree scroll")

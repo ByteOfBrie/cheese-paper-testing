@@ -39,9 +39,20 @@ impl WordFind {
 
 impl Widget for &WordFindPreview {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let context_format = TextFormat::default();
+        let font_id = ui
+            .style()
+            .text_styles
+            .get(&egui::TextStyle::Body)
+            .unwrap()
+            .clone();
+
+        let context_format = TextFormat {
+            font_id: font_id.clone(),
+            ..Default::default()
+        };
         let match_format = TextFormat {
             color: Color32::WHITE,
+            font_id,
             ..Default::default()
         };
 

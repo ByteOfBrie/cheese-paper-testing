@@ -429,7 +429,6 @@ impl ProjectEditor {
             && let Some(focused_text_box) = search_results.get(uid)
         {
             self.set_editor_tab(&focused_text_box.page.clone());
-            self.editor_context.search.goto_focus = false;
         }
     }
 

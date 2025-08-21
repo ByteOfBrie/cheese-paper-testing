@@ -114,12 +114,76 @@ impl Text {
             ui.fonts(|f| f.layout_job(layout_job))
         };
 
+        let text_box_id = self.struct_uid;
+
         let output = egui::TextEdit::multiline(self)
             .desired_width(f32::INFINITY)
             .layouter(&mut layouter)
             .min_size(egui::Vec2 { x: 50.0, y: 100.0 })
             .lock_focus(true)
+            .id_salt(text_box_id)
             .show(ui);
+
+        // Select the cursor text and scroll to it if requried
+        if ctx.search.active
+            && ctx.search.goto_focus
+            && let Some((uid, word_find)) = &ctx.search.focus
+            && uid == &self.struct_uid
+        {
+            // Cursor ranges are specified in character offsets, we have a byte offset,
+            // find the word
+            let mut start_char_pos: Option<usize> = None;
+            let mut end_char_pos: Option<usize> = None;
+            for (char_count, (offset, _char)) in self.text.char_indices().enumerate() {
+                if start_char_pos.is_none() && offset >= word_find.start {
+                    start_char_pos = Some(char_count);
+                }
+                if end_char_pos.is_none() && offset >= word_find.end {
+                    end_char_pos = Some(char_count);
+                    break;
+                }
+            }
+
+            // Special case: if we're looking for a string that matches the end of the file,
+            // end_char_pos will be None, we correct it here (rather than trying to fix my
+            // logic above because that's complicated)
+            if start_char_pos.is_some() && end_char_pos.is_none() {
+                end_char_pos = Some(self.text.chars().count());
+            }
+
+            if let Some(start_pos) = start_char_pos
+                && let Some(end_pos) = end_char_pos
+                && let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id)
+            {
+                let ccursor = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(start_pos),
+                    egui::text::CCursor::new(end_pos),
+                );
+
+                // Set the positition of the cursor in the text
+                state.cursor.set_char_range(Some(ccursor));
+                state.store(ui.ctx(), output.response.id);
+                ui.ctx()
+                    .memory_mut(|mem| mem.request_focus(output.response.id));
+
+                // Find the position of the cursor position in the rendered text output
+                let cursor_pos_in_galley = output
+                    .galley
+                    .pos_from_cursor(egui::text::CCursor::new(start_pos));
+
+                let text_edit_pos = output.response.rect;
+
+                // Add the minimum of the text edit widget to the galley position to get the
+                // absolute rectangle
+                let cursor_absolute_pos =
+                    cursor_pos_in_galley.translate(text_edit_pos.min.to_vec2());
+
+                ui.scroll_to_rect(cursor_absolute_pos, Some(egui::Align::Center));
+            }
+
+            // We've gone to our focus (or made our best effort), we're done
+            ctx.search.goto_focus = false;
+        }
 
         // Keep track of where we're typing and if it's new, used in spellcheck logic later on
         if let Some(cursor_range) = output.cursor_range {

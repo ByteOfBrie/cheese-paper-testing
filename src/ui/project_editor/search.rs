@@ -102,10 +102,13 @@ impl ProjectEditor {
 }
 
 impl Project {
-    pub fn get_searchable<'a>(&'a self, page: &Page) -> Searchable<'a> {
+    pub fn get_searchable<'a>(&'a self, page: &Page) -> Option<Searchable<'a>> {
         match page {
-            Page::FileObject(file_id) => Searchable::FileObject(self.objects.get(file_id).unwrap()),
-            Page::ProjectMetadata => Searchable::ProjectMetadata(&self.metadata),
+            Page::FileObject(file_id) => {
+                Some(Searchable::FileObject(self.objects.get(file_id).unwrap()))
+            }
+            Page::ProjectMetadata => Some(Searchable::ProjectMetadata(&self.metadata)),
+            Page::Export => None,
         }
     }
 }

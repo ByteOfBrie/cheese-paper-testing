@@ -128,6 +128,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                     "<Deleted>".into()
                 }
             }
+            Page::Export => "Export".into(),
         }
     }
 
@@ -205,6 +206,7 @@ impl ProjectEditor {
         // Before rendering the tab view, clear out any deleted scenes
         self.dock_state.retain_tabs(|tab| match tab {
             Page::ProjectMetadata => true,
+            Page::Export => true,
             Page::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
         });
 
@@ -313,6 +315,10 @@ impl ProjectEditor {
                                 }
                             }
                         });
+
+                        if ui.button("Export Story Text").clicked() {
+                            self.set_editor_tab(&Page::Export);
+                        }
 
                         if ui.button("Export Outline").clicked() {
                             let project_title = &self.project.base_metadata.name;

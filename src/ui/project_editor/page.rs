@@ -1,3 +1,4 @@
+mod export_selection;
 mod file_object_editor;
 mod project_metadata_editor;
 
@@ -17,33 +18,45 @@ use egui::{Key, Modifiers};
 pub enum Page {
     ProjectMetadata,
     FileObject(FileID),
+    Export,
 }
 
 impl Page {
     const PROJECT_METADATA_ID: &str = "project_metadata";
+    const EXPORT_ID: &str = "export";
 
     /// Get an id from a string. This (and its reverse, `get_id`) could be replaced by `From`
     /// (and `Into`), but this seems like it might be more explicit?
     pub fn from_id(id: &str) -> Self {
         match id {
-            Self::PROJECT_METADATA_ID => Page::ProjectMetadata,
-            _ => Page::FileObject(FileID::new(id.to_owned())),
+            Self::PROJECT_METADATA_ID => Self::ProjectMetadata,
+            Self::EXPORT_ID => Self::Export,
+            _ => Self::FileObject(FileID::new(id.to_owned())),
         }
     }
 
     pub fn get_id(&self) -> &str {
         match self {
-            Page::ProjectMetadata => Self::PROJECT_METADATA_ID,
-            Page::FileObject(id) => id,
+            Self::ProjectMetadata => Self::PROJECT_METADATA_ID,
+            Self::Export => Self::EXPORT_ID,
+            Self::FileObject(id) => id,
         }
     }
 
     pub fn from_file_id(file_id: &FileID) -> Self {
-        Page::FileObject(file_id.clone())
+        Self::FileObject(file_id.clone())
     }
 
     pub fn is_file_object(&self) -> bool {
-        matches!(self, Page::FileObject(_))
+        matches!(self, Self::FileObject(_))
+    }
+
+    pub fn is_searchable(&self) -> bool {
+        match self {
+            Self::Export => false,
+            Self::FileObject(_) => true,
+            Self::ProjectMetadata => true,
+        }
     }
 }
 
@@ -59,6 +72,40 @@ impl Page {
         let rdata = ctx.stores.page.get(self);
         let page_data: &mut PageData = &mut rdata.borrow_mut();
 
+        let page_search_active = if self.is_searchable() {
+            self.process_page_search(page_data, ui, project, ctx)
+        } else {
+            false
+        };
+
+        match self {
+            Self::ProjectMetadata => {
+                project.metadata_ui(ui, ctx);
+            }
+            Self::FileObject(file_object_id) => {
+                if let Some(file_object) = project.objects.get(file_object_id) {
+                    file_object.borrow_mut().as_editor_mut().ui(ui, ctx);
+                }
+            }
+            Self::Export => {
+                project.export_ui(ui, ctx);
+            }
+        }
+
+        // If this was swapped once, we need to put it back
+        if page_search_active {
+            std::mem::swap(&mut ctx.search, &mut page_data.search);
+        }
+    }
+
+    /// Handle page search logic, including
+    fn process_page_search(
+        &self,
+        page_data: &mut PageData,
+        ui: &mut Ui,
+        project: &mut Project,
+        ctx: &mut EditorContext,
+    ) -> bool {
         // check for ctrl-f for page search
         if ui.input_mut(|i| {
             i.consume_shortcut(&egui::KeyboardShortcut {
@@ -92,9 +139,11 @@ impl Page {
 
             if page_data.search.redo_search {
                 page_data.search.search_results = Some(HashMap::new());
-                project
-                    .get_searchable(self)
-                    .search(self, &mut page_data.search);
+
+                if let Some(searchable) = project.get_searchable(self) {
+                    searchable.search(self, &mut page_data.search);
+                }
+
                 ctx.version += 1;
                 page_data.search.redo_search = false;
             }
@@ -105,21 +154,7 @@ impl Page {
             /* Hack-y solution: swap in the file search object for the file-local search */
             std::mem::swap(&mut ctx.search, &mut page_data.search);
         }
-
-        match self {
-            Page::ProjectMetadata => {
-                project.metadata_ui(ui, ctx);
-            }
-            Page::FileObject(file_object_id) => {
-                if let Some(file_object) = project.objects.get(file_object_id) {
-                    file_object.borrow_mut().as_editor_mut().ui(ui, ctx);
-                }
-            }
-        }
-
-        if page_search_active {
-            std::mem::swap(&mut ctx.search, &mut page_data.search);
-        }
+        page_search_active
     }
 }
 
@@ -133,8 +168,9 @@ impl From<&mut Page> for egui::Id {
 impl From<Rc<String>> for Page {
     fn from(id: Rc<String>) -> Self {
         match id.as_str() {
-            Self::PROJECT_METADATA_ID => Page::ProjectMetadata,
-            _ => Page::FileObject(id),
+            Self::PROJECT_METADATA_ID => Self::ProjectMetadata,
+            Self::EXPORT_ID => Self::Export,
+            _ => Self::FileObject(id),
         }
     }
 }

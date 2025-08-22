@@ -59,6 +59,22 @@ pub enum FileType {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
+pub enum FileObjectTypeInterface<'a> {
+    Scene(&'a Scene),
+    Folder(&'a Folder),
+    Character(&'a Character),
+    Place(&'a Place),
+}
+
+pub enum MutFileObjectTypeInterface<'a> {
+    Scene(&'a mut Scene),
+    Folder(&'a mut Folder),
+    Character(&'a mut Character),
+    Place(&'a mut Place),
+}
+
+#[derive(Debug)]
 pub struct BaseFileObject {
     pub metadata: FileObjectMetadata,
     /// Index (ordering within parent)
@@ -732,6 +748,12 @@ pub trait FileObject: Debug {
     fn empty_string_name(&self) -> &'static str;
     fn is_folder(&self) -> bool;
     fn extension(&self) -> &'static str;
+
+    /// Allow for downcasting this as a reference, useful for some UI components
+    #[allow(dead_code)]
+    fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
+    /// Allow for downcasting this as a mutable reference, useful for some UI components
+    fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
 
     /// Display the outline, writing all relevant non-prose information we have to a single
     /// markdown file that can be scanned/shared easily. We don't (currently) have any selections

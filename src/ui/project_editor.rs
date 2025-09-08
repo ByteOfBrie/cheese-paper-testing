@@ -96,6 +96,7 @@ pub struct EditorContext {
 pub struct Stores {
     pub text_box: crate::ui::text_box::Store,
     pub page: page::Store,
+    pub scene: page::file_object_editor::scene_editor::Store,
 }
 
 pub enum TabMove {

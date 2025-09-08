@@ -1,5 +1,5 @@
 mod export_selection;
-mod file_object_editor;
+pub mod file_object_editor;
 mod project_metadata_editor;
 
 use crate::ui::prelude::*;

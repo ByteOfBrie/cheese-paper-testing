@@ -1,7 +1,7 @@
 mod character_editor;
 mod folder_editor;
 mod place_editor;
-mod scene_editor;
+pub mod scene_editor;
 
 use crate::ui::prelude::*;
 

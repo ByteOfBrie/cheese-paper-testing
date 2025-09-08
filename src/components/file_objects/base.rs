@@ -147,14 +147,25 @@ pub struct FileInfo {
 
 bitflags! {
 
-    /// The presence of this particular object in
+    /// The presence of this particular object in the export.
+    ///
+    /// The `INCLUDE` will (likely) represent an "include in story" checkbox,
+    /// if it's not set, none of the other options have any meaningful value.
+    /// We (currently) accept bools as well, since that's most of the normal
+    /// configuration.
+    ///
+    /// At a data level, it would probably make more sense to have (at least)
+    /// three separate variables here (include, include_title, and break_at_end),
+    /// where the latter two will have an enum with (default, always, and never),
+    /// which is how it'll likely be presented in the UI, but doing it this way is
+    /// more compact in the file.
     #[derive(Debug)]
     pub struct CompileStatus: u64 {
-        const INCLUDE              = 0b0000_0000_0000_0001;
-        const INCLUDE_PRESET       = 0b0000_0000_0000_0010;
-        const INCLUDE_TITLE        = 0b0000_0000_0000_0100;
-        const INCLUDE_TITLE_PRESET = 0b0000_0000_0000_1000;
-        const NO_SPLIT_AT_END      = 0b0000_0000_0001_0000;
+        const INCLUDE                = 0b0000_0000_0000_0001;
+        const OVERRIDE_INCLUDE_TITLE = 0b0000_0000_0000_0010;
+        const INCLUDE_TITLE          = 0b0000_0000_0000_0100;
+        const OVERRIDE_BREAK_AT_END  = 0b0000_0000_0000_1000;
+        const BREAK_AT_END           = 0b0000_0000_0001_0000;
 
         // allow for any bits, in case a future version of cheese-paper sets more
         const _ = !0;
@@ -164,10 +175,65 @@ bitflags! {
 impl Default for CompileStatus {
     fn default() -> Self {
         CompileStatus::INCLUDE
-            | CompileStatus::INCLUDE_PRESET
-            | CompileStatus::INCLUDE_TITLE
-            | CompileStatus::INCLUDE_TITLE_PRESET
     }
+}
+
+impl CompileStatus {
+    pub fn include_title(&self) -> IncludeOptions {
+        if self.contains(CompileStatus::INCLUDE_TITLE | CompileStatus::OVERRIDE_INCLUDE_TITLE) {
+            IncludeOptions::Always
+        } else if self.contains(CompileStatus::OVERRIDE_INCLUDE_TITLE) {
+            IncludeOptions::Never
+        } else {
+            IncludeOptions::Default
+        }
+    }
+
+    pub fn set_include_title(&mut self, options: IncludeOptions) {
+        match options {
+            IncludeOptions::Default => self.set(CompileStatus::OVERRIDE_INCLUDE_TITLE, false),
+            IncludeOptions::Always => {
+                self.set(CompileStatus::OVERRIDE_INCLUDE_TITLE, true);
+                self.set(CompileStatus::INCLUDE_TITLE, true);
+            }
+            IncludeOptions::Never => {
+                self.set(CompileStatus::OVERRIDE_INCLUDE_TITLE, true);
+                self.set(CompileStatus::INCLUDE_TITLE, false);
+            }
+        }
+    }
+
+    pub fn break_at_end(&self) -> IncludeOptions {
+        if self.contains(CompileStatus::BREAK_AT_END | CompileStatus::OVERRIDE_BREAK_AT_END) {
+            IncludeOptions::Always
+        } else if self.contains(CompileStatus::OVERRIDE_BREAK_AT_END) {
+            IncludeOptions::Never
+        } else {
+            IncludeOptions::Default
+        }
+    }
+
+    pub fn set_break_at_end(&mut self, options: IncludeOptions) {
+        match options {
+            IncludeOptions::Default => self.set(CompileStatus::OVERRIDE_BREAK_AT_END, false),
+            IncludeOptions::Always => {
+                self.set(CompileStatus::OVERRIDE_BREAK_AT_END, true);
+                self.set(CompileStatus::BREAK_AT_END, true);
+            }
+            IncludeOptions::Never => {
+                self.set(CompileStatus::OVERRIDE_BREAK_AT_END, true);
+                self.set(CompileStatus::BREAK_AT_END, false);
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
+pub enum IncludeOptions {
+    #[default]
+    Default,
+    Always,
+    Never,
 }
 
 pub fn metadata_extract_u64(

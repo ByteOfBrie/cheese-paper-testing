@@ -68,6 +68,17 @@ pub enum FileObjectTypeInterface<'a> {
     Place(&'a Place),
 }
 
+impl From<FileObjectTypeInterface<'_>> for FileType {
+    fn from(value: FileObjectTypeInterface) -> Self {
+        match value {
+            FileObjectTypeInterface::Scene(_) => FileType::Scene,
+            FileObjectTypeInterface::Folder(_) => FileType::Folder,
+            FileObjectTypeInterface::Character(_) => FileType::Character,
+            FileObjectTypeInterface::Place(_) => FileType::Place,
+        }
+    }
+}
+
 pub enum MutFileObjectTypeInterface<'a> {
     Scene(&'a mut Scene),
     Folder(&'a mut Folder),
@@ -130,8 +141,6 @@ impl FileType {
         }
     }
 }
-
-// pub type FileObjectStore = HashMap<String, Box<dyn FileObject>>;
 
 #[derive(Debug)]
 pub struct FileInfo {

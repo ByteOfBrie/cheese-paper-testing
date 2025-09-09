@@ -1,0 +1,230 @@
+use icu_casemap::{CaseMapper, CaseMapperBorrowed};
+
+use crate::components::file_objects::{FileID, FileObjectStore, FileType};
+
+/// A reference to an object that is currently unknown (e.g., does not reference an object
+/// currently loaded into the editor)
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct UnknownReference {
+    pub name: String,
+    /// The ID present in the reference, if any. Will not be generated if missing
+    pub id: String,
+    pub file_type: Option<FileType>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ObjectReference {
+    Known(FileID),
+    Unknown(UnknownReference),
+    None,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum PrefixLen {
+    Exact,
+    Some(usize),
+}
+
+impl UnknownReference {
+    pub fn resolve(&self, objects: &FileObjectStore) -> Option<FileID> {
+        static CASE_MAPPER: std::sync::LazyLock<CaseMapperBorrowed<'_>> =
+            std::sync::LazyLock::new(CaseMapper::new);
+
+        if self.id.is_empty() {
+            // We don't have an ID, look through all of the objects
+
+            // Create a few variables to track state
+            let mut best_match_id: Option<&FileID> = None;
+            let mut prefix_len = PrefixLen::Some(0);
+            let mut found_multiple = false;
+
+            // name of the object we're searching for, case folded so we can make case-insensitive
+            // comparisons (see https://www.w3.org/TR/charmod-norm/#definitionCaseFolding)
+            let needle_name = CASE_MAPPER.fold_string(&self.name);
+
+            for (id, object_refcell) in objects.iter() {
+                let object = object_refcell.borrow();
+
+                // If we have a known file object type and this doesn't match it (e.g., we're trying to
+                // resolve a character reference and this is a scene, give up)
+                if let Some(this_file_type) = self.file_type
+                    && this_file_type != object.get_file_type().into()
+                {
+                    continue;
+                }
+
+                let object_name = CASE_MAPPER.fold_string(&object.get_base().metadata.name);
+
+                if needle_name == object_name {
+                    // exact name match
+                    if prefix_len == PrefixLen::Exact {
+                        // we've found two exact name matches, we can't distinguish between them, give up
+                        log::warn!(
+                            "Found multiple instances of name '{object_name}' while attempting \
+                             to resolve reference, giving up"
+                        );
+                        return None;
+                    } else {
+                        best_match_id = Some(id);
+                        prefix_len = PrefixLen::Exact;
+                        found_multiple = false;
+                    }
+                } else if let PrefixLen::Some(current_best) = prefix_len {
+                    // partial name match, find out how much we have. this might be the entire needle
+                    // string but that isn't actually a case we need to handle separately, it's still
+                    // a partial match of a particular length
+                    let common_prefix = longest_common_prefix(&needle_name, &object_name);
+                    if common_prefix.len() > current_best {
+                        prefix_len = PrefixLen::Some(common_prefix.len());
+                        found_multiple = false;
+                        best_match_id = Some(id);
+                    } else if common_prefix.len() == current_best {
+                        found_multiple = true;
+                    }
+                }
+            }
+
+            if found_multiple {
+                if prefix_len == PrefixLen::Exact {
+                    log::error!(
+                        "Found multiple exact matches late in the program, should be impossible"
+                    )
+                }
+                log::debug!(
+                    "Found multiple instances of name '{needle_name}' while attempting \
+                     to resolve reference, giving up"
+                );
+                return None;
+            }
+
+            match prefix_len {
+                PrefixLen::Exact => best_match_id.cloned(),
+                PrefixLen::Some(0) => {
+                    log::debug!(
+                        "No prefixes found when attempting to resolve reference {needle_name}"
+                    );
+                    None
+                }
+                PrefixLen::Some(match_len) => {
+                    // We have a match, determine if it's good enough to return
+                    // TODO: simplify this, only return a match if it "fully" matches the name
+
+                    // This allows for either an entire match of the needle as a prefix (being the
+                    // only occurence of that prefix) OR a single match of that prefix. In hindsight,
+                    // it's probably a bad idea to treat *any* prefix that doesn't fully match
+                    // like this, although this logic will likely be useful for fuzzy matches later,
+                    // so it's getting committed
+                    if needle_name.len() == match_len || match_len > 5 {
+                        best_match_id.cloned()
+                    } else {
+                        log::debug!(
+                            "No good prefixes found when attempting to resolve reference {needle_name}"
+                        );
+                        None
+                    }
+                }
+            }
+        } else {
+            // We have an ID string, we're only looking for that ID
+            if let Some(object_ref) = objects.get(&self.id) {
+                let object = object_ref.borrow();
+
+                if let Some(this_file_type) = self.file_type
+                    && this_file_type != object.get_file_type().into()
+                {
+                    log::warn!(
+                        "Found object with id {}, but it has type {:?}, was expecting type {:?}",
+                        &self.id,
+                        std::convert::Into::<FileType>::into(object.get_file_type()),
+                        this_file_type
+                    );
+                    None
+                } else {
+                    // we either found a object of the "correct" type, or we're not looking for a
+                    // reference of a specific type
+                    Some(object.id().clone())
+                }
+            } else {
+                // No IDs found, give up. We don't want to break a real reference by searching
+                // if we want to be smart about this, we can add logic to ask if the user
+                // wants to merge later
+                None
+            }
+        }
+    }
+}
+
+/// Find the longest common prefix of two strings, character by character, should support unicode
+/// characters correctly.
+fn longest_common_prefix(s1: &str, s2: &str) -> String {
+    let mut common_prefix = String::new();
+    let mut chars1 = s1.chars();
+    let mut chars2 = s2.chars();
+
+    loop {
+        match (chars1.next(), chars2.next()) {
+            (Some(c1), Some(c2)) if c1 == c2 => {
+                common_prefix.push(c1);
+            }
+            _ => {
+                break; // Mismatch or one of the strings ended
+            }
+        }
+    }
+    common_prefix
+}
+
+#[test]
+fn test_largest_common_prefix() {
+    // I don't specifically care about the result of emojis, but emojis have multi-byte UTF-8 encodings
+    // and zero-width joiners (both of which are possible in normal text depending on the language),
+    // but complex emojis are easier for me to understand than languages that would actually use
+    // zero width joiners in unicode. Contributions of examples from those languages are still welcome
+    let s1 = "👋🏻"; // U+1F44B U+1F3FB
+    let s2 = "👋🏿"; // U+1F44B U+1F3FF
+    let s3 = "🤚🏻"; // U+1F91A U+1F3FB
+
+    // simple tests, these should always pass
+    assert_eq!(longest_common_prefix(s1, s1), s1);
+    assert_eq!(longest_common_prefix("value", "val1"), "val");
+    assert_eq!(longest_common_prefix("value", ""), "");
+    assert_eq!(longest_common_prefix("1value", "2value"), "");
+
+    // both strings start with `0xF0 0x9F` when utf-8 encoded, but shouldn't match at all
+    assert_eq!(longest_common_prefix(s1, s3), "");
+
+    // anything below this point *can* be modified if the library/function changes, just think about
+    // it a little bit
+
+    // this specific behavior isn't critical, but we should know *how* it works
+    assert_eq!(longest_common_prefix(s1, s2), "👋"); // U+1F44B should match
+    assert_eq!(longest_common_prefix("test👋🏻", "test👋🏿"), "test👋");
+
+    // what happens when you start to include zero width joiners?
+    // U+1F636 U+200D U+1F32B U+FE0F compared with U+1F636
+    assert_eq!(longest_common_prefix("😶‍🌫️", "😶"), "😶");
+    // U+1F3F3 U+FE0F U+200D U+1F308 compared with U+1F3F3 U+FE0F
+    assert_eq!(longest_common_prefix("🏳️‍🌈", "🏳️"), "🏳️");
+    // U+1F642 U+200D U+2194 U+FE0F compared with U+1F642 U+200D U+2195 U+FE0F
+    assert_eq!(longest_common_prefix("🙂‍↔️", "🙂‍↕️"), "🙂\u{200d}");
+    // U+1F3F3 U+FE0F U+200D U+1F308 compared with U+1F3F3 U+FE0F	U+200D	U+26A7 U+FE0F
+    assert_eq!(longest_common_prefix("🏳️‍🌈", "🏳️‍⚧️"), "🏳️\u{200d}");
+}
+
+/// Run a few tests on case folding, mostly to verify assumptions. This should use whatever system
+/// we use
+#[test]
+fn test_case_mapping() {
+    let cm = CaseMapper::new();
+
+    assert_eq!(cm.fold_string("val"), cm.fold_string("val"));
+    assert_eq!(cm.fold_string("Val"), cm.fold_string("val"));
+    assert_eq!(cm.fold_string("val"), cm.fold_string("VAL"));
+    assert_eq!(cm.fold_string("Straße"), cm.fold_string("strasse"));
+    // I'm blindly trusting these examples from elsewhere, I don't know enough to verify them
+    assert_eq!(cm.fold_string("Привет мир"), cm.fold_string("привет мир"));
+    assert_eq!(
+        cm.fold_string("Γειά σου Κόσμε"),
+        cm.fold_string("γειά σου κόσμε")
+    );
+}

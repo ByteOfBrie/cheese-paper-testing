@@ -1,3 +1,5 @@
+use crate::components::file_objects::base::CompileStatus;
+use crate::components::file_objects::base::IncludeOptions;
 use crate::ui::prelude::*;
 
 use super::FileObjectEditor;
@@ -5,6 +7,20 @@ use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Folder;
 
 use egui::ScrollArea;
+
+#[derive(Debug, Default, PartialEq)]
+pub enum Tab {
+    #[default]
+    Notes,
+    Export,
+}
+
+#[derive(Debug, Default)]
+pub struct Data {
+    tab: Tab,
+}
+
+pub type Store = RenderDataStore<FileID, Data>;
 
 impl FileObjectEditor for Folder {
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
@@ -26,6 +42,18 @@ impl FileObjectEditor for Folder {
 
 impl Folder {
     fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+        let rdata = ctx.stores.folder.get(&self.get_base().metadata.id);
+        let mut folder_data = rdata.borrow_mut();
+
+        // Tab selection
+        // TODO: make selectable_values here more subtle (e.g., different color gray)
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut folder_data.tab, Tab::Notes, "Summary/Notes");
+            ui.selectable_value(&mut folder_data.tab, Tab::Export, "Export");
+        });
+
+        ui.separator();
+
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
@@ -36,19 +64,110 @@ impl Folder {
             );
             self.process_response(response);
 
-            egui::CollapsingHeader::new("Summary")
-                .default_open(true)
-                .show(ui, |ui| {
-                    let response = ui.add(|ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx));
-                    self.process_response(response);
-                });
+            match folder_data.tab {
+                Tab::Notes => {
+                    egui::CollapsingHeader::new("Summary")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            let response =
+                                ui.add(|ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx));
+                            self.process_response(response);
+                        });
 
-            egui::CollapsingHeader::new("Notes")
-                .default_open(true)
-                .show(ui, |ui| {
-                    let response = ui.add(|ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx));
+                    egui::CollapsingHeader::new("Notes")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            let response = ui.add(|ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx));
+                            self.process_response(response);
+                        });
+                }
+                Tab::Export => {
+                    // Check box for including this file entirely
+                    let mut export_include = self
+                        .metadata
+                        .compile_status
+                        .contains(CompileStatus::INCLUDE);
+                    let response = ui.checkbox(&mut export_include, "Include in export");
+                    if response.changed() {
+                        self.metadata
+                            .compile_status
+                            .set(CompileStatus::INCLUDE, export_include);
+                    }
                     self.process_response(response);
-                });
+
+                    // The rest of the checkboxes have no effect if export isn't included
+                    ui.add_enabled_ui(export_include, |ui| {
+                        let mut include_title = self.metadata.compile_status.include_title();
+                        let include_title_before = include_title;
+
+                        ui.horizontal(|ui| {
+                            ui.label("Include Title");
+
+                            egui::ComboBox::from_id_salt("Include Title")
+                                .selected_text(format!("{include_title:?}"))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut include_title,
+                                        IncludeOptions::Default,
+                                        "Default",
+                                    );
+                                    ui.selectable_value(
+                                        &mut include_title,
+                                        IncludeOptions::Always,
+                                        "Always",
+                                    );
+                                    ui.selectable_value(
+                                        &mut include_title,
+                                        IncludeOptions::Never,
+                                        "Never",
+                                    );
+                                });
+                        });
+
+                        // We don't have an actual response here so we have to manually process
+                        if include_title != include_title_before {
+                            self.metadata
+                                .compile_status
+                                .set_include_title(include_title);
+                            self.get_base_mut().file.modified = true;
+                        }
+
+                        // same thing but for the break
+                        let mut break_at_end = self.metadata.compile_status.break_at_end();
+                        let break_at_end_before = break_at_end;
+
+                        ui.horizontal(|ui| {
+                            ui.label("Break at End");
+
+                            egui::ComboBox::from_id_salt("Break at End")
+                                .selected_text(format!("{break_at_end:?}"))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut break_at_end,
+                                        IncludeOptions::Default,
+                                        "Default",
+                                    );
+                                    ui.selectable_value(
+                                        &mut break_at_end,
+                                        IncludeOptions::Always,
+                                        "Always",
+                                    );
+                                    ui.selectable_value(
+                                        &mut break_at_end,
+                                        IncludeOptions::Never,
+                                        "Never",
+                                    );
+                                });
+                        });
+
+                        // We don't have an actual response here so we have to manually process
+                        if break_at_end != break_at_end_before {
+                            self.metadata.compile_status.set_break_at_end(break_at_end);
+                            self.get_base_mut().file.modified = true;
+                        }
+                    });
+                }
+            }
         });
     }
 }

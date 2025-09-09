@@ -1,5 +1,5 @@
 mod character_editor;
-mod folder_editor;
+pub mod folder_editor;
 mod place_editor;
 pub mod scene_editor;
 

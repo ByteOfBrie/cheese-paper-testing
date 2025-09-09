@@ -20,9 +20,10 @@ pub enum ObjectReference {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum PrefixLen {
+enum WordMatch {
     Exact,
-    Some(usize),
+    FullNeedleAsPrefix,
+    None,
 }
 
 impl UnknownReference {
@@ -35,7 +36,7 @@ impl UnknownReference {
 
             // Create a few variables to track state
             let mut best_match_id: Option<&FileID> = None;
-            let mut prefix_len = PrefixLen::Some(0);
+            let mut prefix_len = WordMatch::None;
             let mut found_multiple = false;
 
             // name of the object we're searching for, case folded so we can make case-insensitive
@@ -57,35 +58,33 @@ impl UnknownReference {
 
                 if needle_name == object_name {
                     // exact name match
-                    if prefix_len == PrefixLen::Exact {
+                    if prefix_len == WordMatch::Exact {
                         // we've found two exact name matches, we can't distinguish between them, give up
                         log::warn!(
-                            "Found multiple instances of name '{object_name}' while attempting \
+                            "Found multiple exact matches of name '{object_name}' while attempting \
                              to resolve reference, giving up"
                         );
                         return None;
                     } else {
                         best_match_id = Some(id);
-                        prefix_len = PrefixLen::Exact;
+                        prefix_len = WordMatch::Exact;
                         found_multiple = false;
                     }
-                } else if let PrefixLen::Some(current_best) = prefix_len {
-                    // partial name match, find out how much we have. this might be the entire needle
-                    // string but that isn't actually a case we need to handle separately, it's still
-                    // a partial match of a particular length
-                    let common_prefix = longest_common_prefix(&needle_name, &object_name);
-                    if common_prefix.len() > current_best {
-                        prefix_len = PrefixLen::Some(common_prefix.len());
-                        found_multiple = false;
-                        best_match_id = Some(id);
-                    } else if common_prefix.len() == current_best {
+                } else if object_name.starts_with(&*needle_name) {
+                    if prefix_len == WordMatch::FullNeedleAsPrefix {
+                        // We could find an exact match later, keep going
                         found_multiple = true;
+                    } else {
+                        // some full prefix matches probably *shouldn't* be resolved automatically:
+                        // https://codeberg.org/ByteOfBrie/cheese-paper/issues/119
+                        prefix_len = WordMatch::FullNeedleAsPrefix;
+                        best_match_id = Some(id);
                     }
                 }
             }
 
             if found_multiple {
-                if prefix_len == PrefixLen::Exact {
+                if prefix_len == WordMatch::Exact {
                     log::error!(
                         "Found multiple exact matches late in the program, should be impossible"
                     )
@@ -98,30 +97,13 @@ impl UnknownReference {
             }
 
             match prefix_len {
-                PrefixLen::Exact => best_match_id.cloned(),
-                PrefixLen::Some(0) => {
+                WordMatch::Exact => best_match_id.cloned(),
+                WordMatch::FullNeedleAsPrefix => best_match_id.cloned(),
+                WordMatch::None => {
                     log::debug!(
                         "No prefixes found when attempting to resolve reference {needle_name}"
                     );
                     None
-                }
-                PrefixLen::Some(match_len) => {
-                    // We have a match, determine if it's good enough to return
-                    // TODO: simplify this, only return a match if it "fully" matches the name
-
-                    // This allows for either an entire match of the needle as a prefix (being the
-                    // only occurence of that prefix) OR a single match of that prefix. In hindsight,
-                    // it's probably a bad idea to treat *any* prefix that doesn't fully match
-                    // like this, although this logic will likely be useful for fuzzy matches later,
-                    // so it's getting committed
-                    if needle_name.len() == match_len || match_len > 5 {
-                        best_match_id.cloned()
-                    } else {
-                        log::debug!(
-                            "No good prefixes found when attempting to resolve reference {needle_name}"
-                        );
-                        None
-                    }
                 }
             }
         } else {
@@ -156,6 +138,7 @@ impl UnknownReference {
 
 /// Find the longest common prefix of two strings, character by character, should support unicode
 /// characters correctly.
+#[allow(dead_code)] // We'll probably use this in fuzzy search logic, keep it for now
 fn longest_common_prefix(s1: &str, s2: &str) -> String {
     let mut common_prefix = String::new();
     let mut chars1 = s1.chars();

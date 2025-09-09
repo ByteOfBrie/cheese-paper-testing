@@ -11,6 +11,7 @@ use crate::components::file_objects::utils::{
     add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
 };
 use crate::components::file_objects::{Character, Folder, Place, Scene};
+use crate::components::project::ExportOptions;
 use crate::ui::FileObjectEditor;
 use crate::util::CheeseError;
 use std::cell::RefCell;
@@ -825,6 +826,14 @@ pub trait FileObject: Debug {
     /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
     /// on export, everything gets included
     fn generate_outline(&self, depth: u32, export_string: &mut String, objects: &FileObjectStore);
+
+    fn generate_export(
+        &self,
+        current_depth: u32,
+        export_string: &mut String,
+        objects: &FileObjectStore,
+        export_options: &ExportOptions,
+    );
 
     /// Loads the file-specific metadata from the toml document
     ///

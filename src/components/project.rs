@@ -399,8 +399,8 @@ impl Project {
         None
     }
 
-    // Export an outline to a string (which can be written to a file)
-    pub fn export_outline(&mut self) -> String {
+    /// Export an outline to a string (which can be written to a file)
+    pub fn export_outline(&self) -> String {
         let mut export_string = String::new();
 
         // Property at the top
@@ -459,5 +459,56 @@ impl Project {
         }
 
         export_string
+    }
+
+    /// Export the story to a string (which can be written to a file)
+    fn export_text(&self) -> String {
+        let mut export_string = String::new();
+
+        for child_id in self
+            .objects
+            .get(&self.text_id)
+            .unwrap()
+            .borrow()
+            .get_base()
+            .children
+            .iter()
+        {
+            let testing_options = ExportOptions {
+                folder_title_depth: ExportDepth::Some(1),
+                scene_title_depth: ExportDepth::None,
+                insert_breaks: true,
+            };
+
+            self.objects
+                .get(child_id)
+                .unwrap()
+                .borrow()
+                .generate_export(1, &mut export_string, &self.objects, &testing_options);
+        }
+
+        export_string
+    }
+}
+
+pub struct ExportOptions {
+    pub folder_title_depth: ExportDepth,
+    pub scene_title_depth: ExportDepth,
+    pub insert_breaks: bool,
+}
+
+pub enum ExportDepth {
+    All,
+    Some(u32),
+    None,
+}
+
+impl ExportDepth {
+    pub fn should_display(&self, depth: u32) -> bool {
+        match self {
+            ExportDepth::All => true,
+            ExportDepth::Some(max_depth) => depth <= *max_depth,
+            ExportDepth::None => false,
+        }
     }
 }

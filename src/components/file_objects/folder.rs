@@ -1,8 +1,10 @@
 use crate::cheese_error;
 use crate::components::file_objects::base::{
-    BaseFileObject, CompileStatus, FileObject, metadata_extract_string, metadata_extract_u64,
+    BaseFileObject, CompileStatus, FileObject, IncludeOptions, metadata_extract_string,
+    metadata_extract_u64,
 };
 use crate::components::file_objects::utils::write_outline_property;
+use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::util::CheeseError;
 use std::ffi::OsString;
@@ -160,7 +162,7 @@ impl FileObject for Folder {
         export_string: &mut String,
         objects: &super::FileObjectStore,
     ) {
-        (self as &dyn FileObject).write_outline_title(depth, export_string);
+        (self as &dyn FileObject).write_title(depth, export_string);
 
         write_outline_property("summary", &self.metadata.summary, export_string);
         write_outline_property("notes", &self.metadata.notes, export_string);
@@ -171,6 +173,51 @@ impl FileObject for Folder {
                 export_string,
                 objects,
             );
+        }
+    }
+
+    fn generate_export(
+        &self,
+        depth: u32,
+        export_string: &mut String,
+        objects: &super::FileObjectStore,
+        export_options: &ExportOptions,
+    ) {
+        if self
+            .metadata
+            .compile_status
+            .contains(CompileStatus::INCLUDE)
+        {
+            let display_title = match self.metadata.compile_status.include_title() {
+                IncludeOptions::Always => true,
+                IncludeOptions::Default => export_options.folder_title_depth.should_display(depth),
+                IncludeOptions::Never => false,
+            };
+
+            if display_title {
+                (self as &dyn FileObject).write_title(depth, export_string);
+            }
+
+            for child_id in self.get_base().children.iter() {
+                objects.get(child_id).unwrap().borrow().generate_export(
+                    depth + 1,
+                    export_string,
+                    objects,
+                    export_options,
+                );
+            }
+
+            let include_break = match self.metadata.compile_status.break_at_end() {
+                IncludeOptions::Always => true,
+                IncludeOptions::Default => export_options.insert_breaks,
+                IncludeOptions::Never => false,
+            };
+
+            // TODO: only include breaks when needed (probably should actually set
+            // a flag or return this state and then let the next write handle it)
+            if include_break {
+                export_string.push_str("----\n\n");
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
 use crate::components::file_objects::utils::write_outline_property;
+use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::util::CheeseError;
 use std::fs::create_dir;
@@ -145,7 +146,7 @@ impl FileObject for Place {
         export_string: &mut String,
         objects: &super::FileObjectStore,
     ) {
-        (self as &dyn FileObject).write_outline_title(depth, export_string);
+        (self as &dyn FileObject).write_title(depth, export_string);
 
         write_outline_property("connection", &self.metadata.connection, export_string);
         write_outline_property("description", &self.metadata.description, export_string);
@@ -160,6 +161,17 @@ impl FileObject for Place {
                 objects,
             );
         }
+    }
+
+    /// Places will not be included in the text export, nothing to do
+    fn generate_export(
+        &self,
+        _depth: u32,
+        _export_string: &mut String,
+        _objects: &super::FileObjectStore,
+        _export_options: &ExportOptions,
+    ) {
+        // it's fine to call this, we just don't do anything
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

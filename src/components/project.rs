@@ -250,7 +250,11 @@ impl Project {
             objects: descendents,
         };
 
-        project.load_metadata()?;
+        let metadata_modified = project.load_metadata()?;
+        if metadata_modified {
+            project.file.modified = true
+        }
+
         project.add_object(Box::new(RefCell::new(text)));
         project.add_object(Box::new(RefCell::new(characters)));
         project.add_object(Box::new(RefCell::new(worldbuilding)));

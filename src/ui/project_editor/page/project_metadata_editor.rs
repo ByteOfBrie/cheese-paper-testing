@@ -64,7 +64,7 @@ impl Project {
         });
     }
 
-    fn process_response(&mut self, response: &egui::Response) {
+    pub fn process_response(&mut self, response: &egui::Response) {
         if response.changed() {
             self.file.modified = true;
         }

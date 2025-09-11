@@ -331,12 +331,14 @@ impl Project {
 
         self.toml_header["export.include_all_folder_titles"] =
             toml_edit::value(self.metadata.export.include_all_folder_titles);
-        self.toml_header["export.include_folder_title_depth"] =
-            toml_edit::value(self.metadata.export.include_folder_title_depth as i64);
+        self.toml_header["export.include_folder_title_depth"] = toml_edit::value(
+            u64_to_i64_drop_msb(self.metadata.export.include_folder_title_depth),
+        );
         self.toml_header["export.include_all_scene_files"] =
             toml_edit::value(self.metadata.export.include_all_scene_titles);
-        self.toml_header["export.include_scene_title_depth"] =
-            toml_edit::value(self.metadata.export.include_scene_title_depth as i64);
+        self.toml_header["export.include_scene_title_depth"] = toml_edit::value(
+            u64_to_i64_drop_msb(self.metadata.export.include_scene_title_depth),
+        );
         self.toml_header["export.insert_break_at_end"] =
             toml_edit::value(self.metadata.export.insert_break_at_end);
     }
@@ -561,6 +563,11 @@ impl Project {
 
         export_string
     }
+}
+
+fn u64_to_i64_drop_msb(val: u64) -> i64 {
+    const MSB_MASK: u64 = u64::MAX >> 1;
+    (val & MSB_MASK) as i64
 }
 
 pub struct ExportOptions {

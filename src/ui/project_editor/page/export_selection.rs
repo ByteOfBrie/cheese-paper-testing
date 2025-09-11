@@ -16,7 +16,7 @@ impl Project {
         egui::Grid::new("Export Options")
             .num_columns(2).spacing(Vec2{x: 5.0, y:10.0})
             .show(ui, |ui| {
-                ui.checkbox(
+                let response = ui.checkbox(
                     &mut self.metadata.export.include_all_folder_titles,
                     "Include All Folder Titles",
                 )
@@ -24,6 +24,7 @@ impl Project {
                     "If this is checked, the title from every folder will be included \
                     in the export (as headings)",
                 );
+                self.process_response(&response);
                 ui.end_row();
 
                 const FOLDER_DEPTH_MESSAGE: &str = "If the previous checkbox is unset, this sets the \
@@ -40,14 +41,15 @@ impl Project {
 
                 // Same enable conditions, but in a separate block so egui can do the grid properly
                 ui.add_enabled_ui(!self.metadata.export.include_all_folder_titles, |ui| {
-                    ui.add(egui::DragValue::new(
+                    let response = ui.add(egui::DragValue::new(
                         &mut self.metadata.export.include_folder_title_depth,
                     ));
+                    self.process_response(&response);
                 });
                 ui.end_row();
 
 
-                ui.checkbox(
+                let response = ui.checkbox(
                     &mut self.metadata.export.include_all_scene_titles,
                     "Include All Scene Titles",
                 )
@@ -55,6 +57,7 @@ impl Project {
                     "If checked, the title of every scene will be included \
                     in the export (as headings)",
                 );
+                self.process_response(&response);
                 ui.end_row();
 
                 const SCENE_DEPTH_MESSAGE: &str = "If the previous checkbox is unset, this sets the \
@@ -71,17 +74,19 @@ impl Project {
 
                 // Same enable conditions, but in a separate block so egui can do the grid properly
                 ui.add_enabled_ui(!self.metadata.export.include_all_scene_titles, |ui| {
-                    ui.add(egui::DragValue::new(
+                    let response = ui.add(egui::DragValue::new(
                         &mut self.metadata.export.include_scene_title_depth,
                     ));
+                    self.process_response(&response);
                 });
                 ui.end_row();
 
-                ui.checkbox(
+                let response = ui.checkbox(
                     &mut self.metadata.export.insert_break_at_end,
                     "Insert break between consecutive scenes",
                 ).on_hover_text("If checked, insert break (horizontal line) between scenes. If this is \
                     not set, two consecutive scenes will only have a newline in the final export");
+                self.process_response(&response);
             });
     }
 }

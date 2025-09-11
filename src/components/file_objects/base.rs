@@ -280,6 +280,20 @@ pub fn metadata_extract_string(
     })
 }
 
+pub fn metadata_extract_bool(
+    table: &DocumentMut,
+    field_name: &str,
+) -> Result<Option<bool>, CheeseError> {
+    Ok(match table.get(field_name) {
+        Some(value) => Some(
+            value
+                .as_bool()
+                .ok_or_else(|| cheese_error!("{field_name} was not bool"))?,
+        ),
+        None => None,
+    })
+}
+
 /// Reads the contents of a file from disk
 pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String), CheeseError> {
     let extension = match file_to_read.extension() {

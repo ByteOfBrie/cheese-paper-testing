@@ -17,7 +17,8 @@ use std::rc::Rc;
 use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
 
 use crate::components::file_objects::base::{
-    FileID, FileObjectCreation, load_base_metadata, metadata_extract_string,
+    FileID, FileObjectCreation, load_base_metadata, metadata_extract_bool, metadata_extract_string,
+    metadata_extract_u64,
 };
 
 /// An entire project. This is somewhat file_object like, but we don't implement everything,
@@ -41,6 +42,33 @@ pub struct ProjectMetadata {
     pub genre: String,
     pub author: String,
     pub email: String,
+
+    pub export: ProjectExportSettings,
+}
+
+#[derive(Debug)]
+pub struct ProjectExportSettings {
+    pub include_all_folder_titles: bool,
+    /// how many levels deep to include folder titles, ignored if include_all_folder_titles is set
+    pub include_folder_title_depth: u64,
+
+    pub include_all_scene_titles: bool,
+    /// how many levels deep to include scene titles, ignored if include_all_scene_titles is set
+    pub include_scene_title_depth: u64,
+
+    pub insert_break_at_end: bool,
+}
+
+impl Default for ProjectExportSettings {
+    fn default() -> Self {
+        Self {
+            include_all_folder_titles: false,
+            include_folder_title_depth: 1,
+            include_all_scene_titles: false,
+            include_scene_title_depth: 1,
+            insert_break_at_end: true,
+        }
+    }
 }
 
 impl ProjectMetadata {
@@ -296,6 +324,17 @@ impl Project {
         self.toml_header["genre"] = toml_edit::value(&self.metadata.genre);
         self.toml_header["author"] = toml_edit::value(&self.metadata.author);
         self.toml_header["email"] = toml_edit::value(&self.metadata.email);
+
+        self.toml_header["export.include_all_folder_titles"] =
+            toml_edit::value(self.metadata.export.include_all_folder_titles);
+        self.toml_header["export.include_folder_title_depth"] =
+            toml_edit::value(self.metadata.export.include_folder_title_depth as i64);
+        self.toml_header["export.include_all_scene_files"] =
+            toml_edit::value(self.metadata.export.include_all_scene_titles);
+        self.toml_header["export.include_scene_title_depth"] =
+            toml_edit::value(self.metadata.export.include_scene_title_depth as i64);
+        self.toml_header["export.insert_break_at_end"] =
+            toml_edit::value(self.metadata.export.insert_break_at_end);
     }
 
     pub fn get_path(&self) -> PathBuf {
@@ -334,6 +373,35 @@ impl Project {
 
         match metadata_extract_string(&self.toml_header, "email")? {
             Some(email) => self.metadata.email = email,
+            None => modified = true,
+        }
+
+        match metadata_extract_bool(&self.toml_header, "export.include_all_folder_titles")? {
+            Some(val) => self.metadata.export.include_all_folder_titles = val,
+            None => modified = true,
+        }
+
+        match metadata_extract_u64(
+            &self.toml_header,
+            "export.include_folder_title_depth",
+            false,
+        )? {
+            Some(val) => self.metadata.export.include_folder_title_depth = val,
+            None => modified = true,
+        }
+
+        match metadata_extract_bool(&self.toml_header, "export.include_all_scene_files")? {
+            Some(val) => self.metadata.export.include_all_scene_titles = val,
+            None => modified = true,
+        }
+
+        match metadata_extract_u64(&self.toml_header, "export.include_scene_title_depth", false)? {
+            Some(val) => self.metadata.export.include_scene_title_depth = val,
+            None => modified = true,
+        }
+
+        match metadata_extract_bool(&self.toml_header, "export.insert_break_at_end")? {
+            Some(val) => self.metadata.export.insert_break_at_end = val,
             None => modified = true,
         }
 

@@ -140,7 +140,7 @@ impl dyn FileObject {
     }
 
     /// Called by all of the generate_outline functions, keeps the formatting consistent
-    pub fn write_title(&self, depth: u32, export_string: &mut String) {
+    pub fn write_title(&self, depth: u64, export_string: &mut String) {
         // file object title (at the appropriate header level)
         for _ in 0..depth {
             export_string.push('#');

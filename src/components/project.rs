@@ -584,12 +584,12 @@ pub struct ExportOptions {
 
 pub enum ExportDepth {
     All,
-    Some(u32),
+    Some(u64),
     None,
 }
 
 impl ExportDepth {
-    pub fn should_display(&self, depth: u32) -> bool {
+    pub fn should_display(&self, depth: u64) -> bool {
         match self {
             ExportDepth::All => true,
             ExportDepth::Some(max_depth) => depth <= *max_depth,

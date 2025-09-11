@@ -110,7 +110,7 @@ impl FileObject for Scene {
 
     fn generate_outline(
         &self,
-        depth: u32,
+        depth: u64,
         export_string: &mut String,
         _objects: &super::FileObjectStore,
     ) {
@@ -123,7 +123,7 @@ impl FileObject for Scene {
 
     fn generate_export(
         &self,
-        depth: u32,
+        depth: u64,
         export_string: &mut String,
         _objects: &super::FileObjectStore,
         export_options: &ExportOptions,

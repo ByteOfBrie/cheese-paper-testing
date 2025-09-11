@@ -141,7 +141,7 @@ impl FileObject for Place {
 
     fn generate_outline(
         &self,
-        depth: u32,
+        depth: u64,
         export_string: &mut String,
         objects: &super::FileObjectStore,
     ) {

@@ -848,7 +848,7 @@ pub trait FileObject: Debug {
     /// Display the outline, writing all relevant non-prose information we have to a single
     /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
     /// on export, everything gets included
-    fn generate_outline(&self, depth: u32, export_string: &mut String, objects: &FileObjectStore);
+    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore);
 
     /// Generate an export of story text, will be overridden by objects that actually generate
     /// (folder and scene)
@@ -857,7 +857,7 @@ pub trait FileObject: Debug {
     /// `true` if the next function should include a break
     fn generate_export(
         &self,
-        _current_depth: u32,
+        _current_depth: u64,
         _export_string: &mut String,
         _objects: &FileObjectStore,
         _export_options: &ExportOptions,

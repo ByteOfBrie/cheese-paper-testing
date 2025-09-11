@@ -14,6 +14,7 @@ use crate::ui::project_tracker::ProjectTracker;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
+use std::path::PathBuf;
 
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
@@ -49,7 +50,7 @@ pub struct ProjectEditor {
     /// in the project metadata editor as well
     title_needs_update: bool,
 
-    editor_context: EditorContext,
+    pub editor_context: EditorContext,
 
     file_event_rx: WatcherReceiver,
 
@@ -88,7 +89,10 @@ pub struct EditorContext {
     pub search: Search,
     pub stores: Stores,
 
-    // version number. increment to trigger a project-wide formatting refresh
+    /// Duplicates the value from state.data, which is then more recent
+    pub last_export_folder: PathBuf,
+
+    /// version number. increment to trigger a project-wide formatting refresh
     pub version: usize,
 }
 
@@ -338,6 +342,11 @@ impl ProjectEditor {
                                 {
                                     log::error!("Error while attempting to write outline: {err}");
                                 }
+
+                                state.data.last_export_folder = export_location
+                                    .parent()
+                                    .map(|val| val.to_path_buf())
+                                    .unwrap_or_default();
                             }
                         }
 
@@ -602,11 +611,14 @@ impl ProjectEditor {
         }
     }
 
+    // last_export_folder probably should be wrapped in another object but I don't have a good object
+    // to wrap it in, so it's here for now
     pub fn new(
         project: Project,
         open_tab_ids: Vec<String>,
         dictionary: Option<Dictionary>,
         settings: Settings,
+        last_export_folder: PathBuf,
     ) -> Self {
         // this might later get wrapped in an optional block or something but not worth it right now
         let (mut watcher, file_event_rx) =
@@ -645,6 +657,7 @@ impl ProjectEditor {
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
                 stores: Stores::default(),
+                last_export_folder,
                 version: 0,
             },
             file_event_rx,

@@ -277,6 +277,16 @@ impl eframe::App for CheesePaperApp {
 
                 let current_time = Instant::now();
                 if current_time.duration_since(self.last_save) > Duration::from_secs(5) {
+                    // Slightly hacky, but write the data back into the editor state with every
+                    // autosave. The settings object was put into a refcell and actually included in
+                    // the ctx, but this is easy and good enough for now
+                    if self.state.data.last_export_folder
+                        != project_editor.editor_context.last_export_folder
+                    {
+                        self.state.data.last_export_folder =
+                            project_editor.editor_context.last_export_folder.clone()
+                    }
+
                     project_editor.save();
                     self.last_save = current_time;
                 }
@@ -536,6 +546,7 @@ impl CheesePaperApp {
                                         Vec::new(),
                                         self.dictionary.clone(),
                                         self.state.settings.clone(),
+                                        self.state.data.last_export_folder.clone(),
                                     ));
                                 }
                                 Err(err) => {

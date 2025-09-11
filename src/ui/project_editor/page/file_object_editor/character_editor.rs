@@ -45,7 +45,6 @@ impl Character {
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
-                    .char_limit(50)
                     .id_salt("name")
                     .hint_text("Character Name")
                     .desired_width(f32::INFINITY),

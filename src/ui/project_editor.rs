@@ -325,7 +325,7 @@ impl ProjectEditor {
                         if ui.button("Export Outline").clicked() {
                             let project_title = &self.project.base_metadata.name;
                             let suggested_title =
-                                format!("{}_outline", process_name_for_filename(project_title));
+                                format!("{}_outline.md", process_name_for_filename(project_title));
                             let export_location_option = FileDialog::new()
                                 .set_title(format!("Export {project_title} Outline"))
                                 .set_directory(&state.data.last_export_folder)
@@ -334,7 +334,7 @@ impl ProjectEditor {
 
                             if let Some(export_location) = export_location_option {
                                 let outline_contents = self.project.export_outline();
-                                if let Err(err) = std::fs::write(export_location, outline_contents)
+                                if let Err(err) = std::fs::write(&export_location, outline_contents)
                                 {
                                     log::error!("Error while attempting to write outline: {err}");
                                 }

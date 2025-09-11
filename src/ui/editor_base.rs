@@ -599,25 +599,21 @@ impl CheesePaperApp {
                 };
 
                 // load tabs
-                self.project_editor = match self
+                let open_tabs = self
                     .state
                     .data
                     .last_open_file_ids
                     .get(&*project.base_metadata.id)
-                {
-                    Some(open_tabs) => Some(ProjectEditor::new(
-                        project,
-                        open_tabs.clone(),
-                        self.dictionary.clone(),
-                        self.state.settings.clone(),
-                    )),
-                    None => Some(ProjectEditor::new(
-                        project,
-                        Vec::new(),
-                        self.dictionary.clone(),
-                        self.state.settings.clone(),
-                    )),
-                };
+                    .cloned()
+                    .unwrap_or_default();
+
+                self.project_editor = Some(ProjectEditor::new(
+                    project,
+                    open_tabs.clone(),
+                    self.dictionary.clone(),
+                    self.state.settings.clone(),
+                    self.state.data.last_export_folder.clone(),
+                ));
 
                 Ok(())
             }

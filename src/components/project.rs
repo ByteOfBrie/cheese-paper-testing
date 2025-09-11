@@ -536,8 +536,10 @@ impl Project {
     }
 
     /// Export the story to a string (which can be written to a file)
-    fn export_text(&self) -> String {
+    pub fn export_text(&self, export_options: ExportOptions) -> String {
         let mut export_string = String::new();
+
+        let mut include_break = false;
 
         for child_id in self
             .objects
@@ -548,13 +550,8 @@ impl Project {
             .children
             .iter()
         {
-            let testing_options = ExportOptions {
-                folder_title_depth: ExportDepth::Some(1),
-                scene_title_depth: ExportDepth::None,
-                insert_breaks: true,
-            };
-
-            self.objects
+            include_break = self
+                .objects
                 .get(child_id)
                 .unwrap()
                 .borrow()
@@ -562,8 +559,8 @@ impl Project {
                     1,
                     &mut export_string,
                     &self.objects,
-                    &testing_options,
-                    false,
+                    &export_options,
+                    include_break,
                 );
         }
 

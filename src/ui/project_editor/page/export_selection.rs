@@ -1,6 +1,13 @@
 use egui::Vec2;
+use rfd::FileDialog;
 
-use crate::ui::prelude::*;
+use crate::{
+    components::{
+        file_objects::utils::process_name_for_filename,
+        project::{ExportDepth, ExportOptions},
+    },
+    ui::prelude::*,
+};
 
 //This probably shouldn't be a part of Project but it's easy enough right now
 impl Project {
@@ -10,8 +17,8 @@ impl Project {
             .response
     }
 
-    fn show_export_selection(&mut self, ui: &mut egui::Ui, _ctx: &mut EditorContext) {
-        ui.label("Project Export Selction");
+    fn show_export_selection(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+        ui.label("Project Export Selection");
 
         egui::Grid::new("Export Options")
             .num_columns(2).spacing(Vec2{x: 5.0, y:10.0})
@@ -88,5 +95,51 @@ impl Project {
                     not set, two consecutive scenes will only have a newline in the final export");
                 self.process_response(&response);
             });
+
+        ui.add_space(40.0);
+
+        if ui.button("Export Story Text").clicked() {
+            let project_title = &self.base_metadata.name;
+            let suggested_title = format!("{}.md", process_name_for_filename(project_title));
+            let export_location_option = FileDialog::new()
+                .set_title(format!("Export {project_title}"))
+                .set_directory(&ctx.last_export_folder)
+                .set_file_name(suggested_title)
+                .save_file();
+
+            let folder_title_depth = if self.metadata.export.include_all_folder_titles {
+                ExportDepth::All
+            } else if self.metadata.export.include_folder_title_depth == 0 {
+                ExportDepth::None
+            } else {
+                ExportDepth::Some(self.metadata.export.include_folder_title_depth)
+            };
+
+            let scene_title_depth = if self.metadata.export.include_all_scene_titles {
+                ExportDepth::All
+            } else if self.metadata.export.include_scene_title_depth == 0 {
+                ExportDepth::None
+            } else {
+                ExportDepth::Some(self.metadata.export.include_scene_title_depth)
+            };
+
+            let export_options = ExportOptions {
+                folder_title_depth,
+                scene_title_depth,
+                insert_breaks: self.metadata.export.insert_break_at_end,
+            };
+
+            if let Some(export_location) = export_location_option {
+                let export_contents = self.export_text(export_options);
+                if let Err(err) = std::fs::write(&export_location, export_contents) {
+                    log::error!("Error while attempting to write outline: {err}");
+                }
+
+                ctx.last_export_folder = export_location
+                    .parent()
+                    .map(|val| val.to_path_buf())
+                    .unwrap_or_default();
+            }
+        }
     }
 }

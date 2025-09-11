@@ -1,6 +1,5 @@
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
 use crate::components::file_objects::utils::write_outline_property;
-use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::util::CheeseError;
 use std::{collections::HashMap, path::PathBuf};
@@ -167,17 +166,6 @@ impl FileObject for Character {
         write_outline_property("conflict", &self.metadata.conflict, export_string);
         write_outline_property("habits", &self.metadata.habits, export_string);
         write_outline_property("notes", &self.metadata.notes, export_string);
-    }
-
-    /// Characters will not be included in the text export, nothing to do
-    fn generate_export(
-        &self,
-        _depth: u32,
-        _export_string: &mut String,
-        _objects: &super::FileObjectStore,
-        _export_options: &ExportOptions,
-    ) {
-        // it's fine to call this, we just don't do anything
     }
 
     fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {

@@ -558,7 +558,13 @@ impl Project {
                 .get(child_id)
                 .unwrap()
                 .borrow()
-                .generate_export(1, &mut export_string, &self.objects, &testing_options);
+                .generate_export(
+                    1,
+                    &mut export_string,
+                    &self.objects,
+                    &testing_options,
+                    false,
+                );
         }
 
         export_string

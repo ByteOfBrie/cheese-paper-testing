@@ -182,7 +182,8 @@ impl FileObject for Folder {
         export_string: &mut String,
         objects: &super::FileObjectStore,
         export_options: &ExportOptions,
-    ) {
+        include_break: bool,
+    ) -> bool {
         if self
             .metadata
             .compile_status
@@ -194,30 +195,43 @@ impl FileObject for Folder {
                 IncludeOptions::Never => false,
             };
 
+            // Keep track of whether the next scene will start with a break, which only ever gets
+            // rendered in scenes
+            let mut include_break_next = include_break;
+
             if display_title {
                 (self as &dyn FileObject).write_title(depth, export_string);
+                // We've written a title, so the requested break has been taken care of
+                include_break_next = false;
             }
 
+            // We don't actually have enough information here to decide to include a break, even
+            // though it seems like we should. For example, we might have `include_break` set here
+            // and no title displayed, but the next scene could actually start with a title, in which
+            // case we shouldn't include the break here. Since we don't have any information about
+            // what comes next, we just have to wait for the title to be drawn
+
             for child_id in self.get_base().children.iter() {
-                objects.get(child_id).unwrap().borrow().generate_export(
+                // Keep passing the include_break status forwards along with any updates to it
+                include_break_next = objects.get(child_id).unwrap().borrow().generate_export(
                     depth + 1,
                     export_string,
                     objects,
                     export_options,
+                    include_break_next,
                 );
             }
 
-            let include_break = match self.metadata.compile_status.break_at_end() {
+            let folder_include_break_next = match self.metadata.compile_status.break_at_end() {
                 IncludeOptions::Always => true,
                 IncludeOptions::Default => export_options.insert_breaks,
                 IncludeOptions::Never => false,
             };
 
-            // TODO: only include breaks when needed (probably should actually set
-            // a flag or return this state and then let the next write handle it)
-            if include_break {
-                export_string.push_str("----\n\n");
-            }
+            // Request a break if either the final child or this folder should have a break
+            include_break_next || folder_include_break_next
+        } else {
+            include_break
         }
     }
 

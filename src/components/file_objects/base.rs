@@ -850,13 +850,22 @@ pub trait FileObject: Debug {
     /// on export, everything gets included
     fn generate_outline(&self, depth: u32, export_string: &mut String, objects: &FileObjectStore);
 
+    /// Generate an export of story text, will be overridden by objects that actually generate
+    /// (folder and scene)
+    ///
+    /// `include_break` adds a break at the beginning if appropriate, and this function returns
+    /// `true` if the next function should include a break
     fn generate_export(
         &self,
-        current_depth: u32,
-        export_string: &mut String,
-        objects: &FileObjectStore,
-        export_options: &ExportOptions,
-    );
+        _current_depth: u32,
+        _export_string: &mut String,
+        _objects: &FileObjectStore,
+        _export_options: &ExportOptions,
+        include_break: bool,
+    ) -> bool {
+        // we don't do anything by default, but we want to pass on the include
+        include_break
+    }
 
     /// Loads the file-specific metadata from the toml document
     ///

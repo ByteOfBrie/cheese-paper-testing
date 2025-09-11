@@ -127,7 +127,8 @@ impl FileObject for Scene {
         export_string: &mut String,
         _objects: &super::FileObjectStore,
         export_options: &ExportOptions,
-    ) {
+        include_break: bool,
+    ) -> bool {
         if self
             .metadata
             .compile_status
@@ -141,21 +142,29 @@ impl FileObject for Scene {
 
             if display_title {
                 (self as &dyn FileObject).write_title(depth, export_string);
+            } else if include_break {
+                // We only include a break if the previous scene/document requested it *and* we
+                // didn't already include a heading (title)
+                export_string.push_str("----\n\n");
             }
 
+            // This should probably eventually be split into a `get_body_export` and `get_body_save`
+            // function once those are different (probably for in-text-notes)
             export_string.push_str(&self.get_body());
 
-            let include_break = match self.metadata.compile_status.break_at_end() {
+            while !export_string.ends_with("\n\n") {
+                export_string.push('\n');
+            }
+
+            // Determine if there should be a break after this scene and return it
+            match self.metadata.compile_status.break_at_end() {
                 IncludeOptions::Always => true,
                 IncludeOptions::Default => export_options.insert_breaks,
                 IncludeOptions::Never => false,
-            };
-
-            // TODO: only include breaks when needed (probably should actually set
-            // a flag or return this state and then let the next write handle it)
-            if include_break {
-                export_string.push_str("----\n\n");
             }
+        } else {
+            // We didn't do anything, keep the same state
+            include_break
         }
     }
 

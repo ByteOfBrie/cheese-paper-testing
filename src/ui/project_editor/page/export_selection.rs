@@ -26,9 +26,11 @@ impl Project {
                 );
                 ui.end_row();
 
-                const FOLDER_DEPTH_MESSAGE: &str = "If all folder titles are not being included, \
-                    the depth at which they will be included. 0 means no folder titles will be included, \
-                    1 means that only top level folder titles will be included, etc.";
+                const FOLDER_DEPTH_MESSAGE: &str = "If the previous checkbox is unset, this sets the \
+                    max depth in the tree where folders will have their titles included (as headings).
+                    0 means no folders will have their titles included as headings
+                    1 means that only top level folders will have their titles included
+                    2 means that folders at the top level or directly inside top level folders";
 
                 ui.add_enabled_ui(!self.metadata.export.include_all_folder_titles, |ui| {
                     ui.label("Include Folder Title Depth  ℹ")
@@ -50,15 +52,16 @@ impl Project {
                     "Include All Scene Titles",
                 )
                 .on_hover_text(
-                    "If this is checked, the title of every scene will be included \
+                    "If checked, the title of every scene will be included \
                     in the export (as headings)",
                 );
                 ui.end_row();
 
-
-                const SCENE_DEPTH_MESSAGE: &str = "If all scene titles are not being included, \
-                    the depth at which they will be included. 0 means no scene titles will be included, \
-                    1 means that only top level scene titles will be included, etc.";
+                const SCENE_DEPTH_MESSAGE: &str = "If the previous checkbox is unset, this sets the \
+                    max depth in the tree where scenes will have their titles included (as headings).
+                    0 means no scenes will have their titles included as headings
+                    1 means that only top level scenes will have their titles included
+                    2 means that scenes at the top level or directly inside top level folders";
 
                 ui.add_enabled_ui(!self.metadata.export.include_all_scene_titles, |ui| {
                     ui.label("Include Scene Title Depth  ℹ")
@@ -76,8 +79,9 @@ impl Project {
 
                 ui.checkbox(
                     &mut self.metadata.export.insert_break_at_end,
-                    "Insert line breaks between consecutive scenes",
-                );
+                    "Insert break between consecutive scenes",
+                ).on_hover_text("If checked, insert break (horizontal line) between scenes. If this is \
+                    not set, two consecutive scenes will only have a newline in the final export");
             });
     }
 }

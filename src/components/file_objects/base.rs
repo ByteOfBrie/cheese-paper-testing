@@ -321,7 +321,7 @@ pub fn load_base_metadata(
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,
 ) -> Result<(), CheeseError> {
-    match metadata_extract_u64(metadata_table, "version", false)? {
+    match metadata_extract_u64(metadata_table, "file_format_version", false)? {
         Some(version) => metadata_object.version = version,
         None => file_info.modified = true,
     }
@@ -818,7 +818,7 @@ impl BaseFileObject {
     }
 
     fn write_metadata(&mut self) {
-        self.toml_header["version"] = toml_edit::value(self.metadata.version as i64);
+        self.toml_header["file_format_version"] = toml_edit::value(self.metadata.version as i64);
         self.toml_header["name"] = toml_edit::value(&self.metadata.name);
         self.toml_header["id"] = toml_edit::value(&*self.metadata.id);
     }

@@ -319,7 +319,8 @@ impl Project {
     }
 
     fn write_metadata(&mut self) {
-        self.toml_header["version"] = toml_edit::value(self.base_metadata.version as i64);
+        self.toml_header["file_format_version"] =
+            toml_edit::value(self.base_metadata.version as i64);
         self.toml_header["name"] = toml_edit::value(&self.base_metadata.name);
         self.toml_header["id"] = toml_edit::value(&*self.base_metadata.id);
 

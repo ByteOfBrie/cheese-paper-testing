@@ -180,13 +180,13 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                 // Moves only make sense if the source and target are both file objects.
                 // This logic only allows for moving individual file objects,
                 if let Some(source) = drag_and_drop.source.first()
-                    && let Page::FileObject(source_file_id) = source
+                    && let Page::FileObject(moving_file_id) = source
                     && let Page::FileObject(target_file_id) = &drag_and_drop.target
                 {
                     // Don't move one of the roots
-                    if *source_file_id == editor.project.text_id
-                        || *source_file_id == editor.project.characters_id
-                        || *source_file_id == editor.project.worldbuilding_id
+                    if *moving_file_id == editor.project.text_id
+                        || *moving_file_id == editor.project.characters_id
+                        || *moving_file_id == editor.project.worldbuilding_id
                     {
                         continue;
                     }
@@ -245,10 +245,14 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                     };
 
                     for object in editor.project.objects.values() {
-                        if object.borrow().get_base().children.contains(source_file_id) {
+                        if object.borrow().get_base().children.contains(moving_file_id) {
+                            // make sure we do this separately from the call so we don't borrow
+                            // this object
+                            let source_file_id = object.borrow().id().clone();
+
                             match move_child(
-                                source_file_id,
-                                object.borrow().id(),
+                                moving_file_id,
+                                &source_file_id,
                                 target_file_id,
                                 index,
                                 &editor.project.objects,
@@ -266,8 +270,8 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                     // If the move above was successful, we would continue, so this will only be
                     // reached in error scenarios
                     log::error!(
-                        "failed to move {source_file_id} to {target_file_id}: could not find source \
-                        object parent in tree"
+                        "failed to move {moving_file_id} to {target_file_id}: could not find moving \
+                        object's parent"
                     );
                 }
             }

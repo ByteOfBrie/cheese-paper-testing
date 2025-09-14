@@ -244,35 +244,23 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                         }
                     };
 
-                    for object in editor.project.objects.values() {
-                        if object.borrow().get_base().children.contains(moving_file_id) {
-                            // make sure we do this separately from the call so we don't borrow
-                            // this object
-                            let source_file_id = object.borrow().id().clone();
-
-                            match move_child(
+                    match editor.project.find_object_parent(moving_file_id) {
+                        Some(source_file_id) => {
+                            if let Err(err) = move_child(
                                 moving_file_id,
                                 &source_file_id,
                                 target_file_id,
                                 index,
                                 &editor.project.objects,
                             ) {
-                                Ok(()) => continue,
-                                Err(err) => {
-                                    log::error!(
-                                        "error encountered while moving file object: {err:?}"
-                                    );
-                                }
+                                log::error!("error encountered while moving file object: {err:?}");
                             }
                         }
+                        None => log::error!(
+                            "failed to move {moving_file_id} to {target_file_id}: could not find moving \
+                            object's parent"
+                        ),
                     }
-
-                    // If the move above was successful, we would continue, so this will only be
-                    // reached in error scenarios
-                    log::error!(
-                        "failed to move {moving_file_id} to {target_file_id}: could not find moving \
-                        object's parent"
-                    );
                 }
             }
             _ => {}

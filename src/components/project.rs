@@ -478,6 +478,17 @@ impl Project {
         None
     }
 
+    /// Given a FileID, try to find the FileID of its parent
+    pub fn find_object_parent(&self, needle: &FileID) -> Option<FileID> {
+        for object in self.objects.values() {
+            if object.borrow().get_base().children.contains(needle) {
+                return Some(object.borrow().id().clone());
+            }
+        }
+
+        None
+    }
+
     /// Export an outline to a string (which can be written to a file)
     pub fn export_outline(&self) -> String {
         let mut export_string = String::new();

@@ -695,7 +695,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                     //
                     // There may still be gaps at this point, but they'll get filled in at the end
                     // by `fix_indexing`
-                    for (index, file) in indexed_files.drain(..) {
+                    for (index, file) in indexed_files {
                         // We process every dir but only some files
                         if !file.is_dir() {
                             // Check for extension

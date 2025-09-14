@@ -172,6 +172,28 @@ impl dyn FileObject {
         }
     }
 
+    /// Reorder the children based on their index (self reported in basename), followed by a call to
+    /// fix_indexing
+    pub fn rescan_indexing(&mut self, objects: &FileObjectStore) {
+        self.get_base_mut().children.sort_by_key(|child_id| {
+            match get_index_from_name(
+                &objects
+                    .get(child_id)
+                    .unwrap()
+                    .borrow()
+                    .get_base()
+                    .file
+                    .basename
+                    .to_string_lossy(),
+            ) {
+                Some(index) => index,
+                None => usize::MAX,
+            }
+        });
+
+        self.fix_indexing(objects);
+    }
+
     fn move_on_disk(
         &mut self,
         old_path: PathBuf,

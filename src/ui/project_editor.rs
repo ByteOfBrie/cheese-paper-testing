@@ -12,6 +12,7 @@ use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::path::PathBuf;
@@ -19,6 +20,8 @@ use std::path::PathBuf;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::TreeViewState;
+use notify::event::RenameMode;
+use notify::{EventKind, event::ModifyKind};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use rfd::FileDialog;
@@ -403,23 +406,63 @@ impl ProjectEditor {
         if let Ok(response) = self.file_event_rx.try_recv() {
             match response {
                 Ok(events) => {
+                    let mut file_objects_needing_rescan = HashSet::new();
+                    let mut found_events = false;
                     for event in events {
-                        use notify::EventKind;
+                        let mut git_event = false;
+                        for event_path in event.paths.iter() {
+                            if event_path.iter().any(|component| component == ".git") {
+                                git_event = true;
+                            }
+                        }
+                        if git_event {
+                            continue;
+                        }
+                        if let EventKind::Access(_) = event.kind {
+                            continue;
+                        }
+
+                        // We now have an event that isn't noise from .git or file opens:
+                        found_events = true;
+                        log::debug!("found event: {event:?}");
+
                         match event.kind {
                             EventKind::Create(_create_kind) => {
                                 self.process_modify_event(event);
                             }
-                            EventKind::Modify(_modify_kind) => {
+                            EventKind::Modify(ModifyKind::Data(_data_change)) => {
                                 self.process_modify_event(event);
+                            }
+                            EventKind::Modify(ModifyKind::Name(rename_mode)) => {
+                                if let Some(need_rescan_vec) =
+                                    self.process_rename_event(event, rename_mode)
+                                {
+                                    for need_rescan_id in need_rescan_vec {
+                                        file_objects_needing_rescan.insert(need_rescan_id);
+                                    }
+                                }
                             }
                             EventKind::Remove(_remove_kind) => {
                                 // Search for file_objects by looking through all of their
                                 // paths, we can't do better.
                                 // Might need to update remove_child function to check for
                                 // existence before deleting
+
+                                log::debug!("not (yet) processing deletion event: {event:?}");
                             }
                             _ => {}
                         }
+                    }
+                    for object_needing_rescan in file_objects_needing_rescan {
+                        self.project
+                            .objects
+                            .get(&object_needing_rescan)
+                            .unwrap()
+                            .borrow_mut()
+                            .rescan_indexing(&self.project.objects);
+                    }
+                    if found_events {
+                        log::debug!("finished processing events");
                     }
                 }
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
@@ -506,6 +549,8 @@ impl ProjectEditor {
                 return;
             }
 
+            log::debug!("processing modify events with path: {modify_path:?}");
+
             match self.project.find_object_by_path(modify_path) {
                 Some(id) => {
                     let file_object = self.project.objects.get(&id).unwrap();
@@ -590,6 +635,148 @@ impl ProjectEditor {
                 }
             };
         }
+    }
+
+    /// Processes rename events as best-effort, currently cannot handle complex cases well
+    ///
+    /// Returns a list of file objects that need to be rescanned for indexing
+    fn process_rename_event(
+        &mut self,
+        event: DebouncedEvent,
+        rename_mode: RenameMode,
+    ) -> Option<Vec<FileID>> {
+        if rename_mode != RenameMode::Both {
+            // Give up, we don't want to make assumptoins at this stage
+            //
+            // Long term, we can probably do better. If it's only "from", we can check for that
+            // file and treat it like a deletion. If it's just a "from", we can treat it like a
+            // deletion. If it's just a "to", we can check for file IDs (in which case we know the
+            // old path), and otherwise treat it like a creation
+            log::warn!(
+                "Processed rename event: {event:?}, but it does not contain both source and\
+                destination, cannot meaningfully continue processing"
+            );
+            return None;
+        }
+
+        let source_path = event
+            .paths
+            .first()
+            .expect("Rename event should have source");
+
+        let dest_path = event
+            .paths
+            .last()
+            .expect("Rename event should have destination");
+
+        if source_path == dest_path {
+            log::debug!("Rename event: {event:?} has the same source and dest, nothing to do");
+            return None;
+        }
+
+        let moving_file_id = match self.project.find_object_by_path(source_path) {
+            Some(fileid) => fileid,
+            None => {
+                log::debug!("Processed file rename for object with unknown source path: {event:?}");
+                return None;
+            }
+        };
+        let dest_name = dest_path.file_name().expect("dest should have a file name");
+
+        let source_directory = source_path
+            .parent()
+            .expect("source should have a directory");
+        let dest_directory = source_path.parent().expect("dest should have a directory");
+
+        let source_parent_file_id = match self.project.find_object_by_path(source_directory) {
+            Some(source_parent_id) => source_parent_id,
+            None => {
+                log::error!(
+                    "Tried to move object but could not find it's parent: {source_directory:?}. \
+                    Event: {event:?}"
+                );
+                return None;
+            }
+        };
+
+        // Easy case: the file has been renamed within the directory it's in
+        if source_directory == dest_directory {
+            let mut object = self
+                .project
+                .objects
+                .get(&moving_file_id)
+                .unwrap()
+                .borrow_mut();
+
+            // Update the filename
+            object.get_base_mut().file.basename = dest_name.to_owned();
+            // propagate that to any children
+            for child in object.children(&self.project.objects) {
+                child
+                    .borrow_mut()
+                    .process_path_update(object.get_path(), &self.project.objects);
+            }
+            // Currently, we don't do anything to cleanup the directory or filename in this case.
+            // It'll probably happen later, but we don't bother now (this is complicated enough already)
+            return Some(vec![source_parent_file_id]);
+        }
+
+        // More complicated case: the file has been moved to another part of the tree. We're basically
+        // processing a move, but without the actual move. This should probably be cleanup up later
+        let dest_file_id = match self.project.find_object_by_path(dest_directory) {
+            Some(dest_file_id) => dest_file_id,
+            None => {
+                log::warn!(
+                    "File object is now in an unknown directory: {dest_directory:?}, \
+                    unable to continue processing move/rename. Event: {event:?}"
+                );
+                return None;
+            }
+        };
+
+        // Remove the moving object from it's current parent
+        let source_parent = self
+            .project
+            .objects
+            .get(&source_parent_file_id)
+            .expect("objects should contain source file id");
+
+        let child_id_position = source_parent
+            .borrow()
+            .get_base()
+            .children
+            .iter()
+            .position(|val| moving_file_id == *val)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Children should only be removed from their parents.\
+                child id: {moving_file_id}, parent: {source_parent_file_id}"
+                )
+            });
+
+        let child_id_string = source_parent
+            .borrow_mut()
+            .get_base_mut()
+            .children
+            .remove(child_id_position);
+
+        let dest_parent = self.project.objects.get(&dest_file_id).unwrap();
+
+        // How do I find the proper place here?
+        // Move the object into the children of dest (at the proper place)
+        dest_parent
+            .borrow_mut()
+            .get_base_mut()
+            .children
+            .push(child_id_string);
+
+        let child = self.project.objects.get(&moving_file_id).unwrap();
+
+        child
+            .borrow_mut()
+            .process_path_update(dest_directory.to_path_buf(), &self.project.objects);
+
+        Some(vec![source_parent_file_id, dest_file_id])
     }
 
     fn set_editor_tab(&mut self, tab: &Page) {

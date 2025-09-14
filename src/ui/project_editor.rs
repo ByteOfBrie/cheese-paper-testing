@@ -443,12 +443,7 @@ impl ProjectEditor {
                                 }
                             }
                             EventKind::Remove(_remove_kind) => {
-                                // Search for file_objects by looking through all of their
-                                // paths, we can't do better.
-                                // Might need to update remove_child function to check for
-                                // existence before deleting
-
-                                log::debug!("not (yet) processing deletion event: {event:?}");
+                                self.process_delete_event(event);
                             }
                             _ => {}
                         }
@@ -777,6 +772,56 @@ impl ProjectEditor {
             .process_path_update(dest_directory.to_path_buf(), &self.project.objects);
 
         Some(vec![source_parent_file_id, dest_file_id])
+    }
+
+    fn process_delete_event(&mut self, event: DebouncedEvent) {
+        let delete_path = event
+            .paths
+            .first()
+            .expect("Rename event should have source");
+
+        let deleting_file_id = match self.project.find_object_by_path(delete_path) {
+            Some(deleting_file_id) => deleting_file_id,
+            None => return,
+        };
+
+        let parent_file_id = match self.project.find_object_parent(&deleting_file_id) {
+            Some(parent_file_id) => parent_file_id,
+            None => {
+                log::error!(
+                    "Could not remove file object: {deleting_file_id}: Could not find parent"
+                );
+                return;
+            }
+        };
+
+        let removed_child = self.project.objects.remove(&deleting_file_id).unwrap();
+
+        // We're misusing a function here, but it does what we want still. It assumes that the file
+        // still exists on disk, while we know it expressly doesn't. A bunch of errors will be generated
+        // and we can ignore all of them, since removal happens first
+        let _ = removed_child
+            .borrow_mut()
+            .remove_file_object(&mut self.project.objects);
+
+        let parent = self.project.objects.get(&parent_file_id).unwrap();
+
+        // Remove this from the list of children
+        let child_index = parent
+            .borrow()
+            .get_base()
+            .children
+            .iter()
+            .position(|id| *id == deleting_file_id)
+            .expect("child_id must be a child of this object");
+
+        parent
+            .borrow_mut()
+            .get_base_mut()
+            .children
+            .remove(child_index);
+
+        parent.borrow_mut().fix_indexing(&self.project.objects);
     }
 
     fn set_editor_tab(&mut self, tab: &Page) {

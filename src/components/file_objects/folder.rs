@@ -39,6 +39,8 @@ impl Folder {
         Ok(folder)
     }
 
+    /// Creates a top level folder (one that doesn't have an index) based on the name. The name will
+    /// be used directly in the metadata, but convereted to lowercase for the version on disk
     pub fn new_top_level(dirname: PathBuf, name: &str) -> Result<Self, CheeseError> {
         let mut folder = Self {
             base: BaseFileObject::new(dirname, None),
@@ -46,7 +48,7 @@ impl Folder {
         };
 
         folder.get_base_mut().metadata.name = name.to_string();
-        folder.get_base_mut().file.basename = OsString::from(name);
+        folder.get_base_mut().file.basename = OsString::from(name.to_lowercase());
 
         if let Err(err) = create_dir(folder.get_path()) {
             return Err(cheese_error!(

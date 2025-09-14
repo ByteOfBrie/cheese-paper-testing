@@ -292,10 +292,13 @@ impl dyn FileObject {
             };
         }
 
-        // Check if the filename is "correct", updating it if necessary
-        let calculated_filename = self.calculate_filename();
-        if self.get_base().file.basename != calculated_filename {
-            self.set_filename(calculated_filename, objects)?
+        // For everything that isn't a top level folder: check if the filename on disk matches
+        // the name, updating the file on disk if necessary
+        if self.get_base().index.is_some() {
+            let calculated_filename = self.calculate_filename();
+            if self.get_base().file.basename != calculated_filename {
+                self.set_filename(calculated_filename, objects)?
+            }
         }
 
         // Ensure `toml_header` has the up-to-date metadata

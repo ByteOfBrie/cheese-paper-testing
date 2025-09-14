@@ -498,7 +498,7 @@ impl ProjectEditor {
                 || relative_path.starts_with("worldbuilding"))
             {
                 if !relative_path.starts_with(".git") {
-                    // We expect a bunch of git events, but other events are unexpected
+                    // We expect a bunch of git events, but other events are unexpected, so log it
                     log::debug!(
                         "invalid modify/create path not in project folders: {modify_path:?}"
                     );

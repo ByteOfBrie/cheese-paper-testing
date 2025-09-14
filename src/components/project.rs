@@ -86,13 +86,17 @@ impl ProjectMetadata {
 
 const PROJECT_INFO_NAME: &str = "project.toml";
 
+/// Loads a special top level folder (e.g., "project/text/", "project/worldbuilding"), creating it if
+/// it doesn't already exist.
+///
+/// Name will be used directly in the metadata name, but will be converted to lowercase for the filename
 fn load_top_level_folder(
     project_path: &Path,
     name: &str,
 ) -> Result<(Folder, FileObjectStore), CheeseError> {
     log::debug!("loading top level folder: {name}");
 
-    let folder_path = &Path::join(project_path, name);
+    let folder_path = &Path::join(project_path, name.to_lowercase());
     if folder_path.exists() {
         let created_object = from_file(folder_path, None)
             .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
@@ -131,9 +135,9 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
-        let text = Folder::new_top_level(project_path.clone(), "text")?;
-        let characters = Folder::new_top_level(project_path.clone(), "characters")?;
-        let worldbuilding = Folder::new_top_level(project_path.clone(), "worldbuilding")?;
+        let text = Folder::new_top_level(project_path.clone(), "Text")?;
+        let characters = Folder::new_top_level(project_path.clone(), "Characters")?;
+        let worldbuilding = Folder::new_top_level(project_path.clone(), "Worldbuilding")?;
 
         let mut project = Self {
             base_metadata: FileObjectMetadata {
@@ -224,12 +228,12 @@ impl Project {
         };
 
         // Load or create folders
-        let (text, mut descendents) = load_top_level_folder(&path, "text")?;
+        let (text, mut descendents) = load_top_level_folder(&path, "Text")?;
 
-        let (characters, characters_descendents) = load_top_level_folder(&path, "characters")?;
+        let (characters, characters_descendents) = load_top_level_folder(&path, "Characters")?;
 
         let (worldbuilding, worldbuilding_descendents) =
-            load_top_level_folder(&path, "worldbuilding")?;
+            load_top_level_folder(&path, "Worldbuilding")?;
 
         log::debug!("Finished loading all project file objects, continuing");
 

@@ -103,13 +103,14 @@ fn test_basic_create_file_object() -> Result<(), CheeseError> {
 fn test_create_top_level_folder() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let text = Folder::new_top_level(base_dir.path().to_path_buf(), "text")?;
+    let text = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")?;
 
     assert_eq!(read_dir(base_dir.path())?.count(), 1);
     assert_eq!(read_dir(text.get_path())?.count(), 1);
 
     assert_eq!(text.get_path().file_name().unwrap(), "text");
     assert_eq!(text.get_base().index, None);
+    assert_eq!(text.get_base().metadata.name, "Text");
 
     Ok(())
 }
@@ -653,7 +654,7 @@ contents1
 fn test_name_from_filename() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "text")
+    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -680,7 +681,7 @@ fn test_fix_indexing_on_load() {
 
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "text")
+    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -2453,7 +2454,7 @@ fn test_move_no_clobber() {
 fn test_place_nesting() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut text = Folder::new_top_level(base_dir.path().to_path_buf(), "text").unwrap();
+    let mut text = Folder::new_top_level(base_dir.path().to_path_buf(), "Text").unwrap();
 
     let place1 = (&mut text as &mut dyn FileObject)
         .create_child_at_end(FileType::Place)

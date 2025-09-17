@@ -15,7 +15,7 @@ use crate::ui::project_tracker::ProjectTracker;
 use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
@@ -428,10 +428,14 @@ impl ProjectEditor {
 
                         match event.kind {
                             EventKind::Create(_create_kind) => {
-                                self.process_modify_event(event);
+                                let modify_path = event.paths.first().unwrap();
+                                log::debug!("processing creation event: {event:?}");
+                                self.process_modify_event(modify_path);
                             }
                             EventKind::Modify(ModifyKind::Data(_data_change)) => {
-                                self.process_modify_event(event);
+                                let modify_path = event.paths.first().unwrap();
+                                log::debug!("processing modify event: {event:?}");
+                                self.process_modify_event(modify_path);
                             }
                             EventKind::Modify(ModifyKind::Name(rename_mode)) => {
                                 if let Some(need_rescan_vec) =
@@ -443,7 +447,14 @@ impl ProjectEditor {
                                 }
                             }
                             EventKind::Remove(_remove_kind) => {
-                                self.process_delete_event(event);
+                                let delete_path = event
+                                    .paths
+                                    .first()
+                                    .expect("Rename event should have source");
+
+                                if let Some(fileid) = self.process_delete(delete_path) {
+                                    file_objects_needing_rescan.insert(fileid);
+                                }
                             }
                             _ => {}
                         }
@@ -488,31 +499,27 @@ impl ProjectEditor {
         }
     }
 
-    /// `event` has to be modification, try to figure out the file and reload it if
-    /// it's truly part of the project
-    fn process_modify_event(&mut self, event: DebouncedEvent) {
+    /// process a creation or modify event. These events are basically equivalent because of how
+    /// different editors and programs actually write to disk, so we have to process them together.
+    /// This could also be a file being moved into the project.
+    ///
+    /// Returns a directory if it should be rescanned
+    fn process_modify_event(&mut self, modify_path: &Path) -> Option<FileID> {
         // Try to read the file, if it has an ID, look up that ID
         // and call reload file, otherwise give up (it might come in as
         // a different event, but we don't care about modifications
         // to files we don't know)
-        let modify_path = match event.paths.first() {
-            Some(path) => path,
-            None => {
-                log::warn!("No path from modify event: {event:?}");
-                return;
-            }
-        };
 
-        if modify_path.ends_with(".tmp") {
+        if modify_path.extension().is_some_and(|ext| ext == "tmp") {
             // we write .tmp files and then immediately remove them, ignore this file
-            return;
+            return None;
         }
 
         if !modify_path.exists() {
             log::debug!(
                 "Attempted to process modification of a file that no longer exists: {modify_path:?}"
             );
-            return;
+            return None;
         }
 
         if *modify_path == self.project.get_project_info_file() {
@@ -522,12 +529,13 @@ impl ProjectEditor {
                     log::warn!("Could not reload project info file: {err}")
                 }
             }
+            None
         } else {
             let relative_path = match modify_path.strip_prefix(self.project.get_path()) {
                 Ok(relative_path) => relative_path,
                 Err(err) => {
                     log::error!("invalid modify/create path not in project: {err}");
-                    return;
+                    return None;
                 }
             };
 
@@ -541,7 +549,7 @@ impl ProjectEditor {
                         "invalid modify/create path not in project folders: {modify_path:?}"
                     );
                 }
-                return;
+                return None;
             }
 
             log::debug!("Processing create/modify event with path: {modify_path:?}");
@@ -552,6 +560,8 @@ impl ProjectEditor {
                     if let Err(err) = file_object.borrow_mut().reload_file() {
                         log::warn!("Error loading file {}: {err}", file_object.borrow());
                     }
+                    // This was a modify, not a creation, nothing to do
+                    None
                 }
                 None => {
                     let ancestors = modify_path.ancestors();
@@ -568,7 +578,7 @@ impl ProjectEditor {
                                     parents should exist and the loop should always \
                                     finish before it escapes the project tree",
                                 );
-                                return;
+                                return None;
                             }
                         };
 
@@ -626,6 +636,8 @@ impl ProjectEditor {
                         for (id_string, object) in descendents {
                             self.project.objects.insert(id_string, object);
                         }
+
+                        return Some(parent_id);
                     }
                     unreachable!("Ancestors should be found or error before this point")
                 }
@@ -641,18 +653,28 @@ impl ProjectEditor {
         event: DebouncedEvent,
         rename_mode: RenameMode,
     ) -> Option<Vec<FileID>> {
-        if rename_mode != RenameMode::Both {
-            // Give up, we don't want to make assumptoins at this stage
-            //
-            // Long term, we can probably do better. If it's only "from", we can check for that
-            // file and treat it like a deletion. If it's just a "from", we can treat it like a
-            // deletion. If it's just a "to", we can check for file IDs (in which case we know the
-            // old path), and otherwise treat it like a creation
-            log::warn!(
-                "Processed rename event: {event:?}, but it does not contain both source and\
-                destination, cannot meaningfully continue processing"
-            );
-            return None;
+        match rename_mode {
+            RenameMode::From => {
+                let delete_path = event
+                    .paths
+                    .first()
+                    .expect("From rename should have a source");
+
+                return self.process_delete(delete_path).map(|fileid| vec![fileid]);
+            }
+            RenameMode::To => {
+                // we could *maybe* try to treat this as a creation/modify, but it's going to involve
+                // making some leaps so the safest thing is just to do nothing
+                return None;
+            }
+            RenameMode::Both => {}
+            _ => {
+                // Give up, we don't want to make assumptoins at this stage
+                log::warn!(
+                    "Encountered rename event: {event:?}, not enough information to continue processing"
+                );
+                return None;
+            }
         }
 
         let source_path = event
@@ -673,7 +695,15 @@ impl ProjectEditor {
         let moving_file_id = match self.project.find_object_by_path(source_path) {
             Some(fileid) => fileid,
             None => {
-                log::debug!("Processed file rename for object with unknown source path: {event:?}");
+                log::debug!(
+                    "Processed file rename for object with non-object source path: {event:?}, \
+                    nothing to do."
+                );
+                if dest_path.starts_with(self.project.get_path()) {
+                    return self
+                        .process_modify_event(dest_path)
+                        .map(|fileid| vec![fileid]);
+                }
                 return None;
             }
         };
@@ -723,11 +753,10 @@ impl ProjectEditor {
         let dest_file_id = match self.project.find_object_by_path(dest_directory) {
             Some(dest_file_id) => dest_file_id,
             None => {
-                log::warn!(
-                    "File object is now in an unknown directory: {dest_directory:?}, \
-                    unable to continue processing move/rename. Event: {event:?}"
+                log::debug!(
+                    "Event: {event:?} moves file object out of project directory, processing as a delete"
                 );
-                return None;
+                return self.process_delete(dest_path).map(|fileid| vec![fileid]);
             }
         };
 
@@ -776,16 +805,8 @@ impl ProjectEditor {
         Some(vec![source_parent_file_id, dest_file_id])
     }
 
-    fn process_delete_event(&mut self, event: DebouncedEvent) {
-        let delete_path = event
-            .paths
-            .first()
-            .expect("Rename event should have source");
-
-        let deleting_file_id = match self.project.find_object_by_path(delete_path) {
-            Some(deleting_file_id) => deleting_file_id,
-            None => return,
-        };
+    fn process_delete(&mut self, delete_path: &Path) -> Option<FileID> {
+        let deleting_file_id = self.project.find_object_by_path(delete_path)?;
 
         let parent_file_id = match self.project.find_object_parent(&deleting_file_id) {
             Some(parent_file_id) => parent_file_id,
@@ -793,7 +814,7 @@ impl ProjectEditor {
                 log::error!(
                     "Could not remove file object: {deleting_file_id}: Could not find parent"
                 );
-                return;
+                return None;
             }
         };
 
@@ -824,6 +845,8 @@ impl ProjectEditor {
             .remove(child_index);
 
         parent.borrow_mut().fix_indexing(&self.project.objects);
+
+        Some(parent_file_id)
     }
 
     fn set_editor_tab(&mut self, tab: &Page) {

@@ -215,8 +215,8 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                                     .expect("nodes in the tree should always have indexes")
                             } else {
                                 log::error!(
-                                    "Encountered invalid move to {target_file_id:?}: found file object with\
-                                    a child that was not a file object"
+                                    "Encountered invalid move to {target_file_id:?}: found file object \
+                                     with a child that was not a file object"
                                 );
                                 continue;
                             }
@@ -236,8 +236,8 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                                 node_position + 1
                             } else {
                                 log::error!(
-                                    "Encountered invalid move to {target_file_id:?}: found file object with\
-                                    a child that was not a file object"
+                                    "Encountered invalid move to {target_file_id:?}: found file object \
+                                    with a child that was not a file object"
                                 );
                                 continue;
                             }

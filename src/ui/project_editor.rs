@@ -544,7 +544,7 @@ impl ProjectEditor {
                 return;
             }
 
-            log::debug!("processing modify events with path: {modify_path:?}");
+            log::debug!("Processing create/modify event with path: {modify_path:?}");
 
             match self.project.find_object_by_path(modify_path) {
                 Some(id) => {
@@ -564,7 +564,7 @@ impl ProjectEditor {
                             Some(parent) => parent,
                             None => {
                                 log::error!(
-                                    "unexpected result while processing event: {event:?}\
+                                    "unexpected result while processing event: \
                                     parents should exist and the loop should always \
                                     finish before it escapes the project tree",
                                 );
@@ -587,10 +587,10 @@ impl ProjectEditor {
                             Ok(file_object_creation) => file_object_creation,
                             Err(err) => {
                                 log::warn!(
-                                    "Could not open file as part of processing modifications: {err}"
+                                    "Could not open file as part of processing modifications: {err}, \
+                                    giving up on processing event"
                                 );
-                                log::warn!("Giving up on processing event: {event:?}");
-                                return;
+                                return None;
                             }
                         };
 
@@ -627,8 +627,9 @@ impl ProjectEditor {
                             self.project.objects.insert(id_string, object);
                         }
                     }
+                    unreachable!("Ancestors should be found or error before this point")
                 }
-            };
+            }
         }
     }
 
@@ -717,7 +718,8 @@ impl ProjectEditor {
         }
 
         // More complicated case: the file has been moved to another part of the tree. We're basically
-        // processing a move, but without the actual move. This should probably be cleanup up later
+        // processing a move, but without doing the actual move outselves. This should probably be
+        // cleanup up later (#128)
         let dest_file_id = match self.project.find_object_by_path(dest_directory) {
             Some(dest_file_id) => dest_file_id,
             None => {
@@ -744,8 +746,8 @@ impl ProjectEditor {
             .position(|val| moving_file_id == *val)
             .unwrap_or_else(|| {
                 panic!(
-                    "Children should only be removed from their parents.\
-                child id: {moving_file_id}, parent: {source_parent_file_id}"
+                    "Children should only be removed from their parents. \
+                    child id: {moving_file_id}, parent: {source_parent_file_id}"
                 )
             });
 

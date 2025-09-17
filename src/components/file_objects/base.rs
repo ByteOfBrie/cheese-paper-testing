@@ -461,7 +461,7 @@ fn create_index_and_move_on_disk(
         .position(|val| moving_file_id == val)
         .unwrap_or_else(|| {
             panic!(
-                "Children should only be removed from their parents.\
+                "Children should only be removed from their parents. \
                 child id: {moving_file_id}, parent: {source_file_id}"
             )
         });

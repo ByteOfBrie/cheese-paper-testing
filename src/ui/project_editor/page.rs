@@ -114,24 +114,24 @@ impl Page {
             })
         }) {
             page_data.search.show();
+            page_data.search.redo_search = true;
         }
 
         if page_data.search.active {
             ui.horizontal(|ui| {
-                ui.add(
+                let search_box_response = ui.add(
                     egui::TextEdit::singleline(&mut page_data.search.find_text)
                         .hint_text("find")
                         .return_key(None), // keep focus when Enter is pressed)
                 );
-                ui.add(
-                    egui::TextEdit::singleline(&mut page_data.search.replace_text)
-                        .hint_text("replace")
-                        .return_key(None),
-                );
-                if ui.button("search").clicked() {
+
+                if search_box_response.changed() {
                     page_data.search.redo_search = true;
                 }
-                if ui.button("close").clicked() {
+
+                if ui.button("close").clicked()
+                    || ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+                {
                     page_data.search.active = false;
                     ctx.version += 1;
                 }

@@ -125,6 +125,10 @@ impl Page {
                         .return_key(None), // keep focus when Enter is pressed)
                 );
 
+                page_data
+                    .search
+                    .process_request_search_box_focus(ui, &search_box_response);
+
                 if search_box_response.changed() {
                     page_data.search.redo_search = true;
                 }

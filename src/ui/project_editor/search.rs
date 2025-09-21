@@ -44,6 +44,31 @@ impl Search {
         self.focus = None;
         self.goto_focus = false;
     }
+
+    /// Should be called after drawing the search box, will move the user's focus to the text box
+    /// and select any text if necessary
+    pub fn process_request_search_box_focus(
+        &mut self,
+        ui: &mut Ui,
+        search_box_response: &egui::Response,
+    ) {
+        if self.request_ui_focus {
+            self.request_ui_focus = false;
+            ui.scroll_to_cursor(Some(egui::Align::Center));
+
+            // Select all of the text in the search box
+            if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), search_box_response.id) {
+                let ccursor = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(0),
+                    egui::text::CCursor::new(self.find_text.chars().count()),
+                );
+
+                state.cursor.set_char_range(Some(ccursor));
+                state.store(ui.ctx(), search_box_response.id);
+            }
+            ui.memory_mut(|i| i.request_focus(search_box_response.id));
+        }
+    }
 }
 
 pub enum Searchable<'a> {

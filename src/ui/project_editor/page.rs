@@ -98,7 +98,8 @@ impl Page {
         }
     }
 
-    /// Handle page search logic, including
+    /// Handle page search logic, including swapping the page search memory once (but not swapping it)
+    /// back, which should be done by the calling function
     fn process_page_search(
         &self,
         page_data: &mut PageData,
@@ -153,12 +154,15 @@ impl Page {
             }
         }
 
-        let page_search_active = page_data.search.active;
-        if page_search_active {
+        // For now, let global search have priority over page search, so only swap in the page search
+        // memory if global search isn't active
+        if page_data.search.active && !ctx.search.active {
             /* Hack-y solution: swap in the file search object for the file-local search */
             std::mem::swap(&mut ctx.search, &mut page_data.search);
+            true
+        } else {
+            false
         }
-        page_search_active
     }
 }
 

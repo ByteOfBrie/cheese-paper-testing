@@ -1,3 +1,4 @@
+use egui::Id;
 use egui::Vec2;
 use rfd::FileDialog;
 
@@ -11,13 +12,14 @@ use crate::{
 
 //This probably shouldn't be a part of Project but it's easy enough right now
 impl Project {
-    pub fn export_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
+    pub fn export_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
         egui::CentralPanel::default()
             .show_inside(ui, |ui| self.show_export_selection(ui, ctx))
-            .response
+            .inner
     }
 
-    fn show_export_selection(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_export_selection(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let mut ids = Vec::new();
         ui.label("Project Export Selection");
 
         egui::Grid::new("Export Options")
@@ -32,6 +34,7 @@ impl Project {
                     in the export (as headings)",
                 );
                 self.process_response(&response);
+                ids.push(response.id);
                 ui.end_row();
 
                 const FOLDER_DEPTH_MESSAGE: &str = "If the previous checkbox is unset, this sets the \
@@ -52,6 +55,7 @@ impl Project {
                         &mut self.metadata.export.include_folder_title_depth,
                     ));
                     self.process_response(&response);
+                    ids.push(response.id);
                 });
                 ui.end_row();
 
@@ -65,6 +69,7 @@ impl Project {
                     in the export (as headings)",
                 );
                 self.process_response(&response);
+                ids.push(response.id);
                 ui.end_row();
 
                 const SCENE_DEPTH_MESSAGE: &str = "If the previous checkbox is unset, this sets the \
@@ -85,6 +90,7 @@ impl Project {
                         &mut self.metadata.export.include_scene_title_depth,
                     ));
                     self.process_response(&response);
+                    ids.push(response.id);
                 });
                 ui.end_row();
 
@@ -94,11 +100,14 @@ impl Project {
                 ).on_hover_text("If checked, insert break (horizontal line) between scenes. If this is \
                     not set, two consecutive scenes will only have a newline in the final export");
                 self.process_response(&response);
+                ids.push(response.id);
             });
 
         ui.add_space(40.0);
 
-        if ui.button("Export Story Text").clicked() {
+        let export_story_button_response = ui.button("Export Story Text");
+
+        if export_story_button_response.clicked() {
             let project_title = &self.base_metadata.name;
             let suggested_title = format!("{}.md", process_name_for_filename(project_title));
             let export_location_option = FileDialog::new()
@@ -141,5 +150,9 @@ impl Project {
                     .unwrap_or_default();
             }
         }
+
+        ids.push(export_story_button_response.id);
+
+        ids
     }
 }

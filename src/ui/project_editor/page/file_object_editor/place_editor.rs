@@ -4,19 +4,24 @@ use super::FileObjectEditor;
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Place;
 
+use egui::Id;
 use egui::ScrollArea;
 
 impl FileObjectEditor for Place {
-    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
-        egui::SidePanel::right("metadata sidebar")
+    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let sidebar_ids = egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)
             .width_range(50.0..=500.0)
-            .show_inside(ui, |ui| self.show_sidebar(ui, ctx));
+            .show_inside(ui, |ui| self.show_sidebar(ui, ctx))
+            .inner;
 
-        egui::CentralPanel::default()
+        let mut ids = egui::CentralPanel::default()
             .show_inside(ui, |ui| self.show_editor(ui, ctx))
-            .response
+            .inner;
+
+        ids.extend(sidebar_ids);
+        ids
     }
 
     fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
@@ -37,7 +42,9 @@ impl FileObjectEditor for Place {
 }
 
 impl Place {
-    fn show_sidebar(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_sidebar(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let mut ids = Vec::new();
+
         ScrollArea::vertical()
             .id_salt("main metadata")
             .show(ui, |ui| {
@@ -47,35 +54,45 @@ impl Place {
                         .hint_text("Place Name")
                         .desired_width(f32::INFINITY),
                 );
-                self.process_response(response);
+                self.process_response(&response);
+                ids.push(response.id);
 
                 ui.label("Notes");
                 let response = ui.add_sized(ui.available_size(), |ui: &'_ mut Ui| {
                     self.metadata.notes.ui(ui, ctx)
                 });
-                self.process_response(response);
+                self.process_response(&response);
+                ids.push(response.id);
             });
+        ids
     }
 
-    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let mut ids = Vec::new();
+
         ScrollArea::vertical()
             .id_salt("main metadata")
             .show(ui, |ui| {
                 ui.label("Connection To Story");
                 let response = ui.add(|ui: &'_ mut Ui| self.metadata.connection.ui(ui, ctx));
-                self.process_response(response);
+                self.process_response(&response);
+                ids.push(response.id);
 
                 ui.label("Description");
                 let response = ui.add(|ui: &'_ mut Ui| self.metadata.description.ui(ui, ctx));
-                self.process_response(response);
+                self.process_response(&response);
+                ids.push(response.id);
 
                 ui.label("Appearance");
                 let response = ui.add(|ui: &'_ mut Ui| self.metadata.appearance.ui(ui, ctx));
-                self.process_response(response);
+                self.process_response(&response);
+                ids.push(response.id);
 
                 ui.label("Other Senses");
                 let response = ui.add(|ui: &'_ mut Ui| self.metadata.other_senses.ui(ui, ctx));
-                self.process_response(response);
+                self.process_response(&response);
+                ids.push(response.id);
             });
+        ids
     }
 }

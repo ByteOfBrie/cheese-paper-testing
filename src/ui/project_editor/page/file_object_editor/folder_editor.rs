@@ -6,6 +6,7 @@ use super::FileObjectEditor;
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::Folder;
 
+use egui::Id;
 use egui::ScrollArea;
 
 #[derive(Debug, Default, PartialEq)]
@@ -23,10 +24,10 @@ pub struct Data {
 pub type Store = RenderDataStore<FileID, Data>;
 
 impl FileObjectEditor for Folder {
-    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
+    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
         egui::CentralPanel::default()
             .show_inside(ui, |ui| self.show_editor(ui, ctx))
-            .response
+            .inner
     }
 
     fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
@@ -41,9 +42,11 @@ impl FileObjectEditor for Folder {
 }
 
 impl Folder {
-    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
         let rdata = ctx.stores.folder.get(&self.get_base().metadata.id);
         let mut folder_data = rdata.borrow_mut();
+
+        let mut ids = Vec::new();
 
         // Tab selection
         // TODO: make selectable_values here more subtle (e.g., different color gray)
@@ -61,7 +64,8 @@ impl Folder {
                     .hint_text("Folder Name")
                     .desired_width(f32::INFINITY),
             );
-            self.process_response(response);
+            self.process_response(&response);
+            ids.push(response.id);
 
             match folder_data.tab {
                 Tab::Notes => {
@@ -70,14 +74,16 @@ impl Folder {
                         .show(ui, |ui| {
                             let response =
                                 ui.add(|ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx));
-                            self.process_response(response);
+                            self.process_response(&response);
+                            ids.push(response.id);
                         });
 
                     egui::CollapsingHeader::new("Notes")
                         .default_open(true)
                         .show(ui, |ui| {
                             let response = ui.add(|ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx));
-                            self.process_response(response);
+                            self.process_response(&response);
+                            ids.push(response.id);
                         });
                 }
                 Tab::Export => {
@@ -86,13 +92,15 @@ impl Folder {
                         .metadata
                         .compile_status
                         .contains(CompileStatus::INCLUDE);
+
                     let response = ui.checkbox(&mut export_include, "Include in export");
                     if response.changed() {
                         self.metadata
                             .compile_status
                             .set(CompileStatus::INCLUDE, export_include);
                     }
-                    self.process_response(response);
+                    self.process_response(&response);
+                    ids.push(response.id);
 
                     // The rest of the checkboxes have no effect if export isn't included
                     ui.add_enabled_ui(export_include, |ui| {
@@ -102,25 +110,30 @@ impl Folder {
                         ui.horizontal(|ui| {
                             ui.label("Include Title");
 
-                            egui::ComboBox::from_id_salt("Include Title")
-                                .selected_text(format!("{include_title:?}"))
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut include_title,
-                                        IncludeOptions::Default,
-                                        "Default",
-                                    );
-                                    ui.selectable_value(
-                                        &mut include_title,
-                                        IncludeOptions::Always,
-                                        "Always",
-                                    );
-                                    ui.selectable_value(
-                                        &mut include_title,
-                                        IncludeOptions::Never,
-                                        "Never",
-                                    );
-                                });
+                            let title_combobox_response =
+                                egui::ComboBox::from_id_salt("Include Title")
+                                    .selected_text(format!("{include_title:?}"))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(
+                                            &mut include_title,
+                                            IncludeOptions::Default,
+                                            "Default",
+                                        );
+                                        ui.selectable_value(
+                                            &mut include_title,
+                                            IncludeOptions::Always,
+                                            "Always",
+                                        );
+                                        ui.selectable_value(
+                                            &mut include_title,
+                                            IncludeOptions::Never,
+                                            "Never",
+                                        );
+                                    });
+
+                            // We want to be able to tab to the box, but it doesn't get a process_response
+                            // call because that needs to be handled below
+                            ids.push(title_combobox_response.response.id);
                         });
 
                         // We don't have an actual response here so we have to manually process
@@ -138,25 +151,30 @@ impl Folder {
                         ui.horizontal(|ui| {
                             ui.label("Break at End");
 
-                            egui::ComboBox::from_id_salt("Break at End")
-                                .selected_text(format!("{break_at_end:?}"))
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut break_at_end,
-                                        IncludeOptions::Default,
-                                        "Default",
-                                    );
-                                    ui.selectable_value(
-                                        &mut break_at_end,
-                                        IncludeOptions::Always,
-                                        "Always",
-                                    );
-                                    ui.selectable_value(
-                                        &mut break_at_end,
-                                        IncludeOptions::Never,
-                                        "Never",
-                                    );
-                                });
+                            let break_combobox_response =
+                                egui::ComboBox::from_id_salt("Break at End")
+                                    .selected_text(format!("{break_at_end:?}"))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(
+                                            &mut break_at_end,
+                                            IncludeOptions::Default,
+                                            "Default",
+                                        );
+                                        ui.selectable_value(
+                                            &mut break_at_end,
+                                            IncludeOptions::Always,
+                                            "Always",
+                                        );
+                                        ui.selectable_value(
+                                            &mut break_at_end,
+                                            IncludeOptions::Never,
+                                            "Never",
+                                        );
+                                    });
+
+                            // We want to be able to tab to the box, but it doesn't get a process_response
+                            // call because that needs to be handled below
+                            ids.push(break_combobox_response.response.id);
                         });
 
                         // We don't have an actual response here so we have to manually process
@@ -168,5 +186,6 @@ impl Folder {
                 }
             }
         });
+        ids
     }
 }

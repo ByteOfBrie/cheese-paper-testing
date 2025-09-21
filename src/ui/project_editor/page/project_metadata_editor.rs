@@ -1,15 +1,21 @@
 use crate::ui::{prelude::*, project_editor::update_title};
 
+use egui::Id;
 use egui::ScrollArea;
 
 impl Project {
-    pub fn metadata_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
+    pub fn metadata_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
         egui::CentralPanel::default()
             .show_inside(ui, |ui| self.show_project_metadata_editor(ui, ctx))
-            .response
+            .inner
     }
 
-    fn show_project_metadata_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) {
+    fn show_project_metadata_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &mut EditorContext,
+    ) -> Vec<Id> {
+        let mut ids = Vec::new();
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.base_metadata.name)
@@ -18,6 +24,7 @@ impl Project {
                     .desired_width(f32::INFINITY),
             );
             self.process_response(&response);
+            ids.push(response.id);
 
             // Special case: update the title if we've changed it:
             if response.changed() {
@@ -31,6 +38,7 @@ impl Project {
                     .desired_width(f32::INFINITY),
             );
             self.process_response(&response);
+            ids.push(response.id);
 
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.metadata.author)
@@ -39,6 +47,7 @@ impl Project {
                     .desired_width(f32::INFINITY),
             );
             self.process_response(&response);
+            ids.push(response.id);
 
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.metadata.email)
@@ -47,12 +56,14 @@ impl Project {
                     .desired_width(f32::INFINITY),
             );
             self.process_response(&response);
+            ids.push(response.id);
 
             egui::CollapsingHeader::new("Story Description/Summary")
                 .default_open(true)
                 .show(ui, |ui| {
                     let response = ui.add(|ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx));
                     self.process_response(&response);
+                    ids.push(response.id);
                 });
 
             egui::CollapsingHeader::new("Notes")
@@ -60,8 +71,10 @@ impl Project {
                 .show(ui, |ui| {
                     let response = ui.add(|ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx));
                     self.process_response(&response);
+                    ids.push(response.id);
                 });
         });
+        ids
     }
 
     pub fn process_response(&mut self, response: &egui::Response) {

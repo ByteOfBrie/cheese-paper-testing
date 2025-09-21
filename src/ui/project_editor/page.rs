@@ -6,7 +6,7 @@ use crate::ui::prelude::*;
 
 pub use file_object_editor::FileObjectEditor;
 
-use egui::{Key, Modifiers};
+use egui::{Id, Key, Modifiers};
 
 /// An identifier for something that can be drawn as a tab
 ///
@@ -63,14 +63,36 @@ impl Page {
 #[derive(Debug, Default)]
 pub struct PageData {
     search: Search,
+    last_selected_id: Option<Id>,
+    /// We lose focus sometimes when using shift-tab to cycle backwards, I think because we somehow
+    /// request focus and then lose it to the normal tab movement widget. We use this variable as a
+    /// hack to get around that
+    rerequest_focus: bool,
 }
 
 pub type Store = RenderDataStore<Page, PageData>;
+
+#[derive(Debug)]
+enum FocusShiftDirection {
+    Next,
+    // /// This means a no-op, could have been encoded with an option instead but this makes more sense
+    // /// to me.
+    // None,
+    Previous,
+}
 
 impl Page {
     pub fn ui(&self, ui: &mut Ui, project: &mut Project, ctx: &mut EditorContext) {
         let rdata = ctx.stores.page.get(self);
         let page_data: &mut PageData = &mut rdata.borrow_mut();
+
+        let focus_shift_option = if ui.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Tab)) {
+            Some(FocusShiftDirection::Previous)
+        } else if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
+            Some(FocusShiftDirection::Next)
+        } else {
+            None
+        };
 
         let page_search_active = if self.is_searchable() {
             self.process_page_search(page_data, ui, project, ctx)
@@ -78,18 +100,75 @@ impl Page {
             false
         };
 
-        match self {
-            Self::ProjectMetadata => {
-                project.metadata_ui(ui, ctx);
-            }
+        // Draw the UI, saving the ids of the (selectable) elements to do tabbing on
+        let page_tabable_ids = match self {
+            Self::ProjectMetadata => project.metadata_ui(ui, ctx),
             Self::FileObject(file_object_id) => {
                 if let Some(file_object) = project.objects.get(file_object_id) {
-                    file_object.borrow_mut().as_editor_mut().ui(ui, ctx);
+                    file_object.borrow_mut().as_editor_mut().ui(ui, ctx)
+                } else {
+                    Vec::new()
                 }
             }
-            Self::Export => {
-                project.export_ui(ui, ctx);
-            }
+            Self::Export => project.export_ui(ui, ctx),
+        };
+
+        if let Some(focus_shift) = focus_shift_option {
+            let current_element_index = if let Some(last_id) = page_data.last_selected_id {
+                page_tabable_ids.iter().position(|&tab| tab == last_id)
+            } else {
+                None
+            };
+
+            let next_element = match focus_shift {
+                FocusShiftDirection::Next => {
+                    if let Some(current_index) = current_element_index {
+                        if let Some(element) = page_tabable_ids.get(current_index + 1) {
+                            element
+                        } else {
+                            page_tabable_ids.first().unwrap()
+                        }
+                    } else {
+                        page_tabable_ids.first().unwrap()
+                    }
+                }
+                FocusShiftDirection::Previous => {
+                    if let Some(current_index) = current_element_index {
+                        if let Some(new_index) = current_index.checked_sub(1) {
+                            if let Some(element) = page_tabable_ids.get(new_index) {
+                                page_data.rerequest_focus = true;
+                                element
+                            } else {
+                                page_data.rerequest_focus = true;
+                                page_tabable_ids.last().unwrap()
+                            }
+                        } else {
+                            page_data.rerequest_focus = true;
+                            page_tabable_ids.last().unwrap()
+                        }
+                    } else {
+                        page_data.rerequest_focus = true;
+                        page_tabable_ids.last().unwrap()
+                    }
+                }
+            };
+
+            ui.memory_mut(|mem| mem.request_focus(*next_element));
+        }
+
+        // Update the currently selected element if we need to do that
+        if let Some(focused) = ui.memory(|i| i.focused())
+            && Some(focused) != page_data.last_selected_id
+            && page_tabable_ids.contains(&focused)
+        {
+            page_data.last_selected_id = Some(focused);
+        } else if let Some(last_focused) = page_data.last_selected_id
+            && page_data.rerequest_focus
+        {
+            // we use the else to force this to happen on the next frame, it would be pointless to do
+            // this at the same time we request focus
+            ui.memory_mut(|mem| mem.request_focus(last_focused));
+            page_data.rerequest_focus = false;
         }
 
         // If this was swapped once, we need to put it back

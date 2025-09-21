@@ -170,12 +170,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             });
         }
 
-        if ui.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Tab)) {
-            println!("pressed shift-tab");
-        } else if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Tab)) {
-            println!("pressed tab!");
-        }
-
         // draw the actual UI for the tab open in the editor
         tab.ui(ui, self.project, self.editor_context);
     }

@@ -18,11 +18,6 @@ pub fn ui(ui: &mut Ui, project: &Project, ctx: &mut EditorContext) -> Response {
 
     gs.process_request_search_box_focus(ui, &search_box_response);
 
-    ui.add_sized(
-        egui::vec2(ui.available_width(), 0.0),
-        egui::TextEdit::singleline(&mut gs.replace_text).hint_text("replace (not implemented)"),
-    );
-
     // check if we need to search
     if ui.button("search").clicked()
         || (search_box_response.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))

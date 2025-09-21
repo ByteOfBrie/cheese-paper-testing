@@ -14,8 +14,6 @@ pub struct Search {
 
     pub find_text: String,
 
-    pub replace_text: String,
-
     pub redo_search: bool,
 
     pub search_results: Option<HashMap<TextUID, TextBoxSearchResult>>,

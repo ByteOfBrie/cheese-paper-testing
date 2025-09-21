@@ -52,6 +52,7 @@ impl Place {
                     egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
                         .id_salt("name")
                         .hint_text("Place Name")
+                        .lock_focus(true)
                         .desired_width(f32::INFINITY),
                 );
                 self.process_response(&response);

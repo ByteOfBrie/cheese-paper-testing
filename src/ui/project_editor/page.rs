@@ -64,10 +64,6 @@ impl Page {
 pub struct PageData {
     search: Search,
     last_selected_id: Option<Id>,
-    /// We lose focus sometimes when using shift-tab to cycle backwards, I think because we somehow
-    /// request focus and then lose it to the normal tab movement widget. We use this variable as a
-    /// hack to get around that
-    rerequest_focus: bool,
 }
 
 pub type Store = RenderDataStore<Page, PageData>;
@@ -136,18 +132,14 @@ impl Page {
                     if let Some(current_index) = current_element_index {
                         if let Some(new_index) = current_index.checked_sub(1) {
                             if let Some(element) = page_tabable_ids.get(new_index) {
-                                page_data.rerequest_focus = true;
                                 element
                             } else {
-                                page_data.rerequest_focus = true;
                                 page_tabable_ids.last().unwrap()
                             }
                         } else {
-                            page_data.rerequest_focus = true;
                             page_tabable_ids.last().unwrap()
                         }
                     } else {
-                        page_data.rerequest_focus = true;
                         page_tabable_ids.last().unwrap()
                     }
                 }
@@ -162,13 +154,6 @@ impl Page {
             && page_tabable_ids.contains(&focused)
         {
             page_data.last_selected_id = Some(focused);
-        } else if let Some(last_focused) = page_data.last_selected_id
-            && page_data.rerequest_focus
-        {
-            // we use the else to force this to happen on the next frame, it would be pointless to do
-            // this at the same time we request focus
-            ui.memory_mut(|mem| mem.request_focus(last_focused));
-            page_data.rerequest_focus = false;
         }
 
         // If this was swapped once, we need to put it back

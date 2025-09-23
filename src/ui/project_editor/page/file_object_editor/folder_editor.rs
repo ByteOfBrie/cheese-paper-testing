@@ -109,7 +109,12 @@ impl Folder {
                         let include_title_before = include_title;
 
                         ui.horizontal(|ui| {
-                            ui.label("Include Title");
+                            const INCLUDE_TITLE_MESSAGE: &str = "If the title of this folder/scene will be included
+                            default - this will come from the settings in the export tab
+                            always - include the title for this, even if the project export settings differ
+                            never - do not include the title for this, even if the export settings differ";
+
+                            ui.label("Include Title  ℹ").on_hover_text(INCLUDE_TITLE_MESSAGE);
 
                             let title_combobox_response =
                                 egui::ComboBox::from_id_salt("Include Title")
@@ -150,7 +155,12 @@ impl Folder {
                         let break_at_end_before = break_at_end;
 
                         ui.horizontal(|ui| {
-                            ui.label("Break at End");
+                            const INCLUDE_BREAK_MESSAGE: &str = "If this is followed by a scene, should there be a divider?
+                            default - this will come from the settings in the export tab
+                            always - include a divider after this, even if the project export settings differ
+                            never - do not include a divider after this, even if the export settings differ";
+
+                            ui.label("Break at End  ℹ").on_hover_text(INCLUDE_BREAK_MESSAGE);
 
                             let break_combobox_response =
                                 egui::ComboBox::from_id_salt("Break at End")

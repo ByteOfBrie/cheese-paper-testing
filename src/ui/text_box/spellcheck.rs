@@ -5,35 +5,55 @@ use cow_utils::CowUtils;
 use std::borrow::Cow;
 use std::ops::Range;
 
-pub fn get_current_word(text: &str, mut position: usize) -> Range<usize> {
-    // Use `ceil_char_boundary` once it's stable
-    while !text.is_char_boundary(position) {
-        position += 1;
-    }
-
-    let before = &text[..position];
+/// Given a position (character offset), finds the byte range of the word (exclusively bounded by
+/// whitespace) that is contained at that position
+pub fn get_current_word(text: &str, position: usize) -> Range<usize> {
+    let chars: Vec<_> = text.char_indices().collect();
 
     let mut before_pos_option = None;
 
-    for (pos, chr) in before.char_indices().rev() {
+    // Starting at the position given, look backwards for whitespace. When we find it, we stop
+    // immediately, so we'll end up with the previous character's index.
+    //
+    // We can't trivially find the first whitespace position and then correct for that because we need
+    // the char index. There's almost definitely still a way to do this as a single line, but the
+    // current iteration is what I understand. Something like:
+    // `chars[..position].iter().rev().position(|(pos, chr)| chr.is_whitespace())` with the right match
+    //
+    // example: " word " starting at index 2 (`o`)
+    // slice is ` w` and then reversed to `w `
+    // loop 1: examine `w` (position = 1)
+    //         not whitespace, set before_pos_option to Some(1)
+    // loop 2: examine ` ` (position = 0)
+    //         whitespace, break
+    // before_pos = 1
+    for (pos, chr) in chars[..position].iter().rev() {
         if chr.is_whitespace() {
             // The last character we found was the correct spot, before_pos_option is already set
             break;
         } else {
-            before_pos_option = Some(pos);
+            before_pos_option = Some(*pos);
         }
     }
 
-    let before_pos = before_pos_option.unwrap_or(position);
+    // if we started on a whitespace character, we'll still have None, so the start of the range is
+    // the starting position (in byte offset)
+    let before_pos = before_pos_option.unwrap_or(chars[position].0);
 
-    let after = &text[position..];
-
-    let after_whitespace_offset = &text[position..]
-        .char_indices()
-        .find_map(|(pos, chr)| if chr.is_whitespace() { Some(pos) } else { None })
-        .unwrap_or(after.len());
-
-    let after_pos = position + after_whitespace_offset;
+    // We now go forwards in the string, but consuming characters. Once we find a whitespace character,
+    // we use that character's byte offset of the end of our range, since it will be the end of our
+    // range. This results in the slice grabbing the full word, but not spaces. If we don't find anything,
+    // we use the full length of the text (byte version, not char version)
+    let after_pos = chars[position..]
+        .iter()
+        .find_map(|(pos, chr)| {
+            if chr.is_whitespace() {
+                Some(*pos)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(text.len());
 
     before_pos..after_pos
 }
@@ -45,6 +65,12 @@ fn test_get_current_word() {
     assert_eq!(get_current_word("asdf jkl qwerty", 6), 5..8);
     assert_eq!(get_current_word("asdf  qwerty", 5), 5..5);
     assert_eq!(get_current_word("asdf  qwerty", 6), 6..12);
+    assert_eq!(get_current_word("ßß ssss", 1), 0..4);
+    assert_eq!(get_current_word("ßß ssss", 2), 0..4);
+    assert_eq!(get_current_word("ßß ssss", 3), 5..9);
+    assert_eq!("Alte Jakobstraße".len(), 17); // String is 17 bytes long
+    assert_eq!(get_current_word("Alte Jakobstraße", 5), 5..17);
+    assert_eq!(get_current_word("Alte Jakobstrasse", 5), 5..17);
 }
 
 pub fn trim_word_for_spellcheck(word: &str) -> (Cow<'_, str>, Range<usize>) {

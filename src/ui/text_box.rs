@@ -187,7 +187,9 @@ impl Text {
 
         // Keep track of where we're typing and if it's new, used in spellcheck logic later on
         if let Some(cursor_range) = output.cursor_range {
+            // Primary cursor tells us where we're at in the text edit box
             let primary_cursor_pos = cursor_range.primary.index;
+            // Collect the character start and end boundaries (byte index)
             let current_word_pos = spellcheck::get_current_word(&self.text, primary_cursor_pos);
 
             if current_word_pos.is_empty() || current_word_pos.end == self.text.len() {

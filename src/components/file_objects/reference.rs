@@ -1,3 +1,4 @@
+use cow_utils::CowUtils;
 use icu_casemap::{CaseMapper, CaseMapperBorrowed};
 
 use crate::components::file_objects::{FileID, FileObjectStore, FileType};
@@ -7,16 +8,96 @@ use crate::components::file_objects::{FileID, FileObjectStore, FileType};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct UnknownReference {
     pub name: String,
-    /// The ID present in the reference, if any. Will not be generated if missing
+    /// The ID present in the reference, if any. Will not be generated if missing. This should
+    /// possibly be an option, which would make more sense in some ways, although an empty string
+    /// is not meaningfully different from an option with None
     pub id: String,
     pub file_type: Option<FileType>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub enum ObjectReference {
     Known(FileID),
     Unknown(UnknownReference),
+    #[default]
     None,
+}
+
+impl ObjectReference {
+    pub fn new(mut value: String, file_type: Option<FileType>) -> Self {
+        if value.is_empty() {
+            ObjectReference::None
+        } else {
+            if value.starts_with('[') && value.ends_with(']') {
+                value.pop();
+                value.remove(0);
+            }
+            match value.split_once('|') {
+                Some((name, id)) => ObjectReference::Unknown(UnknownReference {
+                    name: name.to_string(),
+                    id: id.to_string(),
+                    file_type,
+                }),
+                None => ObjectReference::Unknown(UnknownReference {
+                    name: value,
+                    id: String::new(),
+                    file_type,
+                }),
+            }
+        }
+    }
+
+    /// This should probably have a better name, there should also be a "to title" function that
+    /// gets called by the outline
+    pub fn to_string(&self, objects: &FileObjectStore) -> String {
+        let mut output = String::new();
+        output.push('[');
+
+        match self {
+            Self::Known(file_id) => {
+                match objects.get(file_id) {
+                    Some(referenced_object) => {
+                        // Add the string name, removing invalid characters
+                        output.push_str(
+                            &referenced_object
+                                .borrow()
+                                .get_base()
+                                .metadata
+                                .name
+                                .cow_replace('|', "")
+                                .cow_replace('[', "")
+                                .cow_replace(']', ""),
+                        );
+                    }
+                    None => {
+                        log::error!(
+                            "Could not find file ID {file_id} for reference while attempting to save"
+                        );
+                        output.push_str("ERROR");
+                    }
+                }
+
+                output.push('|');
+                output.push_str(file_id);
+            }
+            Self::Unknown(unknown) => {
+                // Add the string name, removing invalid characters
+                output.push_str(
+                    &unknown
+                        .name
+                        .cow_replace('|', "")
+                        .cow_replace('[', "")
+                        .cow_replace(']', ""),
+                );
+
+                output.push('|');
+                output.push_str(&unknown.id);
+            }
+            Self::None => {}
+        }
+        output.push(']');
+        output
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -27,6 +108,8 @@ enum WordMatch {
 }
 
 impl UnknownReference {
+    /// Attempt to resolve this option into a FileID. This should be called in one specific place
+    /// that will have to handle the actual transformation
     pub fn resolve(&self, objects: &FileObjectStore) -> Option<FileID> {
         static CASE_MAPPER: std::sync::LazyLock<CaseMapperBorrowed<'_>> =
             std::sync::LazyLock::new(CaseMapper::new);
@@ -43,6 +126,7 @@ impl UnknownReference {
             // comparisons (see https://www.w3.org/TR/charmod-norm/#definitionCaseFolding)
             let needle_name = CASE_MAPPER.fold_string(&self.name);
 
+            // Compare this reference to every object to see if it matches up
             for (id, object_refcell) in objects.iter() {
                 let object = object_refcell.borrow();
 

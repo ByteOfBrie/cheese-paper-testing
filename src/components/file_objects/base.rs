@@ -873,7 +873,7 @@ pub trait FileObject: Debug {
     fn load_metadata(&mut self) -> Result<bool, CheeseError>;
 
     /// Writes the current type-specific metadata to the BaseFileObjects toml_header
-    fn write_metadata(&mut self);
+    fn write_metadata(&mut self, objects: &FileObjectStore);
 
     fn as_editor(&self) -> &dyn FileObjectEditor;
 

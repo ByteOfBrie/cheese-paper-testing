@@ -1,3 +1,4 @@
+use crate::components::file_objects::FileObjectStore;
 use crate::components::file_objects::base::{BaseFileObject, FileObject, metadata_extract_string};
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::text::Text;
@@ -130,7 +131,7 @@ impl FileObject for Place {
         super::MutFileObjectTypeInterface::Place(self)
     }
 
-    fn write_metadata(&mut self) {
+    fn write_metadata(&mut self, _objects: &FileObjectStore) {
         self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
         self.base.toml_header["connection"] = toml_edit::value(&*self.metadata.connection);
         self.base.toml_header["description"] = toml_edit::value(&*self.metadata.description);
@@ -139,12 +140,7 @@ impl FileObject for Place {
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
     }
 
-    fn generate_outline(
-        &self,
-        depth: u64,
-        export_string: &mut String,
-        objects: &super::FileObjectStore,
-    ) {
+    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore) {
         (self as &dyn FileObject).write_title(depth, export_string);
 
         write_outline_property("connection", &self.metadata.connection, export_string);
@@ -174,7 +170,7 @@ impl FileObject for Place {
 // shortcuts for not having to cast every time
 #[cfg(test)]
 impl Place {
-    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
+    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
         (self as &mut dyn FileObject).save(objects)
     }
 }

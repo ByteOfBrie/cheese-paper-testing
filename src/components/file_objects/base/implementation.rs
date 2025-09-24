@@ -325,7 +325,7 @@ impl dyn FileObject {
 
         // Ensure `toml_header` has the up-to-date metadata
         self.get_base_mut().write_metadata();
-        self.write_metadata();
+        self.write_metadata(objects);
 
         let mut final_str = self.get_base().toml_header.to_string();
 

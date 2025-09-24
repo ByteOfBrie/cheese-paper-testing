@@ -1,4 +1,5 @@
 use crate::cheese_error;
+use crate::components::file_objects::FileObjectStore;
 use crate::components::file_objects::base::{
     BaseFileObject, CompileStatus, FileObject, IncludeOptions, metadata_extract_string,
     metadata_extract_u64,
@@ -150,7 +151,7 @@ impl FileObject for Folder {
         super::MutFileObjectTypeInterface::Folder(self)
     }
 
-    fn write_metadata(&mut self) {
+    fn write_metadata(&mut self, _objects: &FileObjectStore) {
         self.base.toml_header["file_type"] = toml_edit::value("folder");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
@@ -158,12 +159,7 @@ impl FileObject for Folder {
             toml_edit::value(self.metadata.compile_status.bits() as i64);
     }
 
-    fn generate_outline(
-        &self,
-        depth: u64,
-        export_string: &mut String,
-        objects: &super::FileObjectStore,
-    ) {
+    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore) {
         (self as &dyn FileObject).write_title(depth, export_string);
 
         write_outline_property("summary", &self.metadata.summary, export_string);
@@ -182,7 +178,7 @@ impl FileObject for Folder {
         &self,
         depth: u64,
         export_string: &mut String,
-        objects: &super::FileObjectStore,
+        objects: &FileObjectStore,
         export_options: &ExportOptions,
         include_break: bool,
     ) -> bool {
@@ -250,7 +246,7 @@ impl FileObject for Folder {
 
 #[cfg(test)]
 impl Folder {
-    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
+    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
         (self as &mut dyn FileObject).save(objects)
     }
 }

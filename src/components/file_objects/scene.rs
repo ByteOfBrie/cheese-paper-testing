@@ -1,18 +1,23 @@
+use crate::components::file_objects::FileObjectStore;
+use crate::components::file_objects::FileType;
 use crate::components::file_objects::base::{
     BaseFileObject, CompileStatus, FileObject, IncludeOptions, metadata_extract_string,
     metadata_extract_u64,
 };
+use crate::components::file_objects::reference::ObjectReference;
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::util::CheeseError;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Default)]
 pub struct SceneMetadata {
     pub summary: Text,
     pub notes: Text,
-    pub pov: Text, // TODO: create custom object for this
+    pub pov: Rc<RefCell<ObjectReference>>,
     pub compile_status: CompileStatus,
 }
 
@@ -38,7 +43,12 @@ impl FileObject for Scene {
         }
 
         match metadata_extract_string(&self.base.toml_header, "pov")? {
-            Some(pov) => self.metadata.pov = pov.into(),
+            Some(pov) => {
+                self.metadata.pov = Rc::new(RefCell::new(ObjectReference::new(
+                    pov,
+                    Some(FileType::Character),
+                )))
+            }
             None => modified = true,
         }
 
@@ -99,25 +109,25 @@ impl FileObject for Scene {
         full_text
     }
 
-    fn write_metadata(&mut self) {
+    fn write_metadata(&mut self, objects: &FileObjectStore) {
         self.base.toml_header["file_type"] = toml_edit::value("scene");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
-        self.base.toml_header["pov"] = toml_edit::value(&*self.metadata.pov);
+        self.base.toml_header["pov"] =
+            toml_edit::value(self.metadata.pov.borrow().to_string(objects));
         self.base.toml_header["compile_status"] =
             toml_edit::value(self.metadata.compile_status.bits() as i64);
     }
 
-    fn generate_outline(
-        &self,
-        depth: u64,
-        export_string: &mut String,
-        _objects: &super::FileObjectStore,
-    ) {
+    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore) {
         (self as &dyn FileObject).write_title(depth, export_string);
 
         write_outline_property("summary", &self.metadata.summary, export_string);
-        write_outline_property("pov", &self.metadata.pov, export_string);
+        write_outline_property(
+            "pov",
+            &self.metadata.pov.borrow().to_string(objects),
+            export_string,
+        );
         write_outline_property("notes", &self.metadata.notes, export_string);
     }
 
@@ -125,7 +135,7 @@ impl FileObject for Scene {
         &self,
         depth: u64,
         export_string: &mut String,
-        _objects: &super::FileObjectStore,
+        _objects: &FileObjectStore,
         export_options: &ExportOptions,
         include_break: bool,
     ) -> bool {
@@ -223,7 +233,7 @@ impl Scene {
 
 #[cfg(test)]
 impl Scene {
-    pub fn save(&mut self, objects: &super::FileObjectStore) -> Result<(), CheeseError> {
+    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
         (self as &mut dyn FileObject).save(objects)
     }
 }

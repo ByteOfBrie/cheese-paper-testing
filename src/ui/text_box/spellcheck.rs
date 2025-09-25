@@ -38,7 +38,18 @@ pub fn get_current_word(text: &str, position: usize) -> Range<usize> {
 
     // if we started on a whitespace character, we'll still have None, so the start of the range is
     // the starting position (in byte offset)
-    let before_pos = before_pos_option.unwrap_or(chars[position].0);
+    let before_pos = match before_pos_option {
+        Some(pos) => pos,
+        None => {
+            if position == chars.len() {
+                // special case, we're at the end of the file, we can't look at the index
+                text.len()
+            } else {
+                // usual case, we have a "normal" position, find it
+                chars[position].0
+            }
+        }
+    };
 
     // We now go forwards in the string, but consuming characters. Once we find a whitespace character,
     // we use that character's byte offset of the end of our range, since it will be the end of our
@@ -71,6 +82,10 @@ fn test_get_current_word() {
     assert_eq!("Alte Jakobstraße".len(), 17); // String is 17 bytes long
     assert_eq!(get_current_word("Alte Jakobstraße", 5), 5..17);
     assert_eq!(get_current_word("Alte Jakobstrasse", 5), 5..17);
+
+    // end of line, make sure it works
+    assert_eq!(get_current_word("Alte Jakobstraße", 16), 5..17);
+    assert_eq!(get_current_word("Alte Jakobstrasse", 17), 5..17);
 }
 
 pub fn trim_word_for_spellcheck(word: &str) -> (Cow<'_, str>, Range<usize>) {

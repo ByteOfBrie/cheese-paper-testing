@@ -25,7 +25,7 @@ impl Default for SettingsData {
         Self {
             font_size: 18.0,
             reopen_last: true,
-            indent_line_start: true,
+            indent_line_start: false,
             dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
         }
     }

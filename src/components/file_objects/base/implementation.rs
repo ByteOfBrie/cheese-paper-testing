@@ -359,6 +359,8 @@ impl dyn FileObject {
         parent_id: &FileID,
         objects: &mut FileObjectStore,
     ) -> Result<(), CheeseError> {
+        log::debug!("removing file: {child_id:?}");
+
         let removed_child = objects.remove(child_id).unwrap();
 
         removed_child.borrow_mut().remove_file_object(objects)?;

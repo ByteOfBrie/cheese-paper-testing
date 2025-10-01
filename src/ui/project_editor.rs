@@ -671,6 +671,8 @@ impl ProjectEditor {
             }
         }
 
+        log::debug!("Processing rename event: {event:?}");
+
         let source_path = event
             .paths
             .first()
@@ -689,16 +691,18 @@ impl ProjectEditor {
         let moving_file_id = match self.project.find_object_by_path(source_path) {
             Some(fileid) => fileid,
             None => {
-                log::debug!(
-                    "Processed file rename for object with non-object source path: {event:?}, \
-                    nothing to do."
-                );
                 if dest_path.starts_with(self.project.get_path()) {
+                    log::debug!("Processing move as modify event: {event:?}");
                     return self
                         .process_modify_event(dest_path)
                         .map(|fileid| vec![fileid]);
+                } else {
+                    log::debug!(
+                        "Processed file rename for object with non-object source path: {event:?}, \
+                    nothing to do."
+                    );
+                    return None;
                 }
-                return None;
             }
         };
         let dest_name = dest_path.file_name().expect("dest should have a file name");
@@ -800,6 +804,11 @@ impl ProjectEditor {
     }
 
     fn process_delete(&mut self, delete_path: &Path) -> Option<FileID> {
+        if delete_path.exists() {
+            log::debug!("Not processing delete event for file that still exists");
+            return None;
+        }
+
         let deleting_file_id = self.project.find_object_by_path(delete_path)?;
 
         let parent_file_id = match self.project.find_object_parent(&deleting_file_id) {

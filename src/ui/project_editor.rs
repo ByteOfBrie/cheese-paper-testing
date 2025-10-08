@@ -493,22 +493,75 @@ impl ProjectEditor {
         }
     }
 
+    /// Determine if we care about an event happening at this path. This filters out things like events
+    /// starting with `.git/`, hidden files (on linux), unknown extensions, or files not in one of the
+    /// three top level folders
+    ///
+    /// It does not check for files existing, and does not do anything specific to modification types.
+    /// The string argument is only to provide better log message output
+    fn is_relevant_event_path(&self, modify_path: &Path, modification_type: &'static str) -> bool {
+        if modify_path
+            .extension()
+            .is_none_or(|extension| extension != "md" && extension != "toml")
+        {
+            // we write .tmp files and then immediately remove them and other editors can do the same
+            // we also don't care about files that other programs generate
+            return false;
+        }
+
+        if modify_path
+            .file_name()
+            .is_none_or(|filename| filename.to_string_lossy().starts_with('.'))
+        {
+            // modified files should have a name, and we don't want to look at hidden files
+            return false;
+        }
+
+        let relative_path = match modify_path.strip_prefix(self.project.get_path()) {
+            Ok(relative_path) => relative_path,
+            Err(err) => {
+                log::error!("invalid {modification_type} event path not in project: {err}");
+                return false;
+            }
+        };
+
+        if !(relative_path.starts_with("text")
+            || relative_path.starts_with("characters")
+            || relative_path.starts_with("worldbuilding"))
+        {
+            if !relative_path.starts_with(".git") {
+                // We expect a bunch of git events, but other events are unexpected, so log it
+                log::debug!(
+                    "invalid {modification_type} event path not in project folders: {modify_path:?}"
+                );
+            }
+            return false;
+        }
+
+        true
+    }
+
     /// process a creation or modify event. These events are basically equivalent because of how
     /// different editors and programs actually write to disk, so we have to process them together.
     /// This could also be a file being moved into the project.
     ///
     /// Returns a directory if it should be rescanned
     fn process_modify_event(&mut self, modify_path: &Path) -> Option<FileID> {
-        // Try to read the file, if it has an ID, look up that ID
-        // and call reload file, otherwise give up (it might come in as
-        // a different event, but we don't care about modifications
-        // to files we don't know)
-
-        if modify_path.extension().is_some_and(|ext| ext == "tmp") {
-            // we write .tmp files and then immediately remove them, ignore this file
+        // special case, check for the project info file *first*
+        if *modify_path == self.project.get_project_info_file() {
+            if let Err(err) = self.project.reload_file() {
+                log::warn!("Could not reload project info file: {err}")
+            }
+            // regardless of what happened, we're done
             return None;
         }
 
+        // Filter out events like .git or tmp files
+        if !self.is_relevant_event_path(modify_path, "create/modify") {
+            return None;
+        }
+
+        // Lastly, check if it still exists before trying to read
         if !modify_path.exists() {
             log::debug!(
                 "Attempted to process modification of a file that no longer exists: {modify_path:?}"
@@ -516,126 +569,91 @@ impl ProjectEditor {
             return None;
         }
 
-        if *modify_path == self.project.get_project_info_file() {
-            match self.project.reload_file() {
-                Ok(_) => {}
-                Err(err) => {
-                    log::warn!("Could not reload project info file: {err}")
-                }
+        log::debug!("Processing create/modify event with path: {modify_path:?}");
+
+        if let Some(id) = self.project.find_object_by_path(modify_path) {
+            let file_object = self.project.objects.get(&id).unwrap();
+            if let Err(err) = file_object.borrow_mut().reload_file() {
+                log::warn!("Error loading file {}: {err}", file_object.borrow());
             }
+            // This was a modify, not a creation, nothing to do
             None
         } else {
-            let relative_path = match modify_path.strip_prefix(self.project.get_path()) {
-                Ok(relative_path) => relative_path,
-                Err(err) => {
-                    log::error!("invalid modify/create path not in project: {err}");
-                    return None;
-                }
-            };
+            let ancestors = modify_path.ancestors();
 
-            if !(relative_path.starts_with("text")
-                || relative_path.starts_with("characters")
-                || relative_path.starts_with("worldbuilding"))
-            {
-                if !relative_path.starts_with(".git") {
-                    // We expect a bunch of git events, but other events are unexpected, so log it
-                    log::debug!(
-                        "invalid modify/create path not in project folders: {modify_path:?}"
-                    );
-                }
-                return None;
-            }
-
-            log::debug!("Processing create/modify event with path: {modify_path:?}");
-
-            match self.project.find_object_by_path(modify_path) {
-                Some(id) => {
-                    let file_object = self.project.objects.get(&id).unwrap();
-                    if let Err(err) = file_object.borrow_mut().reload_file() {
-                        log::warn!("Error loading file {}: {err}", file_object.borrow());
+            for ancestor in ancestors {
+                // We need to check if this object can be loaded, which means
+                // that its parent is already in the tree
+                let parent_path = match ancestor.parent() {
+                    Some(parent) => parent,
+                    None => {
+                        log::error!(
+                            "unexpected result while processing event: \
+                            parents should exist and the loop should always \
+                            finish before it escapes the project tree",
+                        );
+                        return None;
                     }
-                    // This was a modify, not a creation, nothing to do
-                    None
-                }
-                None => {
-                    let ancestors = modify_path.ancestors();
+                };
 
-                    for ancestor in ancestors {
-                        // We need to check if this object can be loaded, which means
-                        // that its parent is already in the tree
+                let parent_id = match self.project.find_object_by_path(parent_path) {
+                    Some(id) => id,
+                    None => continue,
+                };
 
-                        let parent_path = match ancestor.parent() {
-                            Some(parent) => parent,
-                            None => {
-                                log::error!(
-                                    "unexpected result while processing event: \
-                                    parents should exist and the loop should always \
-                                    finish before it escapes the project tree",
-                                );
-                                return None;
-                            }
-                        };
+                let parent_object = self.project.objects.get(&parent_id).unwrap();
 
-                        let parent_id = match self.project.find_object_by_path(parent_path) {
-                            Some(id) => id,
-                            None => continue,
-                        };
+                let new_index = parent_object.borrow_mut().get_base().children.len();
 
-                        let parent_object = self.project.objects.get(&parent_id).unwrap();
-
-                        let new_index = parent_object.borrow_mut().get_base().children.len();
-
-                        // We've found a parent, which means that this object should
-                        // have from_file called on it
-                        let new_object = match from_file(ancestor, Some(new_index)) {
-                            Ok(file_object_creation) => file_object_creation,
-                            Err(err) => {
-                                log::warn!(
-                                    "Could not open file as part of processing modifications: {err}, \
+                // We've found a parent, which means that this object should
+                // have from_file called on it
+                let new_object = match from_file(ancestor, Some(new_index)) {
+                    Ok(file_object_creation) => file_object_creation,
+                    Err(err) => {
+                        log::warn!(
+                            "Could not open file as part of processing modifications: {err}, \
                                     giving up on processing event"
-                                );
-                                return None;
-                            }
-                        };
-
-                        let (new_object, descendents): (Box<RefCell<dyn FileObject>>, _) =
-                            match new_object {
-                                FileObjectCreation::Scene(parent, children) => {
-                                    (Box::new(RefCell::new(parent)), children)
-                                }
-                                FileObjectCreation::Character(parent, children) => {
-                                    (Box::new(RefCell::new(parent)), children)
-                                }
-                                FileObjectCreation::Folder(parent, children) => {
-                                    (Box::new(RefCell::new(parent)), children)
-                                }
-                                FileObjectCreation::Place(parent, children) => {
-                                    (Box::new(RefCell::new(parent)), children)
-                                }
-                            };
-
-                        let id = new_object.borrow().id().clone();
-
-                        // Add to the parent's list of children
-                        parent_object
-                            .borrow_mut()
-                            .get_base_mut()
-                            .children
-                            .push(id.clone());
-
-                        // Add the parent object to the object list
-                        self.project.objects.insert(id, new_object);
-
-                        // Add all of the descendents to the list
-                        for (id_string, object) in descendents {
-                            self.project.objects.insert(id_string, object);
-                        }
-
-                        return Some(parent_id);
+                        );
+                        return None;
                     }
-                    unreachable!("Ancestors should be found or error before this point")
+                };
+
+                let (new_object, descendents): (Box<RefCell<dyn FileObject>>, _) = match new_object
+                {
+                    FileObjectCreation::Scene(parent, children) => {
+                        (Box::new(RefCell::new(parent)), children)
+                    }
+                    FileObjectCreation::Character(parent, children) => {
+                        (Box::new(RefCell::new(parent)), children)
+                    }
+                    FileObjectCreation::Folder(parent, children) => {
+                        (Box::new(RefCell::new(parent)), children)
+                    }
+                    FileObjectCreation::Place(parent, children) => {
+                        (Box::new(RefCell::new(parent)), children)
+                    }
+                };
+
+                let id = new_object.borrow().id().clone();
+
+                // Add to the parent's list of children
+                parent_object
+                    .borrow_mut()
+                    .get_base_mut()
+                    .children
+                    .push(id.clone());
+
+                // Add the parent object to the object list
+                self.project.objects.insert(id, new_object);
+
+                // Add all of the descendents to the list
+                for (id_string, object) in descendents {
+                    self.project.objects.insert(id_string, object);
                 }
+
+                return Some(parent_id);
             }
+            unreachable!("Ancestors should be found or error before this point")
         }
     }
 

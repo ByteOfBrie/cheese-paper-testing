@@ -698,9 +698,10 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                     for (index, file) in indexed_files {
                         // We process every dir but only some files
                         if !file.is_dir() {
-                            // Check for extension
-                            if file.extension().unwrap_or_default() != "toml"
-                                && file.extension().unwrap_or_default() != "md"
+                            // Check for missing or unknown extension
+                            if file
+                                .extension()
+                                .is_none_or(|extension| extension != "toml" && extension != "md")
                             {
                                 log::debug!("skipping regular {file:?} with unknown extension");
                                 continue;

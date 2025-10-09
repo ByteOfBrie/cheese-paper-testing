@@ -87,11 +87,13 @@ impl ProjectTracker {
 
         Ok(Self {
             repo,
-            snapshot_time: Instant::now(), // technically untrue, but we're going to snapshot anyway
+            snapshot_time: Instant::now(), // technically untrue, but we're going to snapshot right away anyway
         })
     }
 
     pub fn snapshot(&mut self, reason: &str) -> Result<bool, String> {
+        self.snapshot_time = Instant::now();
+
         let committer = Signature::now(COMMITTER_NAME, COMMITTER_EMAIL).unwrap();
 
         let mut index = self.repo.index().expect("cannot get the Index file");
@@ -150,8 +152,6 @@ impl ProjectTracker {
         ) {
             return Err(format!("failed to create snapshot: {err}"));
         }
-
-        self.snapshot_time = Instant::now();
 
         Ok(true)
     }

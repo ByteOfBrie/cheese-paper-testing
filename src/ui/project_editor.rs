@@ -657,9 +657,14 @@ impl ProjectEditor {
                 return self.process_delete(delete_path).map(|fileid| vec![fileid]);
             }
             RenameMode::To => {
-                // we could *maybe* try to treat this as a creation/modify, but it's going to involve
-                // making some leaps so the safest thing is just to do nothing
-                return None;
+                let dest_path = event
+                    .paths
+                    .last()
+                    .expect("to event should have a destination");
+
+                return self
+                    .process_modify_event(dest_path)
+                    .map(|fileid| vec![fileid]);
             }
             RenameMode::Both => {}
             _ => {

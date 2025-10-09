@@ -154,7 +154,8 @@ impl dyn FileObject {
     /// in `children` will actually be sorted.
     pub fn fix_indexing(&mut self, objects: &FileObjectStore) {
         for (count, child) in self.children(objects).enumerate() {
-            match child.borrow_mut().set_index(count, objects) {
+            let set_index_result = child.borrow_mut().set_index(count, objects);
+            match set_index_result {
                 Ok(true) => {
                     log::debug!("Updated index of {} to {count}", child.borrow())
                 }

@@ -349,6 +349,25 @@ pub enum FileObjectCreation {
     Place(Place, FileObjectStore),
 }
 
+impl FileObjectCreation {
+    pub fn into_boxed(self) -> (Box<RefCell<dyn FileObject>>, FileObjectStore) {
+        match self {
+            FileObjectCreation::Scene(parent, children) => {
+                (Box::new(RefCell::new(parent)), children)
+            }
+            FileObjectCreation::Character(parent, children) => {
+                (Box::new(RefCell::new(parent)), children)
+            }
+            FileObjectCreation::Folder(parent, children) => {
+                (Box::new(RefCell::new(parent)), children)
+            }
+            FileObjectCreation::Place(parent, children) => {
+                (Box::new(RefCell::new(parent)), children)
+            }
+        }
+    }
+}
+
 fn parent_contains(parent_id: &FileID, checking_id: &FileID, objects: &FileObjectStore) -> bool {
     let parent = objects.get(parent_id).unwrap();
 
@@ -709,23 +728,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
                         }
                         match from_file(&file, Some(index)) {
                             Ok(created_files) => {
-                                let (object, mut descendents): (
-                                    Box<RefCell<dyn FileObject>>,
-                                    FileObjectStore,
-                                ) = match created_files {
-                                    FileObjectCreation::Scene(object, descendents) => {
-                                        (Box::new(RefCell::new(object)), descendents)
-                                    }
-                                    FileObjectCreation::Folder(object, descendents) => {
-                                        (Box::new(RefCell::new(object)), descendents)
-                                    }
-                                    FileObjectCreation::Character(object, descendents) => {
-                                        (Box::new(RefCell::new(object)), descendents)
-                                    }
-                                    FileObjectCreation::Place(object, descendents) => {
-                                        (Box::new(RefCell::new(object)), descendents)
-                                    }
-                                };
+                                let (object, mut descendents) = created_files.into_boxed();
 
                                 let id = object.borrow().id().clone();
                                 base.children.push(id.clone());

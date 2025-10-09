@@ -5,9 +5,7 @@ mod util;
 
 use crate::ui::prelude::*;
 
-use crate::components::file_objects::{
-    base::FileObjectCreation, from_file, utils::process_name_for_filename,
-};
+use crate::components::file_objects::{from_file, utils::process_name_for_filename};
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
@@ -607,30 +605,14 @@ impl ProjectEditor {
 
                 // We've found a parent, which means that this object should
                 // have from_file called on it
-                let new_object = match from_file(ancestor, Some(new_index)) {
-                    Ok(file_object_creation) => file_object_creation,
+                let (new_object, descendents) = match from_file(ancestor, Some(new_index)) {
+                    Ok(file_object_creation) => file_object_creation.into_boxed(),
                     Err(err) => {
                         log::warn!(
                             "Could not open file as part of processing modifications: {err}, \
                                     giving up on processing event"
                         );
                         return None;
-                    }
-                };
-
-                let (new_object, descendents): (Box<RefCell<dyn FileObject>>, _) = match new_object
-                {
-                    FileObjectCreation::Scene(parent, children) => {
-                        (Box::new(RefCell::new(parent)), children)
-                    }
-                    FileObjectCreation::Character(parent, children) => {
-                        (Box::new(RefCell::new(parent)), children)
-                    }
-                    FileObjectCreation::Folder(parent, children) => {
-                        (Box::new(RefCell::new(parent)), children)
-                    }
-                    FileObjectCreation::Place(parent, children) => {
-                        (Box::new(RefCell::new(parent)), children)
                     }
                 };
 

@@ -567,16 +567,23 @@ impl ProjectEditor {
             return None;
         }
 
-        log::debug!("Processing create/modify event with path: {modify_path:?}");
-
         if let Some(id) = self.project.find_object_by_path(modify_path) {
             let file_object = self.project.objects.get(&id).unwrap();
+
+            log::debug!(
+                "Processing modify event at path: {modify_path:?}\n\
+                Found file object: {}, reloading file",
+                file_object.borrow()
+            );
+
             if let Err(err) = file_object.borrow_mut().reload_file() {
                 log::warn!("Error loading file {}: {err}", file_object.borrow());
             }
             // This was a modify, not a creation, nothing to do
             None
         } else {
+            log::debug!("Processing create/modify event at path: {modify_path:?}");
+
             let ancestors = modify_path.ancestors();
 
             for ancestor in ancestors {
@@ -624,6 +631,8 @@ impl ProjectEditor {
                     .get_base_mut()
                     .children
                     .push(id.clone());
+
+                log::debug!("Loaded new file object: {id}");
 
                 // Add the parent object to the object list
                 self.project.objects.insert(id, new_object);

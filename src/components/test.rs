@@ -15,6 +15,8 @@ use std::collections::HashMap;
 #[cfg(test)]
 use std::ffi::OsString;
 #[cfg(test)]
+use std::fs::create_dir;
+#[cfg(test)]
 use std::fs::{read_dir, read_to_string};
 #[cfg(test)]
 use std::path::Path;
@@ -2577,4 +2579,72 @@ fn test_tracker_creation_basic() {
     project.process_updates();
 
     assert_eq!(project.objects.len(), 4);
+}
+
+/// Create a new folder and something in it, ensure that it all gets read in
+#[test]
+fn test_tracker_creation_folder() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let scene_text = "123456";
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    assert_eq!(project.objects.len(), 3);
+
+    create_dir(base_dir.path().join("test_project/text/folder1")).unwrap();
+
+    write_with_temp_file(
+        &Path::join(base_dir.path(), "test_project/text/folder1/scene.md"),
+        scene_text.as_bytes(),
+    )
+    .unwrap();
+
+    // Sleep and call process_updates twice with more time than the WATCHER_MSEC_DURATION
+    // to make sure it actually gets woken up and runs
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 5);
+}
+
+/// Ensure that a place gets read as one single object
+#[test]
+fn test_tracker_creation_place() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let place_file_text = r#"id = "1"
+file_type = "place""#;
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    assert_eq!(project.objects.len(), 3);
+
+    create_dir(Path::join(
+        base_dir.path(),
+        "test_project/worldbuilding/000-place1/",
+    ))
+    .unwrap();
+
+    write_with_temp_file(
+        &Path::join(
+            base_dir.path(),
+            "test_project/worldbuilding/000-place1/metadata.toml",
+        ),
+        place_file_text.as_bytes(),
+    )
+    .unwrap();
+    // Sleep and call process_updates twice with more time than the WATCHER_MSEC_DURATION
+    // to make sure it actually gets woken up and runs
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 4);
+    assert!(project.objects.contains_key(&file_id("1")));
 }

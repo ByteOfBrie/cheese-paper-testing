@@ -5,28 +5,20 @@ mod util;
 
 use crate::ui::prelude::*;
 
-use crate::components::file_objects::{from_file, utils::process_name_for_filename};
+use crate::components::file_objects::utils::process_name_for_filename;
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 
-use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::TreeViewState;
-use notify::event::RenameMode;
-use notify::{EventKind, event::ModifyKind};
-use notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use rfd::FileDialog;
 use spellbook::Dictionary;
-
-type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
-type WatcherReceiver = std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>;
 
 #[derive(Debug, Default)]
 pub struct SpellCheckStatus {
@@ -53,10 +45,6 @@ pub struct ProjectEditor {
 
     pub editor_context: EditorContext,
 
-    file_event_rx: WatcherReceiver,
-
-    /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
-    _watcher: RecommendedDebouncer,
     tracker: Option<ProjectTracker>,
 
     /// We need to keep track of the tree state to set selection
@@ -74,8 +62,6 @@ impl Debug for ProjectEditor {
             .field("dock_state", &self.dock_state)
             .field("title_needs_update", &self.title_needs_update)
             .field("editor_context", &self.editor_context)
-            .field("file_event_rx", &self.file_event_rx)
-            .field("_watcher", &self._watcher)
             .field("tracker", &self.tracker)
             .finish()
     }
@@ -176,14 +162,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         // disable moving tabs into windows (untested, could maybe be supported later)
         false
     }
-}
-
-fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
-    let (tx, rx) = std::sync::mpsc::channel();
-
-    let watcher = new_debouncer(std::time::Duration::from_secs(2), None, tx)?;
-
-    Ok((watcher, rx))
 }
 
 /// Update the title of the project
@@ -394,78 +372,7 @@ impl ProjectEditor {
             self.editor_context.version += 1;
         }
 
-        // check for file system events and process them
-        if let Ok(response) = self.file_event_rx.try_recv() {
-            match response {
-                Ok(events) => {
-                    let mut file_objects_needing_rescan = HashSet::new();
-                    let mut found_events = false;
-                    for event in events {
-                        let mut git_event = false;
-                        for event_path in event.paths.iter() {
-                            if event_path.iter().any(|component| component == ".git") {
-                                git_event = true;
-                            }
-                        }
-                        if git_event {
-                            continue;
-                        }
-                        if let EventKind::Access(_) = event.kind {
-                            continue;
-                        }
-
-                        // We now have an event that isn't noise from .git or file opens:
-                        found_events = true;
-                        log::debug!("found event: {event:?}");
-
-                        match event.kind {
-                            EventKind::Create(_create_kind) => {
-                                let modify_path = event.paths.first().unwrap();
-                                log::debug!("processing creation event: {event:?}");
-                                self.process_modify_event(modify_path);
-                            }
-                            EventKind::Modify(ModifyKind::Data(_data_change)) => {
-                                let modify_path = event.paths.first().unwrap();
-                                log::debug!("processing modify event: {event:?}");
-                                self.process_modify_event(modify_path);
-                            }
-                            EventKind::Modify(ModifyKind::Name(rename_mode)) => {
-                                if let Some(need_rescan_vec) =
-                                    self.process_rename_event(event, rename_mode)
-                                {
-                                    for need_rescan_id in need_rescan_vec {
-                                        file_objects_needing_rescan.insert(need_rescan_id);
-                                    }
-                                }
-                            }
-                            EventKind::Remove(_remove_kind) => {
-                                let delete_path = event
-                                    .paths
-                                    .first()
-                                    .expect("Rename event should have source");
-
-                                if let Some(fileid) = self.process_delete(delete_path) {
-                                    file_objects_needing_rescan.insert(fileid);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    for object_needing_rescan in file_objects_needing_rescan {
-                        self.project
-                            .objects
-                            .get(&object_needing_rescan)
-                            .unwrap()
-                            .borrow_mut()
-                            .rescan_indexing(&self.project.objects);
-                    }
-                    if found_events {
-                        log::debug!("finished processing events");
-                    }
-                }
-                Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
-            }
-        }
+        self.project.process_updates();
 
         // automatically track progerss if we have a tracker
         if let Some(tracker) = &mut self.tracker
@@ -489,381 +396,6 @@ impl ProjectEditor {
         {
             self.set_editor_tab(&focused_text_box.page.clone());
         }
-    }
-
-    /// Determine if we care about an event happening at this path. This filters out things like events
-    /// starting with `.git/`, hidden files (on linux), unknown extensions, or files not in one of the
-    /// three top level folders
-    ///
-    /// It does not check for files existing, and does not do anything specific to modification types.
-    /// The string argument is only to provide better log message output
-    fn is_relevant_event_path(&self, modify_path: &Path, modification_type: &'static str) -> bool {
-        if modify_path
-            .extension()
-            .is_none_or(|extension| extension != "md" && extension != "toml")
-        {
-            // we write .tmp files and then immediately remove them and other editors can do the same
-            // we also don't care about files that other programs generate
-            return false;
-        }
-
-        if modify_path
-            .file_name()
-            .is_none_or(|filename| filename.to_string_lossy().starts_with('.'))
-        {
-            // modified files should have a name, and we don't want to look at hidden files
-            return false;
-        }
-
-        let relative_path = match modify_path.strip_prefix(self.project.get_path()) {
-            Ok(relative_path) => relative_path,
-            Err(err) => {
-                log::error!("invalid {modification_type} event path not in project: {err}");
-                return false;
-            }
-        };
-
-        if !(relative_path.starts_with("text")
-            || relative_path.starts_with("characters")
-            || relative_path.starts_with("worldbuilding"))
-        {
-            if !relative_path.starts_with(".git") {
-                // We expect a bunch of git events, but other events are unexpected, so log it
-                log::debug!(
-                    "invalid {modification_type} event path not in project folders: {modify_path:?}"
-                );
-            }
-            return false;
-        }
-
-        true
-    }
-
-    /// process a creation or modify event. These events are basically equivalent because of how
-    /// different editors and programs actually write to disk, so we have to process them together.
-    /// This could also be a file being moved into the project.
-    ///
-    /// Returns a directory if it should be rescanned
-    fn process_modify_event(&mut self, modify_path: &Path) -> Option<FileID> {
-        // special case, check for the project info file *first*
-        if *modify_path == self.project.get_project_info_file() {
-            if let Err(err) = self.project.reload_file() {
-                log::warn!("Could not reload project info file: {err}")
-            }
-            // regardless of what happened, we're done
-            return None;
-        }
-
-        // Filter out events like .git or tmp files
-        if !self.is_relevant_event_path(modify_path, "create/modify") {
-            return None;
-        }
-
-        // Lastly, check if it still exists before trying to read
-        if !modify_path.exists() {
-            log::debug!(
-                "Attempted to process modification of a file that no longer exists: {modify_path:?}"
-            );
-            return None;
-        }
-
-        if let Some(id) = self.project.find_object_by_path(modify_path) {
-            let file_object = self.project.objects.get(&id).unwrap();
-
-            log::debug!(
-                "Processing modify event at path: {modify_path:?}\n\
-                Found file object: {}, reloading file",
-                file_object.borrow()
-            );
-
-            if let Err(err) = file_object.borrow_mut().reload_file() {
-                log::warn!("Error loading file {}: {err}", file_object.borrow());
-            }
-            // This was a modify, not a creation, nothing to do
-            None
-        } else {
-            log::debug!("Processing create/modify event at path: {modify_path:?}");
-
-            let ancestors = modify_path.ancestors();
-
-            for ancestor in ancestors {
-                // We need to check if this object can be loaded, which means
-                // that its parent is already in the tree
-                let parent_path = match ancestor.parent() {
-                    Some(parent) => parent,
-                    None => {
-                        log::error!(
-                            "unexpected result while processing event: \
-                            parents should exist and the loop should always \
-                            finish before it escapes the project tree",
-                        );
-                        return None;
-                    }
-                };
-
-                let parent_id = match self.project.find_object_by_path(parent_path) {
-                    Some(id) => id,
-                    None => continue,
-                };
-
-                let parent_object = self.project.objects.get(&parent_id).unwrap();
-
-                let new_index = parent_object.borrow_mut().get_base().children.len();
-
-                // We've found a parent, which means that this object should
-                // have from_file called on it
-                let (new_object, descendents) = match from_file(ancestor, Some(new_index)) {
-                    Ok(file_object_creation) => file_object_creation.into_boxed(),
-                    Err(err) => {
-                        log::warn!(
-                            "Could not open file as part of processing modifications: {err}, \
-                                    giving up on processing event"
-                        );
-                        return None;
-                    }
-                };
-
-                let id = new_object.borrow().id().clone();
-
-                // Add to the parent's list of children
-                parent_object
-                    .borrow_mut()
-                    .get_base_mut()
-                    .children
-                    .push(id.clone());
-
-                log::debug!("Loaded new file object: {id}");
-
-                // Add the parent object to the object list
-                self.project.objects.insert(id, new_object);
-
-                // Add all of the descendents to the list
-                for (id_string, object) in descendents {
-                    self.project.objects.insert(id_string, object);
-                }
-
-                return Some(parent_id);
-            }
-            unreachable!("Ancestors should be found or error before this point")
-        }
-    }
-
-    /// Processes rename events as best-effort, currently cannot handle complex cases well
-    ///
-    /// Returns a list of file objects that need to be rescanned for indexing
-    fn process_rename_event(
-        &mut self,
-        event: DebouncedEvent,
-        rename_mode: RenameMode,
-    ) -> Option<Vec<FileID>> {
-        match rename_mode {
-            RenameMode::From => {
-                let delete_path = event
-                    .paths
-                    .first()
-                    .expect("From rename should have a source");
-
-                return self.process_delete(delete_path).map(|fileid| vec![fileid]);
-            }
-            RenameMode::To => {
-                let dest_path = event
-                    .paths
-                    .last()
-                    .expect("to event should have a destination");
-
-                return self
-                    .process_modify_event(dest_path)
-                    .map(|fileid| vec![fileid]);
-            }
-            RenameMode::Both => {}
-            _ => {
-                // Give up, we don't want to make assumptoins at this stage
-                log::warn!(
-                    "Encountered rename event: {event:?}, not enough information to continue processing"
-                );
-                return None;
-            }
-        }
-
-        log::debug!("Processing rename event: {event:?}");
-
-        let source_path = event
-            .paths
-            .first()
-            .expect("Rename event should have source");
-
-        let dest_path = event
-            .paths
-            .last()
-            .expect("Rename event should have destination");
-
-        if source_path == dest_path {
-            log::debug!("Rename event: {event:?} has the same source and dest, nothing to do");
-            return None;
-        }
-
-        let moving_file_id = match self.project.find_object_by_path(source_path) {
-            Some(fileid) => fileid,
-            None => {
-                if dest_path.starts_with(self.project.get_path()) {
-                    log::debug!("Processing move as modify event: {event:?}");
-                    return self
-                        .process_modify_event(dest_path)
-                        .map(|fileid| vec![fileid]);
-                } else {
-                    log::debug!(
-                        "Processed file rename for object with non-object source path: {event:?}, \
-                    nothing to do."
-                    );
-                    return None;
-                }
-            }
-        };
-        let dest_name = dest_path.file_name().expect("dest should have a file name");
-
-        let source_directory = source_path
-            .parent()
-            .expect("source should have a directory");
-        let dest_directory = source_path.parent().expect("dest should have a directory");
-
-        let source_parent_file_id = match self.project.find_object_by_path(source_directory) {
-            Some(source_parent_id) => source_parent_id,
-            None => {
-                log::error!(
-                    "Tried to move object but could not find it's parent: {source_directory:?}. \
-                    Event: {event:?}"
-                );
-                return None;
-            }
-        };
-
-        // Easy case: the file has been renamed within the directory it's in
-        if source_directory == dest_directory {
-            let mut object = self
-                .project
-                .objects
-                .get(&moving_file_id)
-                .unwrap()
-                .borrow_mut();
-
-            // Update the filename
-            object.get_base_mut().file.basename = dest_name.to_owned();
-            // propagate that to any children
-            for child in object.children(&self.project.objects) {
-                child
-                    .borrow_mut()
-                    .process_path_update(object.get_path(), &self.project.objects);
-            }
-            // Currently, we don't do anything to cleanup the directory or filename in this case.
-            // It'll probably happen later, but we don't bother now (this is complicated enough already)
-            return Some(vec![source_parent_file_id]);
-        }
-
-        // More complicated case: the file has been moved to another part of the tree. We're basically
-        // processing a move, but without doing the actual move outselves. This should probably be
-        // cleanup up later (#128)
-        let dest_file_id = match self.project.find_object_by_path(dest_directory) {
-            Some(dest_file_id) => dest_file_id,
-            None => {
-                log::debug!(
-                    "Event: {event:?} moves file object out of project directory, processing as a delete"
-                );
-                return self.process_delete(dest_path).map(|fileid| vec![fileid]);
-            }
-        };
-
-        // Remove the moving object from it's current parent
-        let source_parent = self
-            .project
-            .objects
-            .get(&source_parent_file_id)
-            .expect("objects should contain source file id");
-
-        let child_id_position = source_parent
-            .borrow()
-            .get_base()
-            .children
-            .iter()
-            .position(|val| moving_file_id == *val)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Children should only be removed from their parents. \
-                    child id: {moving_file_id}, parent: {source_parent_file_id}"
-                )
-            });
-
-        let child_id_string = source_parent
-            .borrow_mut()
-            .get_base_mut()
-            .children
-            .remove(child_id_position);
-
-        let dest_parent = self.project.objects.get(&dest_file_id).unwrap();
-
-        // How do I find the proper place here?
-        // Move the object into the children of dest (at the proper place)
-        dest_parent
-            .borrow_mut()
-            .get_base_mut()
-            .children
-            .push(child_id_string);
-
-        let child = self.project.objects.get(&moving_file_id).unwrap();
-
-        child
-            .borrow_mut()
-            .process_path_update(dest_directory.to_path_buf(), &self.project.objects);
-
-        Some(vec![source_parent_file_id, dest_file_id])
-    }
-
-    fn process_delete(&mut self, delete_path: &Path) -> Option<FileID> {
-        if delete_path.exists() {
-            log::debug!("Not processing delete event for file that still exists");
-            return None;
-        }
-
-        let deleting_file_id = self.project.find_object_by_path(delete_path)?;
-
-        let parent_file_id = match self.project.find_object_parent(&deleting_file_id) {
-            Some(parent_file_id) => parent_file_id,
-            None => {
-                log::error!(
-                    "Could not remove file object: {deleting_file_id}: Could not find parent"
-                );
-                return None;
-            }
-        };
-
-        let removed_child = self.project.objects.remove(&deleting_file_id).unwrap();
-
-        // We're misusing a function here, but it does what we want still. It assumes that the file
-        // still exists on disk, while we know it expressly doesn't. A bunch of errors will be generated
-        // and we can ignore all of them, since removal happens first
-        let _ = removed_child
-            .borrow_mut()
-            .remove_file_object(&mut self.project.objects);
-
-        let parent = self.project.objects.get(&parent_file_id).unwrap();
-
-        // Remove this from the list of children
-        let child_index = parent
-            .borrow()
-            .get_base()
-            .children
-            .iter()
-            .position(|id| *id == deleting_file_id)
-            .expect("child_id must be a child of this object");
-
-        parent
-            .borrow_mut()
-            .get_base_mut()
-            .children
-            .remove(child_index);
-
-        parent.borrow_mut().fix_indexing(&self.project.objects);
-
-        Some(parent_file_id)
     }
 
     fn set_editor_tab(&mut self, tab: &Page) {
@@ -894,14 +426,6 @@ impl ProjectEditor {
         settings: Settings,
         last_export_folder: PathBuf,
     ) -> Self {
-        // this might later get wrapped in an optional block or something but not worth it right now
-        let (mut watcher, file_event_rx) =
-            create_watcher().expect("Should always be able to create a watcher");
-
-        watcher
-            .watch(project.get_path(), RecursiveMode::Recursive)
-            .unwrap();
-
         let tracker = match ProjectTracker::new(&project.get_path()) {
             Ok(mut tracker) => {
                 if let Err(err) = tracker.snapshot("Startup") {
@@ -934,8 +458,6 @@ impl ProjectEditor {
                 last_export_folder,
                 version: 0,
             },
-            file_event_rx,
-            _watcher: watcher,
             tracker,
             tree_state: Default::default(),
             current_open_tab: None,

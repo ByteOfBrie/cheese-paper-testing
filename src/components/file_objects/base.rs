@@ -301,7 +301,7 @@ pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String), Chees
         None => return Err(cheese_error!("value was not string")),
     };
 
-    let file_data = std::fs::read_to_string(file_to_read).expect("could not read file");
+    let file_data = std::fs::read_to_string(file_to_read)?;
 
     let (metadata_str, file_content): (&str, &str) = match extension == "md" {
         false => (&file_data, ""),

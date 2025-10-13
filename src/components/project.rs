@@ -722,9 +722,11 @@ impl Project {
     /// It does not check for files existing, and does not do anything specific to modification types.
     /// The string argument is only to provide better log message output
     fn is_relevant_event_path(&self, modify_path: &Path, modification_type: &'static str) -> bool {
+        // We assume that any files that don't have an extension are folders but this function
+        // not checking disk means we can't verify that
         if modify_path
             .extension()
-            .is_none_or(|extension| extension != "md" && extension != "toml")
+            .is_some_and(|extension| extension != "md" && extension != "toml")
         {
             // we write .tmp files and then immediately remove them and other editors can do the same
             // we also don't care about files that other programs generate

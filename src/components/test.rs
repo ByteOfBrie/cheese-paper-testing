@@ -23,6 +23,8 @@ use std::path::Path;
 use std::cell::RefCell;
 #[cfg(test)]
 use std::rc::Rc;
+#[cfg(test)]
+use std::{thread, time};
 
 #[cfg(test)]
 fn file_id(s: &str) -> Rc<String> {
@@ -2548,4 +2550,31 @@ file_type = "worldbuilding""#;
         }
         _ => panic!(),
     }
+}
+
+#[test]
+fn test_tracker_creation_basic() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let scene_text = "123456";
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    assert_eq!(project.objects.len(), 3);
+
+    write_with_temp_file(
+        &Path::join(base_dir.path(), "test_project/text/scene.md"),
+        scene_text.as_bytes(),
+    )
+    .unwrap();
+
+    // Sleep and call process_updates twice with more time than the WATCHER_MSEC_DURATION
+    // to make sure it actually gets woken up and runs
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 4);
 }

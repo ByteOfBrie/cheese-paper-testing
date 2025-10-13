@@ -132,10 +132,20 @@ fn load_top_level_folder(
     }
 }
 
+#[cfg(not(test))]
+const WATCHER_MSEC_DURATION: u64 = 1000;
+
+#[cfg(test)]
+const WATCHER_MSEC_DURATION: u64 = 50;
+
 fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
     let (tx, rx) = std::sync::mpsc::channel();
 
-    let watcher = new_debouncer(std::time::Duration::from_secs(2), None, tx)?;
+    let watcher = new_debouncer(
+        std::time::Duration::from_millis(WATCHER_MSEC_DURATION),
+        None,
+        tx,
+    )?;
 
     Ok((watcher, rx))
 }

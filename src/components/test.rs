@@ -2648,3 +2648,52 @@ file_type = "place""#;
     assert_eq!(project.objects.len(), 4);
     assert!(project.objects.contains_key(&file_id("1")));
 }
+
+/// First, create a file in another folder, then move it in
+#[test]
+fn test_tracker_creation_by_movement() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+    let other_dir = tempfile::TempDir::new().unwrap();
+
+    let scene_text = r#"id = "1"
+++++++++
+123456"#;
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    write_with_temp_file(&other_dir.path().join("scene.md"), scene_text.as_bytes()).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 3);
+
+    std::fs::rename(
+        other_dir.path().join("scene.md"),
+        base_dir.path().join("test_project/text/scene.md"),
+    )
+    .unwrap();
+
+    // Sleep and call process_updates twice with more time than the WATCHER_MSEC_DURATION
+    // to make sure it actually gets woken up and runs
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 4);
+    assert!(project.objects.contains_key(&file_id("1")));
+}
+
+// TODO: test folder creation by movement in
+// TODO: test deletion of files
+// TODO: test deletion of folders with files
+// TODO: test rename (but not movement) of files
+// TODO: test movement (but not rename) of files
+// TODO: test rename (but not movement) of folders
+// TODO: test movement (but not rename) of folders
+// TODO: test file having index changed
+// TODO: test modification in place

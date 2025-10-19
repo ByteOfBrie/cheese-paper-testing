@@ -2945,10 +2945,349 @@ fn test_tracker_delete_folder() {
     );
 }
 
-// TODO: test rename (but not movement) of files
+/// Rename a file on disk, the tracker should still process it
+#[test]
+fn test_tracker_rename_file() {
+    // Setup file objects
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let folder1 = project
+        .objects
+        .get(&project.text_id)
+        .unwrap()
+        .borrow_mut()
+        .create_child_at_end(FileType::Folder)
+        .unwrap();
+    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
+    folder1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene1 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
+    scene1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene2 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
+    scene2.borrow_mut().get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
+    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
+    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(scene1);
+    project.add_object(scene2);
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    let scene1_path_orig = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    let scene2_path_orig = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+    let folder1_path = project
+        .objects
+        .get(&folder1_id)
+        .unwrap()
+        .borrow()
+        .get_path();
+
+    // a few baseline checks about our starting env
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene1_id));
+    assert!(project.objects.contains_key(&scene2_id));
+    assert_eq!(project.objects.len(), 6);
+    assert_eq!(std::fs::read_dir(&folder1_path).unwrap().count(), 3);
+
+    let scene1_path_new = folder1_path.join("000-alt_name_scene1.md");
+
+    // Actual start of the testing
+    std::fs::rename(&scene1_path_orig, &scene1_path_new).unwrap();
+
+    // mostly checking our test logic, we expect the original file to not exist
+    assert!(!scene1_path_orig.exists());
+    assert!(
+        project
+            .objects
+            .get(&scene2_id)
+            .unwrap()
+            .borrow()
+            .get_path()
+            .exists()
+    );
+
+    // process in the tracker
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // check 1: all of the files should still be in the project
+    assert!(project.objects.contains_key(&scene2_id));
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene1_id));
+
+    assert_eq!(project.objects.len(), 6);
+
+    // check 2: scene2 should still exist and shouldn't have moved
+    assert!(scene2_path_orig.exists());
+    let scene2_path_new = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+    assert_eq!(scene2_path_new, scene2_path_orig);
+
+    // check 3: the scene should still exist on disk
+    let scene1_path_actual = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    assert!(scene1_path_actual.exists());
+
+    // check 4: there should be the same number of files in that directory
+    assert_eq!(std::fs::read_dir(&folder1_path).unwrap().count(), 3);
+
+    // check 5: check that the file is currently at the new path instead of the
+    // old path (based on the name). This is being tested to encode the behavior
+    // (and be aware if it changes), but I don't think I'm particularly attached
+    // to the behavior here either way
+    assert!(!scene1_path_orig.exists());
+    assert!(scene1_path_new.exists());
+    assert_ne!(scene1_path_actual, scene1_path_orig);
+    assert_eq!(scene1_path_new, scene1_path_actual);
+
+    // ensure that a save doesn't mess with things
+    project.save().unwrap();
+
+    assert_eq!(project.objects.len(), 6);
+
+    // check 3: the scene should still exist on disk
+    let scene1_path_actual = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    assert!(scene1_path_actual.exists());
+
+    // check 4: there should be the same number of files in that directory
+    assert_eq!(std::fs::read_dir(&folder1_path).unwrap().count(), 3);
+
+    // After the save, check that we can safely rename the file again
+    {
+        let mut scene1 = project.objects.get(&scene1_id).unwrap().borrow_mut();
+        scene1.get_base_mut().metadata.name = String::from("scene1 new name");
+        scene1.get_base_mut().file.modified = true;
+    }
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 6);
+
+    // check 3: the scene should still exist on disk
+    let scene1_path_final = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    assert!(scene1_path_final.exists());
+    assert!(scene1_path_final.ends_with("000-scene1_new_name.md"));
+
+    // check 4: there should be the same number of files in that directory
+    assert_eq!(std::fs::read_dir(&folder1_path).unwrap().count(), 3);
+}
+
+/// Rename a file on disk, the tracker should still process it
+#[test]
+fn test_tracker_rename_folder() {
+    // Setup file objects
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let folder1 = project
+        .objects
+        .get(&project.text_id)
+        .unwrap()
+        .borrow_mut()
+        .create_child_at_end(FileType::Folder)
+        .unwrap();
+    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
+    folder1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene1 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
+    scene1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene2 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
+    scene2.borrow_mut().get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
+    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
+    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(scene1);
+    project.add_object(scene2);
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    let scene1_path_orig = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    let scene2_path_orig = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+    let folder1_path_orig = project
+        .objects
+        .get(&folder1_id)
+        .unwrap()
+        .borrow()
+        .get_path();
+    let text_path = project
+        .objects
+        .get(&project.text_id)
+        .unwrap()
+        .borrow()
+        .get_path();
+
+    // a few baseline checks about our starting env
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene1_id));
+    assert!(project.objects.contains_key(&scene2_id));
+    assert_eq!(project.objects.len(), 6);
+    assert_eq!(std::fs::read_dir(&folder1_path_orig).unwrap().count(), 3);
+
+    let folder1_path_new = text_path.join("000-alt_name_folder1.md");
+
+    // Actual start of the testing
+    std::fs::rename(&folder1_path_orig, &folder1_path_new).unwrap();
+
+    // mostly checking our test logic, we expect the original file to not exist
+    assert!(!folder1_path_orig.exists());
+
+    // process in the tracker
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // check 1: all of the files should still be in the project
+    assert!(project.objects.contains_key(&scene2_id));
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene1_id));
+
+    assert_eq!(project.objects.len(), 6);
+
+    // check 2: scenes should have moved
+    assert!(!scene1_path_orig.exists());
+    assert!(!scene2_path_orig.exists());
+    let scene1_path_new = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    assert_ne!(scene1_path_new, scene1_path_orig);
+
+    // check 3: the scene should still exist on disk
+    let folder1_path_actual = project
+        .objects
+        .get(&folder1_id)
+        .unwrap()
+        .borrow()
+        .get_path();
+    assert!(folder1_path_actual.exists());
+
+    // check 4: there should be the same number of files in text and the folder
+    assert_eq!(std::fs::read_dir(&folder1_path_actual).unwrap().count(), 3);
+    assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+
+    // check 5: check that the file is currently at the new path instead of the
+    // old path (based on the name). This is being tested to encode the behavior
+    // (and be aware if it changes), but I don't think I'm particularly attached
+    // to the behavior here either way
+    assert!(!folder1_path_orig.exists());
+    assert!(folder1_path_new.exists());
+    assert_ne!(folder1_path_actual, folder1_path_orig);
+    assert_eq!(folder1_path_new, folder1_path_actual);
+
+    // ensure that a save doesn't mess with things
+    project.save().unwrap();
+
+    assert_eq!(project.objects.len(), 6);
+
+    // check 3: the scene should still exist on disk
+    let scene1_path_actual = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    assert!(scene1_path_actual.exists());
+
+    // check 4: there should be the same number of files in that directory
+    assert_eq!(std::fs::read_dir(&folder1_path_actual).unwrap().count(), 3);
+    assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+
+    // After the save, check that we can safely rename the folder again
+    {
+        let mut scene1 = project.objects.get(&folder1_id).unwrap().borrow_mut();
+        scene1.get_base_mut().metadata.name = String::from("folder1 new name");
+        scene1.get_base_mut().file.modified = true;
+    }
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert_eq!(project.objects.len(), 6);
+
+    // check 3: the scene should still exist on disk
+    let scene1_path_final = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    assert!(scene1_path_final.exists());
+    assert!(scene1_path_final.ends_with("000-scene1.md"));
+
+    let folder1_path_final = project
+        .objects
+        .get(&folder1_id)
+        .unwrap()
+        .borrow()
+        .get_path();
+    assert!(folder1_path_final.exists());
+    assert!(folder1_path_final.ends_with("000-folder1_new_name"));
+
+    // check 4: there should be the same number of files in that directory
+    assert_eq!(std::fs::read_dir(&folder1_path_final).unwrap().count(), 3);
+    assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+
+    // Make sure that file deletion still works (by deleting scene1)
+    <dyn FileObject>::remove_child(&scene1_id, &folder1_id, &mut project.objects).unwrap();
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // Checks for after deletion:
+    assert_eq!(project.objects.len(), 5);
+    assert!(folder1_path_final.exists());
+    assert_eq!(std::fs::read_dir(&folder1_path_final).unwrap().count(), 2);
+    assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+
+    assert!(!scene1_path_final.exists());
+
+    let scene2_path_final = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+    assert!(scene2_path_final.exists());
+    assert!(scene2_path_final.ends_with("000-scene2.md"));
+}
+
 // TODO: test movement (but not rename) of files
-// TODO: test rename (but not movement) of folders
 // TODO: test movement (but not rename) of folders
 // TODO: test file having index changed
 // TODO: test modification in place
 // TODO: test copy and delete (will this trigger duplicate?)
+// TODO: test rename/movement and file contents being updated
+// TODO: test movement of a file into a folder that requires reindexing

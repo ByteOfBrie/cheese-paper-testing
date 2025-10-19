@@ -2733,8 +2733,218 @@ fn test_tracker_creation_by_movement_folder() {
     assert!(project.objects.contains_key(&file_id("1")));
 }
 
-// TODO: test deletion of files
-// TODO: test deletion of folders with files
+#[test]
+fn test_tracker_delete_file() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let folder1 = project
+        .objects
+        .get(&project.text_id)
+        .unwrap()
+        .borrow_mut()
+        .create_child_at_end(FileType::Folder)
+        .unwrap();
+    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
+    folder1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene1 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
+    scene1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene2 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
+    scene2.borrow_mut().get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
+    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
+    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(scene1);
+    project.add_object(scene2);
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene1_id));
+    assert!(project.objects.contains_key(&scene2_id));
+
+    assert_eq!(project.objects.len(), 6);
+
+    let scene1_path = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    let scene2_path_orig = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+
+    // Delete the file
+    std::fs::remove_file(&scene1_path).unwrap();
+
+    assert!(!scene1_path.exists());
+    assert!(
+        project
+            .objects
+            .get(&scene2_id)
+            .unwrap()
+            .borrow()
+            .get_path()
+            .exists()
+    );
+
+    // process the tracker
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert!(!project.objects.contains_key(&scene1_id));
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene2_id));
+
+    assert_eq!(project.objects.len(), 5);
+    assert!(!scene1_path.exists());
+    let scene2_path_new = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+    assert!(scene2_path_new.exists());
+    assert_ne!(scene2_path_new, scene2_path_orig);
+
+    // ensure that a save doesn't mess with things
+    project.save().unwrap();
+
+    assert!(!project.objects.contains_key(&scene1_id));
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene2_id));
+
+    assert_eq!(project.objects.len(), 5);
+    assert!(scene2_path_new.exists());
+    assert_ne!(scene2_path_new, scene2_path_orig);
+}
+
+#[test]
+fn test_tracker_delete_folder() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let folder1 = project
+        .objects
+        .get(&project.text_id)
+        .unwrap()
+        .borrow_mut()
+        .create_child_at_end(FileType::Folder)
+        .unwrap();
+    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
+    folder1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene1 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
+    scene1.borrow_mut().get_base_mut().file.modified = true;
+
+    let scene2 = folder1
+        .borrow_mut()
+        .create_child_at_end(FileType::Scene)
+        .unwrap();
+    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
+    scene2.borrow_mut().get_base_mut().file.modified = true;
+
+    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
+    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
+    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+
+    project.add_object(folder1);
+    project.add_object(scene1);
+    project.add_object(scene2);
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert!(project.objects.contains_key(&folder1_id));
+    assert!(project.objects.contains_key(&scene1_id));
+    assert!(project.objects.contains_key(&scene2_id));
+
+    assert_eq!(project.objects.len(), 6);
+
+    let folder1_path = project
+        .objects
+        .get(&folder1_id)
+        .unwrap()
+        .borrow()
+        .get_path();
+    let scene1_path = project.objects.get(&scene1_id).unwrap().borrow().get_path();
+    let scene2_path = project.objects.get(&scene2_id).unwrap().borrow().get_path();
+
+    assert_eq!(
+        std::fs::read_dir(base_dir.path().join("test_project/text/"))
+            .unwrap()
+            .count(),
+        2
+    );
+
+    // Delete the file
+    std::fs::remove_dir_all(&folder1_path).unwrap();
+
+    assert!(!scene1_path.exists());
+    assert!(!scene2_path.exists());
+    assert!(!folder1_path.exists());
+
+    // process the tracker
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    assert!(!project.objects.contains_key(&scene1_id));
+    assert!(!project.objects.contains_key(&scene2_id));
+    assert!(!project.objects.contains_key(&folder1_id));
+
+    assert_eq!(project.objects.len(), 3);
+    assert!(!scene1_path.exists());
+    assert!(!scene2_path.exists());
+    assert!(!folder1_path.exists());
+
+    assert_eq!(
+        std::fs::read_dir(base_dir.path().join("test_project/text/"))
+            .unwrap()
+            .count(),
+        1
+    );
+    // ensure that a save doesn't mess with things
+    project.save().unwrap();
+
+    assert!(!project.objects.contains_key(&scene1_id));
+    assert!(!project.objects.contains_key(&scene2_id));
+    assert!(!project.objects.contains_key(&folder1_id));
+
+    assert_eq!(project.objects.len(), 3);
+
+    assert!(!scene1_path.exists());
+    assert!(!scene2_path.exists());
+    assert!(!folder1_path.exists());
+
+    assert_eq!(
+        std::fs::read_dir(base_dir.path().join("test_project/text/"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
 // TODO: test rename (but not movement) of files
 // TODO: test movement (but not rename) of files
 // TODO: test rename (but not movement) of folders

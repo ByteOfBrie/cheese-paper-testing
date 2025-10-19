@@ -950,7 +950,7 @@ impl Project {
         let source_directory = source_path
             .parent()
             .expect("source should have a directory");
-        let dest_directory = source_path.parent().expect("dest should have a directory");
+        let dest_directory = dest_path.parent().expect("dest should have a directory");
 
         let source_parent_file_id = match self.find_object_by_path(source_directory) {
             Some(source_parent_id) => source_parent_id,
@@ -963,18 +963,20 @@ impl Project {
             }
         };
 
+        let moving_object = self.objects.get(&moving_file_id).unwrap();
+
+        // Update the filename (basename) based on what we've gotten (since this needs to happen
+        // regardless of path). Indexing will happen during rescan (after all events are processed)
+        moving_object.borrow_mut().get_base_mut().file.basename = dest_name.to_owned();
+        // propagate that to any children
+        for child in moving_object.borrow().children(&self.objects) {
+            child
+                .borrow_mut()
+                .process_path_update(moving_object.borrow().get_path(), &self.objects);
+        }
+
         // Easy case: the file has been renamed within the directory it's in
         if source_directory == dest_directory {
-            let mut object = self.objects.get(&moving_file_id).unwrap().borrow_mut();
-
-            // Update the filename
-            object.get_base_mut().file.basename = dest_name.to_owned();
-            // propagate that to any children
-            for child in object.children(&self.objects) {
-                child
-                    .borrow_mut()
-                    .process_path_update(object.get_path(), &self.objects);
-            }
             // Currently, we don't do anything to cleanup the directory or filename in this case.
             // It'll probably happen later, but we don't bother now (this is complicated enough already)
             return Some(vec![source_parent_file_id]);
@@ -982,7 +984,7 @@ impl Project {
 
         // More complicated case: the file has been moved to another part of the tree. We're basically
         // processing a move, but without doing the actual move outselves. This should probably be
-        // cleanup up later (#128)
+        // cleaned up/deduplicated later (#128)
         let dest_file_id = match self.find_object_by_path(dest_directory) {
             Some(dest_file_id) => dest_file_id,
             None => {
@@ -1028,9 +1030,7 @@ impl Project {
             .children
             .push(child_id_string);
 
-        let child = self.objects.get(&moving_file_id).unwrap();
-
-        child
+        moving_object
             .borrow_mut()
             .process_path_update(dest_directory.to_path_buf(), &self.objects);
 

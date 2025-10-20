@@ -2594,7 +2594,9 @@ fn test_tracker_creation_folder() {
 
     assert_eq!(project.objects.len(), 3);
 
-    create_dir(base_dir.path().join("test_project/text/folder1")).unwrap();
+    let folder1_path = base_dir.path().join("test_project/text/folder1");
+
+    create_dir(&folder1_path).unwrap();
 
     write_with_temp_file(
         &Path::join(base_dir.path(), "test_project/text/folder1/scene.md"),
@@ -2610,6 +2612,8 @@ fn test_tracker_creation_folder() {
     project.process_updates();
 
     assert_eq!(project.objects.len(), 5);
+    // There should be the metadata file and the scene file
+    assert_eq!(std::fs::read_dir(&folder1_path).unwrap().count(), 2);
 }
 
 /// Ensure that a place gets read as one single object
@@ -4127,8 +4131,94 @@ fn test_tracker_move_file_copy_delete() {
     assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 3);
 }
 
-// TODO: test rename/movement and file contents being updated
+/// test movement and file contents being updated between tracker updates
+#[test]
+fn test_tracker_move_modification() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let scene_text = r#"id = "1"
+++++++++
+123456"#;
+
+    let scene1_path = base_dir.path().join("test_project/text/000-scene1.md");
+
+    std::fs::create_dir(base_dir.path().join("test_project/text/001-folder1")).unwrap();
+
+    write_with_temp_file(&scene1_path, scene_text.as_bytes()).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    {
+        assert_eq!(project.objects.len(), 5);
+        assert!(project.objects.contains_key(&file_id("1")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "123456");
+    }
+
+    let new_scene_text = r#"id = "1"
+++++++++
+asdfjkl123"#;
+
+    let new_scene1_path = base_dir
+        .path()
+        .join("test_project/text/001-folder1/000-scene1.md");
+    std::fs::rename(&scene1_path, &new_scene1_path).unwrap();
+
+    std::fs::write(new_scene1_path, new_scene_text).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    {
+        // Ensure that the file object still exists (and we don't have duplicates)
+        assert_eq!(project.objects.len(), 5);
+        assert!(project.objects.contains_key(&file_id("1")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "asdfjkl123");
+
+        assert_eq!(
+            std::fs::read_dir(base_dir.path().join("test_project/text/000-folder1"))
+                .unwrap()
+                .count(),
+            2
+        );
+        let text_path = project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .borrow()
+            .get_path();
+
+        assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+    }
+}
+
 // TODO: test movement of a file into a folder that requires reindexing
 // TODO: test: create a folder, process updates. add children to the folder, move the folder,
 //          and process updates again. Make sure that the children actually get added to the
 //          project
+// TODO: test for fully populated metadata after moving (which isn't working now)

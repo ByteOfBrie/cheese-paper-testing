@@ -880,6 +880,8 @@ impl Project {
                             let rename_results =
                                 self.process_rename_movement(&old_path, &modify_path.to_path_buf());
 
+                            // TODO: copy over descendants/children as well (I think it'll be required)
+
                             // Reload the file, we have to do another get to avoid making the borrow
                             // checker unhappy (instead of using the existing object)
                             if let Err(err) =

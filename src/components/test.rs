@@ -3165,7 +3165,7 @@ fn test_tracker_rename_folder() {
     assert_eq!(project.objects.len(), 6);
     assert_eq!(std::fs::read_dir(&folder1_path_orig).unwrap().count(), 3);
 
-    let folder1_path_new = text_path.join("000-alt_name_folder1.md");
+    let folder1_path_new = text_path.join("000-alt_name_folder1");
 
     // Actual start of the testing
     std::fs::rename(&folder1_path_orig, &folder1_path_new).unwrap();
@@ -3563,7 +3563,7 @@ fn test_tracker_move_folder() {
     assert_eq!(std::fs::read_dir(&folder1_path_orig).unwrap().count(), 3);
     assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 3);
 
-    let folder1_path_new = folder2_path_orig.join("000-folder1.md");
+    let folder1_path_new = folder2_path_orig.join("000-folder1");
 
     // Actual start of the testing, move the folder
     std::fs::rename(&folder1_path_orig, &folder1_path_new).unwrap();
@@ -3615,7 +3615,7 @@ fn test_tracker_move_folder() {
     assert!(folder1_path_actual.exists());
     assert_ne!(folder1_path_actual, folder1_path_orig);
     // folder2 path will change so we can't compare with folder1_path_new
-    assert!(folder1_path_actual.ends_with("text/000-folder2/000-folder1.md"));
+    assert!(folder1_path_actual.ends_with("text/000-folder2/000-folder1"));
 
     // ensure that a save doesn't mess with things
     project.save().unwrap();

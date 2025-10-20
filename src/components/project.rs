@@ -770,7 +770,7 @@ impl Project {
     /// This could also be a file being moved into the project.
     ///
     /// Returns a directory if it should be rescanned
-    fn process_modify_event(&mut self, modify_path: &Path) -> Option<FileID> {
+    fn process_modify_event(&mut self, modify_path: &Path) -> Option<Vec<FileID>> {
         // special case, check for the project info file *first*
         if *modify_path == self.get_project_info_file() {
             if let Err(err) = self.reload_file() {
@@ -865,7 +865,21 @@ impl Project {
                         }
 
                         if !old_path.exists() {
-                            unimplemented!("This is just a rename, should call that instead");
+                            let rename_results =
+                                self.process_rename_movement(&old_path, &modify_path.to_path_buf());
+
+                            // Reload the file, we have to do another get to avoid making the borrow
+                            // checker unhappy (instead of using the existing object)
+                            if let Err(err) =
+                                self.objects.get(&id).unwrap().borrow_mut().reload_file()
+                            {
+                                log::error!(
+                                    "Error while reloading file during rename movement: {modify_path:?}, \
+                                    id: {id:?}, err: {err:?}"
+                                );
+                            }
+
+                            return rename_results;
                         } else {
                             // We've found duplicates, we could maybe return none and log this as an
                             // error, but for now we panic
@@ -893,7 +907,7 @@ impl Project {
                             self.objects.insert(id_string, object);
                         }
 
-                        return Some(parent_id);
+                        return Some(vec![parent_id]);
                     }
                 }
             }
@@ -916,7 +930,7 @@ impl Project {
                     .first()
                     .expect("From rename should have a source");
 
-                return self.process_delete(delete_path).map(|fileid| vec![fileid]);
+                self.process_delete(delete_path).map(|fileid| vec![fileid])
             }
             RenameMode::To => {
                 let dest_path = event
@@ -924,34 +938,42 @@ impl Project {
                     .last()
                     .expect("to event should have a destination");
 
-                return self
-                    .process_modify_event(dest_path)
-                    .map(|fileid| vec![fileid]);
+                self.process_modify_event(dest_path)
             }
-            RenameMode::Both => {}
+            RenameMode::Both => {
+                log::debug!("Processing actual rename event: {event:?}");
+
+                let source_path = event
+                    .paths
+                    .first()
+                    .expect("Rename event should have source");
+
+                let dest_path = event
+                    .paths
+                    .last()
+                    .expect("Rename event should have destination");
+
+                self.process_rename_movement(source_path, dest_path)
+            }
             _ => {
                 // Give up, we don't want to make assumptoins at this stage
                 log::warn!(
                     "Encountered rename event: {event:?}, not enough information to continue processing"
                 );
-                return None;
+                None
             }
         }
+    }
 
-        log::debug!("Processing rename event: {event:?}");
-
-        let source_path = event
-            .paths
-            .first()
-            .expect("Rename event should have source");
-
-        let dest_path = event
-            .paths
-            .last()
-            .expect("Rename event should have destination");
-
+    fn process_rename_movement(
+        &mut self,
+        source_path: &PathBuf,
+        dest_path: &PathBuf,
+    ) -> Option<Vec<FileID>> {
         if source_path == dest_path {
-            log::debug!("Rename event: {event:?} has the same source and dest, nothing to do");
+            log::debug!(
+                "Rename event: has the same source and dest ({source_path:?}), nothing to do"
+            );
             return None;
         }
 
@@ -959,14 +981,12 @@ impl Project {
             Some(fileid) => fileid,
             None => {
                 if dest_path.starts_with(self.get_path()) {
-                    log::debug!("Processing move as modify event: {event:?}");
-                    return self
-                        .process_modify_event(dest_path)
-                        .map(|fileid| vec![fileid]);
+                    log::debug!("Processing move as modify event at path: {dest_path:?}");
+                    return self.process_modify_event(dest_path);
                 } else {
                     log::debug!(
-                        "Processed file rename for object with non-object source path: {event:?}, \
-                    nothing to do."
+                        "Processed file rename for object with non-object source path: {source_path:?}, \
+                        nothing to do."
                     );
                     return None;
                 }
@@ -984,7 +1004,7 @@ impl Project {
             None => {
                 log::error!(
                     "Tried to move object but could not find it's parent: {source_directory:?}. \
-                    Event: {event:?}"
+                    source path: {source_path:?}, dest path: {dest_path:?}"
                 );
                 return None;
             }
@@ -1016,7 +1036,7 @@ impl Project {
             Some(dest_file_id) => dest_file_id,
             None => {
                 log::debug!(
-                    "Event: {event:?} moves file object out of project directory, processing as a delete"
+                    "move from: {source_path:?} to {dest_path:?} moves file object out of project directory, processing as a delete"
                 );
                 return self.process_delete(dest_path).map(|fileid| vec![fileid]);
             }

@@ -2611,9 +2611,18 @@ fn test_tracker_creation_folder() {
     thread::sleep(time::Duration::from_millis(60));
     project.process_updates();
 
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    let folder1_path_final = base_dir.path().join("test_project/text/000-folder1");
+
     assert_eq!(project.objects.len(), 5);
     // There should be the metadata file and the scene file
-    assert_eq!(std::fs::read_dir(&folder1_path).unwrap().count(), 2);
+    assert_eq!(std::fs::read_dir(&folder1_path_final).unwrap().count(), 2);
 }
 
 /// Ensure that a place gets read as one single object
@@ -4148,6 +4157,13 @@ fn test_tracker_move_modification() {
     std::fs::create_dir(base_dir.path().join("test_project/text/001-folder1")).unwrap();
 
     write_with_temp_file(&scene1_path, scene_text.as_bytes()).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    project.save().unwrap();
 
     thread::sleep(time::Duration::from_millis(60));
     project.process_updates();

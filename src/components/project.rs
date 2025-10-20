@@ -663,19 +663,31 @@ impl Project {
                         }
 
                         // We now have an event that isn't noise from .git or file opens:
-                        found_events = true;
                         log::debug!("found event: {event:?}");
+                        found_events = true;
 
                         match event.kind {
                             EventKind::Create(_create_kind) => {
                                 let modify_path = event.paths.first().unwrap();
                                 log::debug!("processing creation event: {event:?}");
-                                self.process_modify_event(modify_path);
+                                if let Some(need_rescan_vec) =
+                                    self.process_modify_event(modify_path)
+                                {
+                                    for need_rescan_id in need_rescan_vec {
+                                        file_objects_needing_rescan.insert(need_rescan_id);
+                                    }
+                                }
                             }
                             EventKind::Modify(ModifyKind::Data(_data_change)) => {
                                 let modify_path = event.paths.first().unwrap();
                                 log::debug!("processing modify event: {event:?}");
-                                self.process_modify_event(modify_path);
+                                if let Some(need_rescan_vec) =
+                                    self.process_modify_event(modify_path)
+                                {
+                                    for need_rescan_id in need_rescan_vec {
+                                        file_objects_needing_rescan.insert(need_rescan_id);
+                                    }
+                                }
                             }
                             EventKind::Modify(ModifyKind::Name(rename_mode)) => {
                                 if let Some(need_rescan_vec) =

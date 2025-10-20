@@ -247,10 +247,9 @@ impl dyn FileObject {
         let new_path = Path::join(&self.get_base().file.dirname, &new_filename);
 
         if new_path == old_path {
-            // Nothing to do
-            log::warn!(
-                "tried to move {old_path:?} to itself (set_filename), harmless but shouldn't happen"
-            );
+            // Nothing to do. this can happen as part of a move being processed by the tracker
+            // (which is quite complex to untangle), so it's a debug instead of a warn now
+            log::debug!("set_filename: tried to move {old_path:?} to itself, skipping");
             return Ok(());
         }
 

@@ -4,7 +4,8 @@ use crate::components::file_objects::FileObjectStore;
 use crate::components::file_objects::base::{FileObjectCreation, FileType};
 #[cfg(test)]
 use crate::components::file_objects::{
-    Character, FileObject, Folder, Place, Scene, from_file, move_child, write_with_temp_file,
+    Character, FileObject, FileObjectTypeInterface, Folder, Place, Scene, from_file, move_child,
+    write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::Project;
@@ -3869,7 +3870,70 @@ fn test_tracker_move_file_reindex() {
     assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
 }
 
-// TODO: test modification in place
+/// Test that the tracker updates files in place
+#[test]
+fn test_tracker_modification() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let scene_text = r#"id = "1"
+++++++++
+123456"#;
+
+    let scene1_path = base_dir.path().join("test_project/text/000-scene1.md");
+
+    write_with_temp_file(&scene1_path, scene_text.as_bytes()).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    {
+        assert_eq!(project.objects.len(), 4);
+        assert!(project.objects.contains_key(&file_id("1")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "123456");
+    }
+
+    let new_scene_text = r#"id = "1"
+++++++++
+asdfjkl123"#;
+
+    std::fs::write(scene1_path, new_scene_text).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    {
+        // Ensure that the file object still exists (and we don't have duplicates)
+        assert_eq!(project.objects.len(), 4);
+        assert!(project.objects.contains_key(&file_id("1")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "asdfjkl123");
+    }
+}
+
 // TODO: test copy and delete (will this trigger duplicate?)
 // TODO: test rename/movement and file contents being updated
 // TODO: test movement of a file into a folder that requires reindexing

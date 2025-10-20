@@ -851,24 +851,51 @@ impl Project {
 
                 let id = new_object.borrow().id().clone();
 
-                // Add to the parent's list of children
-                parent_object
-                    .borrow_mut()
-                    .get_base_mut()
-                    .children
-                    .push(id.clone());
+                let existing_item = self.objects.get(&id);
 
-                log::debug!("Loaded new file object: {id}");
+                match existing_item {
+                    Some(existing_object) => {
+                        let old_path = existing_object.borrow().get_path();
+                        if old_path == modify_path {
+                            panic!(
+                                "Found a file object seemingly missed by find_object_by_path. \
+                                This should have been processed as a modification which is hard now, \
+                                Giving up."
+                            );
+                        }
 
-                // Add the parent object to the object list
-                self.objects.insert(id, new_object);
+                        if !old_path.exists() {
+                            unimplemented!("This is just a rename, should call that instead");
+                        } else {
+                            // We've found duplicates, we could maybe return none and log this as an
+                            // error, but for now we panic
+                            panic!(
+                                "Attempted to process new file at path {modify_path:?}, \
+                                but found file_id {id:?}, also currently present at {old_path:?}"
+                            );
+                        }
+                    }
+                    None => {
+                        // Add to the parent's list of children
+                        parent_object
+                            .borrow_mut()
+                            .get_base_mut()
+                            .children
+                            .push(id.clone());
 
-                // Add all of the descendents to the list
-                for (id_string, object) in descendents {
-                    self.objects.insert(id_string, object);
+                        log::debug!("Loaded new file object: {id}");
+
+                        // Add the parent object to the object list
+                        self.objects.insert(id, new_object);
+
+                        // Add all of the descendents to the list
+                        for (id_string, object) in descendents {
+                            self.objects.insert(id_string, object);
+                        }
+
+                        return Some(parent_id);
+                    }
                 }
-
-                return Some(parent_id);
             }
             unreachable!("Ancestors should be found or error before this point")
         }

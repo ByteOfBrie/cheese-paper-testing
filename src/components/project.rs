@@ -18,11 +18,13 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use toml_edit::DocumentMut;
 
-use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
+use crate::components::file_objects::utils::{
+    get_index_from_name, process_name_for_filename, write_outline_property,
+};
 
 use crate::components::file_objects::base::{
-    FileID, FileObjectCreation, load_base_metadata, metadata_extract_bool, metadata_extract_string,
-    metadata_extract_u64,
+    FOLDER_METADATA_FILE_NAME, FileID, FileObjectCreation, load_base_metadata,
+    metadata_extract_bool, metadata_extract_string, metadata_extract_u64, read_file_contents,
 };
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
@@ -130,6 +132,45 @@ fn load_top_level_folder(
             HashMap::new(),
         ))
     }
+}
+
+fn get_id_from_file(filename: &Path) -> Option<FileID> {
+    if !filename.exists() {
+        return None;
+    }
+
+    // If the filename is a directory, we need to look for the underlying file, otherwise
+    // we already have it
+    let underlying_file = match filename.is_dir() {
+        true => Path::join(filename, FOLDER_METADATA_FILE_NAME),
+        false => filename.to_path_buf(),
+    };
+
+    let (metadata_str, _file_body) = match read_file_contents(&underlying_file) {
+        Ok((metadata_str, file_body)) => (metadata_str, file_body),
+        Err(err) => {
+            if !filename.is_dir() {
+                log::error!("Failed to read file {:?}: {:?}", &underlying_file, err);
+            }
+            return None;
+        }
+    };
+
+    let toml_header = match metadata_str.parse::<DocumentMut>() {
+        Ok(toml_header) => toml_header,
+        Err(err) => {
+            log::error!("Error parsing {underlying_file:?}: {err}");
+            return None;
+        }
+    };
+
+    if let Some(id_item) = toml_header.get("id")
+        && let Some(id_string) = id_item.as_str()
+    {
+        return Some(FileID::new(id_string.to_string()));
+    }
+
+    None
 }
 
 #[cfg(not(test))]
@@ -848,25 +889,16 @@ impl Project {
 
                 let new_index = parent_object.borrow_mut().get_base().children.len();
 
-                // We've found a parent, which means that this object should
-                // have from_file called on it
-                let (new_object, mut descendants) = match from_file(ancestor, Some(new_index)) {
-                    Ok(file_object_creation) => file_object_creation.into_boxed(),
-                    Err(err) => {
-                        log::warn!(
-                            "Could not open file as part of processing modifications: {err}, \
-                                    giving up on processing event"
-                        );
-                        return None;
-                    }
-                };
+                // We've found a parent, which means we need to load or reload this item
+                let id = get_id_from_file(ancestor);
 
-                let id = new_object.borrow().id().clone();
-
-                let existing_item = self.objects.get(&id);
+                let existing_item = id.clone().and_then(|id| self.objects.get(&id));
 
                 match existing_item {
                     Some(existing_object) => {
+                        // we know we have a real id (otherwise we couldn't get here, just unwrap it)
+                        let id = id.unwrap();
+
                         let old_path = existing_object.borrow().get_path();
                         if old_path == modify_path {
                             panic!(
@@ -877,28 +909,8 @@ impl Project {
                         }
 
                         if !old_path.exists() {
-                            let rename_results =
-                                self.process_rename_movement(&old_path, &modify_path.to_path_buf());
-
-                            // Reload the file, we have to do another get to avoid making the borrow
-                            // checker unhappy (instead of using the existing object)
-                            if let Err(err) =
-                                self.objects.get(&id).unwrap().borrow_mut().reload_file()
-                            {
-                                log::error!(
-                                    "Error while reloading file during rename movement: {modify_path:?}, \
-                                    id: {id:?}, err: {err:?}"
-                                );
-                            }
-
-                            sync_file_object_descendents(
-                                id,
-                                new_object,
-                                &mut self.objects,
-                                &mut descendants,
-                            );
-
-                            return rename_results;
+                            return self
+                                .process_rename_movement(&old_path, &modify_path.to_path_buf());
                         } else {
                             // We've found duplicates, we could maybe return none and log this as an
                             // error, but for now we panic
@@ -909,6 +921,21 @@ impl Project {
                         }
                     }
                     None => {
+                        // Either the file isn't already loaded or we didn't successfully load it,
+                        // try again either way
+                        let (new_object, descendants) = match from_file(ancestor, Some(new_index)) {
+                            Ok(file_object_creation) => file_object_creation.into_boxed(),
+                            Err(err) => {
+                                log::warn!(
+                                    "Could not open file as part of processing modifications: {err}, \
+                                    giving up on processing event"
+                                );
+                                return None;
+                            }
+                        };
+
+                        let id = new_object.borrow().id().clone();
+
                         // Add to the parent's list of children
                         parent_object
                             .borrow_mut()
@@ -989,6 +1016,7 @@ impl Project {
         source_path: &PathBuf,
         dest_path: &PathBuf,
     ) -> Option<Vec<FileID>> {
+        let mut need_rescan = Vec::new();
         if source_path == dest_path {
             log::debug!(
                 "Rename event: has the same source and dest ({source_path:?}), nothing to do"
@@ -1028,6 +1056,7 @@ impl Project {
                 return None;
             }
         };
+        need_rescan.push(source_parent_file_id.clone());
 
         let moving_object = self.objects.get(&moving_file_id).unwrap();
 
@@ -1041,66 +1070,94 @@ impl Project {
                 .process_path_update(moving_object.borrow().get_path(), &self.objects);
         }
 
-        // Easy case: the file has been renamed within the directory it's in
-        if source_directory == dest_directory {
-            // Currently, we don't do anything to cleanup the directory or filename in this case.
-            // It'll probably happen later, but we don't bother now (this is complicated enough already)
-            return Some(vec![source_parent_file_id]);
+        if source_directory != dest_directory {
+            // the file has been moved to another part of the tree. We're basically processing a
+            // move, but without doing the actual move outselves. This should probably be
+            // cleaned up/deduplicated later (#128)
+            let dest_file_id = match self.find_object_by_path(dest_directory) {
+                Some(dest_file_id) => dest_file_id,
+                None => {
+                    log::debug!(
+                        "move from: {source_path:?} to {dest_path:?} moves file object out of project directory, processing as a delete"
+                    );
+                    return self.process_delete(dest_path).map(|fileid| vec![fileid]);
+                }
+            };
+
+            // Remove the moving object from it's current parent
+            let source_parent = self
+                .objects
+                .get(&source_parent_file_id)
+                .expect("objects should contain source file id");
+
+            let child_id_position = source_parent
+                .borrow()
+                .get_base()
+                .children
+                .iter()
+                .position(|val| moving_file_id == *val)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Children should only be removed from their parents. \
+                    child id: {moving_file_id}, parent: {source_parent_file_id}"
+                    )
+                });
+
+            let child_id_string = source_parent
+                .borrow_mut()
+                .get_base_mut()
+                .children
+                .remove(child_id_position);
+
+            let dest_parent = self.objects.get(&dest_file_id).unwrap();
+
+            // How do I find the proper place here?
+            // Move the object into the children of dest (at the proper place)
+            dest_parent
+                .borrow_mut()
+                .get_base_mut()
+                .children
+                .push(child_id_string);
+
+            self.objects
+                .get(&moving_file_id)
+                .unwrap()
+                .borrow_mut()
+                .process_path_update(dest_directory.to_path_buf(), &self.objects);
+
+            need_rescan.push(dest_file_id.clone());
         }
 
-        // More complicated case: the file has been moved to another part of the tree. We're basically
-        // processing a move, but without doing the actual move outselves. This should probably be
-        // cleaned up/deduplicated later (#128)
-        let dest_file_id = match self.find_object_by_path(dest_directory) {
-            Some(dest_file_id) => dest_file_id,
-            None => {
-                log::debug!(
-                    "move from: {source_path:?} to {dest_path:?} moves file object out of project directory, processing as a delete"
-                );
-                return self.process_delete(dest_path).map(|fileid| vec![fileid]);
-            }
-        };
+        // Reload the moving file
+        if let Err(err) = moving_object.borrow_mut().reload_file() {
+            log::error!(
+                "Error while reloading file during rename movement: {source_path:?} to {dest_path:?}, \
+                                    id: {moving_file_id:?}, err: {err:?}"
+            );
+        }
 
-        // Remove the moving object from it's current parent
-        let source_parent = self
-            .objects
-            .get(&source_parent_file_id)
-            .expect("objects should contain source file id");
+        let is_dir = moving_object.borrow().is_folder();
 
-        let child_id_position = source_parent
-            .borrow()
-            .get_base()
-            .children
-            .iter()
-            .position(|val| moving_file_id == *val)
-            .unwrap_or_else(|| {
-                panic!(
-                    "Children should only be removed from their parents. \
-                    child id: {moving_file_id}, parent: {source_parent_file_id}"
-                )
-            });
+        if is_dir {
+            // we're basically forced to reload the file object at this point, unfortunately.
+            let (new_object, mut descendants) =
+                match from_file(dest_path, get_index_from_name(&dest_name.to_string_lossy())) {
+                    Ok(file_object_creation) => file_object_creation.into_boxed(),
+                    Err(err) => {
+                        log::warn!(
+                            "Could not open file as part of processing modifications: {err}, \
+                                    giving up on processing event"
+                        );
+                        return None;
+                    }
+                };
 
-        let child_id_string = source_parent
-            .borrow_mut()
-            .get_base_mut()
-            .children
-            .remove(child_id_position);
+            let id = new_object.borrow().id().clone();
 
-        let dest_parent = self.objects.get(&dest_file_id).unwrap();
+            sync_file_object_descendents(id, new_object, &mut self.objects, &mut descendants);
+        }
 
-        // How do I find the proper place here?
-        // Move the object into the children of dest (at the proper place)
-        dest_parent
-            .borrow_mut()
-            .get_base_mut()
-            .children
-            .push(child_id_string);
-
-        moving_object
-            .borrow_mut()
-            .process_path_update(dest_directory.to_path_buf(), &self.objects);
-
-        Some(vec![source_parent_file_id, dest_file_id])
+        Some(need_rescan)
     }
 
     fn process_delete(&mut self, delete_path: &Path) -> Option<FileID> {
@@ -1188,6 +1245,16 @@ fn sync_file_object_descendents(
 
                 dest_file_object.borrow_mut().get_base_mut().children = dest_file_object_children;
             }
+
+            // Copy over file and index while we're at it (we might be able to do less, but why bother?)
+            dest_file_object.borrow_mut().get_base_mut().file =
+                file_object.borrow().get_base().file.clone();
+
+            dest_file_object.borrow_mut().get_base_mut().index =
+                file_object.borrow().get_base().index;
+
+            // TODO: we might need to verify that this file object isn't owned by anything else
+            // in the tree (and thus might need to keep track of the parent of this call)
 
             // Make sure we've synced the contets: reload every file just in case
             if let Err(err) = dest_file_object.borrow_mut().reload_file() {

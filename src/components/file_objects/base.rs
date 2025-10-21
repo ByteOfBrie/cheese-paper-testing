@@ -26,7 +26,7 @@ use toml_edit::DocumentMut;
 const FILENAME_MAX_LENGTH: usize = 30;
 
 /// filename of the object within a folder containing its metadata (without extension)
-const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
+pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
 /// Value that splits the header of any file that contains non-metadata content
 const HEADER_SPLIT: &str = "++++++++";
@@ -142,7 +142,7 @@ impl FileType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileInfo {
     /// Path of the directory containing this file
     /// `/foo/bar/` -> `/foo`

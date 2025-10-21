@@ -3462,6 +3462,16 @@ fn test_tracker_move_file() {
     assert_ne!(scene1_path_actual, scene1_path_orig);
     assert_eq!(scene1_path_new, scene1_path_actual);
 
+    assert_eq!(
+        project
+            .objects
+            .get(&scene1_id)
+            .unwrap()
+            .borrow()
+            .get_base()
+            .index,
+        Some(1)
+    );
     // Finally, check that we can safely rename the file again
     {
         let mut scene1 = project.objects.get(&scene1_id).unwrap().borrow_mut();
@@ -4462,7 +4472,7 @@ asdf"#;
 
     // Before the move, update scene1 and scene3
     let mut scene1_raw = read_to_string(&scene1_path_orig).unwrap();
-    scene1_raw.push_str(" updated");
+    scene1_raw.push_str("updated");
     std::fs::write(&scene1_path_orig, scene1_raw).unwrap();
 
     let scene3_path_orig = folder1_path_orig.join("002-scene3.md");
@@ -4518,7 +4528,7 @@ scene4"#;
             FileObjectTypeInterface::Scene(scene) => scene,
             _ => panic!("Got a non-scene object"),
         };
-        assert_eq!(scene1.text.as_str(), "123456 updated");
+        assert_eq!(scene1.text.as_str(), "123456\nupdated");
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
         let scene2 = match scene2_file_object.get_file_type() {
@@ -4527,14 +4537,14 @@ scene4"#;
         };
         assert_eq!(scene2.text.as_str(), "asdfjkl123");
 
-        let scene3_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
         let scene3 = match scene3_file_object.get_file_type() {
             FileObjectTypeInterface::Scene(scene) => scene,
             _ => panic!("Got a non-scene object"),
         };
         assert_eq!(scene3.text.as_str(), "scene3");
 
-        let scene4_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
         let scene4 = match scene4_file_object.get_file_type() {
             FileObjectTypeInterface::Scene(scene) => scene,
             _ => panic!("Got a non-scene object"),
@@ -4555,6 +4565,7 @@ scene4"#;
 
 // TODO: repeat `test_tracker_move_and_modify_folder` but with a copy and delete instead
 // TODO: repeat `test_tracker_move_and_modify_folder` but with multiple levels of nesting
+// TODO: repeat `test_tracker_move_and_modify_folder` but pulling in files from other parts of the project
 
 /// Test that files and folders have their metadata populated after creation
 #[test]

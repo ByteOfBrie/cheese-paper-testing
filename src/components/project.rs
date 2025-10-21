@@ -850,7 +850,7 @@ impl Project {
 
                 // We've found a parent, which means that this object should
                 // have from_file called on it
-                let (new_object, descendents) = match from_file(ancestor, Some(new_index)) {
+                let (new_object, mut descendants) = match from_file(ancestor, Some(new_index)) {
                     Ok(file_object_creation) => file_object_creation.into_boxed(),
                     Err(err) => {
                         log::warn!(
@@ -880,8 +880,6 @@ impl Project {
                             let rename_results =
                                 self.process_rename_movement(&old_path, &modify_path.to_path_buf());
 
-                            // TODO: copy over descendants/children as well (I think it'll be required)
-
                             // Reload the file, we have to do another get to avoid making the borrow
                             // checker unhappy (instead of using the existing object)
                             if let Err(err) =
@@ -892,6 +890,13 @@ impl Project {
                                     id: {id:?}, err: {err:?}"
                                 );
                             }
+
+                            sync_file_object_descendents(
+                                id,
+                                new_object,
+                                &mut self.objects,
+                                &mut descendants,
+                            );
 
                             return rename_results;
                         } else {
@@ -917,7 +922,7 @@ impl Project {
                         self.objects.insert(id, new_object);
 
                         // Add all of the descendents to the list
-                        for (id_string, object) in descendents {
+                        for (id_string, object) in descendants {
                             self.objects.insert(id_string, object);
                         }
 
@@ -1145,6 +1150,54 @@ impl Project {
         parent.borrow_mut().fix_indexing(&self.objects);
 
         Some(parent_file_id)
+    }
+}
+
+/// Syncs the file object descendants
+/// `file` is assumed to be present in objects and have it's list of descendants correct,
+/// this will
+fn sync_file_object_descendents(
+    file_id: FileID,
+    file_object: Box<RefCell<dyn FileObject>>,
+    objects: &mut FileObjectStore,
+    descendants: &mut FileObjectStore,
+) {
+    // we can always safely start by syncing all of the children
+    for child_id in file_object.borrow().get_base().children.iter() {
+        let (child_id_owned, child_object) = descendants
+            .remove_entry(child_id)
+            .expect("all descendants should be in the descendants store");
+
+        sync_file_object_descendents(child_id_owned, child_object, objects, descendants);
+    }
+
+    // determine if this object itself needs to be updated
+    match objects.get(&file_id) {
+        Some(dest_file_object) => {
+            // We have an existing file object, update it in place, we only need to directly
+            // worry about the children
+
+            // first, check if the list of children needs updating:
+            let children_differ = dest_file_object.borrow().get_base().children
+                != file_object.borrow().get_base().children;
+            if children_differ {
+                let dest_file_object_children = file_object.borrow().get_base().children.clone();
+
+                // if we cared about cloning FileIDs (instead of creating duplicate but
+                // equivalent ones), we could do that here, but we'll be lazy
+
+                dest_file_object.borrow_mut().get_base_mut().children = dest_file_object_children;
+            }
+
+            // Make sure we've synced the contets: reload every file just in case
+            if let Err(err) = dest_file_object.borrow_mut().reload_file() {
+                log::warn!("Could not reload project info file: {err}")
+            }
+        }
+        None => {
+            // this object doesn't already exist, so just add it
+            objects.insert(file_id, file_object);
+        }
     }
 }
 

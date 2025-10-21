@@ -1128,6 +1128,14 @@ impl Project {
             need_rescan.push(dest_file_id.clone());
         }
 
+        if !dest_path.exists() {
+            log::debug!(
+                "Attempted to process the rename of a file that no longer exists ({source_path:?} to \
+                {dest_path:?}), nothing to do."
+            );
+            return None;
+        }
+
         // Reload the moving file
         if let Err(err) = moving_object.borrow_mut().reload_file() {
             log::error!(

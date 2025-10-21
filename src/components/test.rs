@@ -4513,7 +4513,71 @@ scene4"#;
 
     {
         // The folder should still be populated by all four scenes
-        assert_eq!(std::fs::read_dir(folder1_path_new).unwrap().count(), 5);
+        assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 5);
+
+        // Check that we have all of the scenes we would expect
+        assert!(project.objects.contains_key(&file_id("1")));
+        assert!(project.objects.contains_key(&file_id("2")));
+        assert!(project.objects.contains_key(&file_id("3")));
+        assert!(project.objects.contains_key(&file_id("4")));
+        assert_eq!(project.objects.len(), 8);
+
+        // Check scene contents
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+
+        let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene2 = match scene2_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+
+        let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
+        let scene3 = match scene3_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene3.text.as_str(), "scene3");
+
+        let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
+        let scene4 = match scene4_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene4.text.as_str(), "scene4");
+
+        // And a basic check around text
+        let text_path = project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .borrow()
+            .get_path();
+
+        assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+    }
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // Do all the checks again after the save
+    {
+        // The folder should still be populated by all four scenes
+        assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 5);
 
         // Check that we have all of the scenes we would expect
         assert!(project.objects.contains_key(&file_id("1")));
@@ -4563,10 +4627,430 @@ scene4"#;
     }
 }
 
-// TODO: repeat `test_tracker_move_and_modify_folder` but with a copy and delete instead
-// TODO: repeat `test_tracker_move_and_modify_folder` but with multiple levels of nesting
-// TODO: repeat `test_tracker_move_and_modify_folder` but pulling in files from other parts of the project
+/// Same as `test_tracker_move_and_modify_folder` but copying the folder and deleting the old one instead
+/// of an actual move
+#[test]
+fn test_tracker_copy_move_and_modify_folder() {
+    let base_dir = tempfile::TempDir::new().unwrap();
 
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let folder1_path_orig = base_dir.path().join("test_project/text/000-folder1");
+    std::fs::create_dir(&folder1_path_orig).unwrap();
+
+    let scene1_path_orig = folder1_path_orig.join("000-scene1.md");
+    let scene1_text_orig = r#"id = "1"
+++++++++
+123456"#;
+
+    let scene2_path_orig = folder1_path_orig.join("001-scene2.md");
+    let scene2_text_orig = r#"id = "2"
+++++++++
+
+asdf"#;
+
+    // Write scene1 and scene2 before sleeping
+    write_with_temp_file(&scene1_path_orig, scene1_text_orig.as_bytes()).unwrap();
+    write_with_temp_file(&scene2_path_orig, scene2_text_orig.as_bytes()).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // Starting assumptions
+    {
+        assert_eq!(project.objects.len(), 6);
+        assert!(project.objects.contains_key(&file_id("1")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "123456");
+    }
+
+    // Before the move, update scene1 and scene3
+    let mut scene1_raw = read_to_string(&scene1_path_orig).unwrap();
+    scene1_raw.push_str("updated");
+    std::fs::write(&scene1_path_orig, scene1_raw).unwrap();
+
+    let scene3_path_orig = folder1_path_orig.join("002-scene3.md");
+    let scene3_text = r#"id = "3"
+++++++++
+scene3"#;
+    std::fs::write(&scene3_path_orig, scene3_text).unwrap();
+
+    // actually update the metadata for the moving folder
+    let folder1_metadata_path = folder1_path_orig.join("metadata.toml");
+    let folder1_metadata = read_to_string(&folder1_metadata_path).unwrap();
+    let folder1_metadata_new = folder1_metadata.replace("folder1", "folder1_alt");
+    std::fs::write(&folder1_metadata_path, folder1_metadata_new).unwrap();
+
+    let folder1_path_new = base_dir.path().join("test_project/text/000-folder1_alt");
+
+    // Now, rename the folder with a copy/delete
+    std::fs::create_dir(&folder1_path_new).unwrap();
+    let scene1_path_new = folder1_path_new.join("000-scene1.md");
+    let scene2_path_new = folder1_path_new.join("001-scene2.md");
+    let scene3_path_new = folder1_path_new.join("002-scene3.md");
+    let folder1_metadata_path_new = folder1_path_new.join("metadata.toml");
+    std::fs::copy(&scene1_path_orig, &scene1_path_new).unwrap();
+    std::fs::copy(&scene2_path_orig, &scene2_path_new).unwrap();
+    std::fs::copy(&scene3_path_orig, &scene3_path_new).unwrap();
+    std::fs::copy(&folder1_metadata_path, &folder1_metadata_path_new).unwrap();
+    std::fs::remove_file(&scene1_path_orig).unwrap();
+    std::fs::remove_file(&scene2_path_orig).unwrap();
+    std::fs::remove_file(&scene3_path_orig).unwrap();
+    std::fs::remove_file(&folder1_metadata_path).unwrap();
+    std::fs::remove_dir(&folder1_path_orig).unwrap();
+
+    // And update scene2 and scene4 after the move
+    let scene2_text_new = r#"id = "2"
+++++++++
+
+asdfjkl123"#;
+    std::fs::write(&scene2_path_new, scene2_text_new).unwrap();
+
+    let scene4_path = folder1_path_new.join("003-scene4.md");
+    let scene4_text = r#"id = "4"
+++++++++
+scene4"#;
+    std::fs::write(&scene4_path, scene4_text).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    {
+        // The folder should still be populated by all four scenes
+        assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 5);
+
+        // Check that we have all of the scenes we would expect
+        assert!(project.objects.contains_key(&file_id("1")));
+        assert!(project.objects.contains_key(&file_id("2")));
+        assert!(project.objects.contains_key(&file_id("3")));
+        assert!(project.objects.contains_key(&file_id("4")));
+        assert_eq!(project.objects.len(), 8);
+
+        // Check scene contents
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+
+        let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene2 = match scene2_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+
+        let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
+        let scene3 = match scene3_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene3.text.as_str(), "scene3");
+
+        let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
+        let scene4 = match scene4_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene4.text.as_str(), "scene4");
+
+        // And a basic check around text
+        let text_path = project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .borrow()
+            .get_path();
+
+        assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+    }
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // check it again
+    {
+        // The folder should still be populated by all four scenes
+        assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 5);
+
+        // Check that we have all of the scenes we would expect
+        assert!(project.objects.contains_key(&file_id("1")));
+        assert!(project.objects.contains_key(&file_id("2")));
+        assert!(project.objects.contains_key(&file_id("3")));
+        assert!(project.objects.contains_key(&file_id("4")));
+        assert_eq!(project.objects.len(), 8);
+
+        // Check scene contents
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+
+        let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene2 = match scene2_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+
+        let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
+        let scene3 = match scene3_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene3.text.as_str(), "scene3");
+
+        let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
+        let scene4 = match scene4_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene4.text.as_str(), "scene4");
+
+        // And a basic check around text
+        let text_path = project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .borrow()
+            .get_path();
+
+        assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+    }
+}
+
+/// Test the tracker by moving a file object into a folder that has also moved
+#[test]
+fn test_tracker_move_into_moved_folder() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let text_path = base_dir.path().join("test_project/text");
+
+    let folder1_path_orig = text_path.join("000-folder1");
+    std::fs::create_dir(&folder1_path_orig).unwrap();
+
+    let folder2_path = text_path.join("001-folder2");
+    std::fs::create_dir(&folder2_path).unwrap();
+
+    let scene1_path_orig = folder1_path_orig.join("000-scene1.md");
+    let scene1_text_orig = r#"id = "1"
+++++++++
+scene1"#;
+
+    let scene2_path_orig = folder2_path.join("000-scene2.md");
+    let scene2_text_orig = r#"id = "2"
+++++++++
+123456"#;
+
+    let scene3_path_orig = folder2_path.join("001-scene3.md");
+    let scene3_text_orig = r#"id = "3"
+++++++++
+scene3"#;
+
+    let scene4_path_orig = folder2_path.join("002-scene4.md");
+    let scene4_text_orig = r#"id = "4"
+++++++++
+scene4"#;
+
+    // Write all scenes before sleeping
+    write_with_temp_file(&scene1_path_orig, scene1_text_orig.as_bytes()).unwrap();
+    write_with_temp_file(&scene2_path_orig, scene2_text_orig.as_bytes()).unwrap();
+    write_with_temp_file(&scene3_path_orig, scene3_text_orig.as_bytes()).unwrap();
+    write_with_temp_file(&scene4_path_orig, scene4_text_orig.as_bytes()).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    // Starting assumptions
+    {
+        assert_eq!(project.objects.len(), 9); // 3 top level folders, 2 folders, 4 scenes
+        assert!(project.objects.contains_key(&file_id("1")));
+        assert!(project.objects.contains_key(&file_id("2")));
+        assert!(project.objects.contains_key(&file_id("3")));
+        assert!(project.objects.contains_key(&file_id("4")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "scene1");
+    }
+
+    // Before the folder move, update and move scene2
+    let mut scene2_raw = read_to_string(&scene2_path_orig).unwrap();
+    scene2_raw.push_str("updated");
+    std::fs::write(&scene2_path_orig, scene2_raw).unwrap();
+
+    let scene2_path_new = folder1_path_orig.join("002-scene2.md");
+    std::fs::rename(&scene2_path_orig, &scene2_path_new).unwrap();
+
+    // actually update the metadata for the moving folder
+    let folder1_metadata_path = folder1_path_orig.join("metadata.toml");
+    let folder1_metadata = read_to_string(&folder1_metadata_path).unwrap();
+    let folder1_metadata_new = folder1_metadata.replace("folder1", "folder1 alt");
+    std::fs::write(&folder1_metadata_path, folder1_metadata_new).unwrap();
+
+    let folder2_metadata_path = folder2_path.join("metadata.toml");
+    let folder2_metadata = read_to_string(&folder2_metadata_path).unwrap();
+
+    let id_regex = regex::Regex::new(r#"id\s*=\s*"([a-z0-9\-]+)""#).unwrap();
+    let folder1_id = file_id(
+        id_regex
+            .captures(&folder1_metadata)
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str(),
+    );
+    let folder2_id = file_id(
+        id_regex
+            .captures(&folder2_metadata)
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str(),
+    );
+
+    let folder1_path_new = base_dir.path().join("test_project/text/000-folder1_alt");
+
+    // Now, rename folder1
+    std::fs::rename(&folder1_path_orig, &folder1_path_new).unwrap();
+
+    // And move scene3
+    let scene3_path_new = folder1_path_new.join("001-scene3.md");
+    std::fs::rename(&scene3_path_orig, &scene3_path_new).unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    {
+        // folder1 should have three scenes (all except scene4)
+        assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 4);
+        assert_eq!(std::fs::read_dir(&folder2_path).unwrap().count(), 2);
+
+        // Check that we have all of the scenes we would expect
+        assert!(project.objects.contains_key(&file_id("1")));
+        assert!(project.objects.contains_key(&file_id("2")));
+        assert!(project.objects.contains_key(&file_id("3")));
+        assert!(project.objects.contains_key(&file_id("4")));
+        assert_eq!(project.objects.len(), 9);
+
+        let folder1_object = project.objects.get(&folder1_id).unwrap();
+        assert_eq!(folder1_object.borrow().get_base().children.len(), 3);
+
+        let folder2_object = project.objects.get(&folder2_id).unwrap();
+        assert_eq!(folder2_object.borrow().get_base().children.len(), 1);
+
+        // Check scene contents
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene1.text.as_str(), "scene1");
+        assert_eq!(scene1.get_base().index, Some(0));
+        assert!(scene1.get_path().exists());
+
+        let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene2 = match scene2_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene2.text.as_str(), "123456\nupdated");
+        assert_eq!(scene2.get_base().index, Some(2));
+        assert!(scene2.get_path().exists());
+
+        let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
+        let scene3 = match scene3_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene3.text.as_str(), "scene3");
+        assert_eq!(scene3.get_base().index, Some(1));
+        assert!(scene3.get_path().exists());
+
+        let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
+        let scene4 = match scene4_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => panic!("Got a non-scene object"),
+        };
+        assert_eq!(scene4.text.as_str(), "scene4");
+        assert_eq!(scene4.get_base().index, Some(1));
+        assert!(scene4.get_path().exists());
+
+        // And a basic check around text
+        let text_path = project
+            .objects
+            .get(&project.text_id)
+            .unwrap()
+            .borrow()
+            .get_path();
+
+        assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 3);
+    }
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+
+    project.save().unwrap();
+
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+    thread::sleep(time::Duration::from_millis(60));
+    project.process_updates();
+}
 /// Test that files and folders have their metadata populated after creation
 #[test]
 fn test_tracker_metadata_population() {

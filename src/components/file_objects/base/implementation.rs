@@ -153,6 +153,7 @@ impl dyn FileObject {
     /// For ease of calling, `objects` can contain arbitrary objects, only values contained
     /// in `children` will actually be sorted.
     pub fn fix_indexing(&mut self, objects: &FileObjectStore) {
+        log::debug!("Fixing indexing of {:?}", self);
         for (count, child) in self.children(objects).enumerate() {
             let set_index_result = child.borrow_mut().set_index(count, objects);
             match set_index_result {

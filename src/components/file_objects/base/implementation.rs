@@ -153,7 +153,7 @@ impl dyn FileObject {
     /// For ease of calling, `objects` can contain arbitrary objects, only values contained
     /// in `children` will actually be sorted.
     pub fn fix_indexing(&mut self, objects: &FileObjectStore) {
-        log::debug!("Fixing indexing of {:?}", self);
+        log::debug!("Fixing indexing of {}", self);
         for (count, child) in self.children(objects).enumerate() {
             let set_index_result = child.borrow_mut().set_index(count, objects);
             match set_index_result {
@@ -424,19 +424,40 @@ impl dyn FileObject {
         new_index: usize,
         objects: &FileObjectStore,
     ) -> Result<bool, CheeseError> {
-        if self.get_base().index == Some(new_index) {
-            let name_index = get_index_from_name(&self.get_base().file.basename.to_string_lossy());
-            if name_index == self.get_base().index {
-                // We have the index in memory and on disk, there's nothing to be done here, return early
-                // and avoid writing to disk
-                return Ok(false);
+        let object_index = self.get_base().index;
+        let filename_index = get_index_from_name(&self.get_base().file.basename.to_string_lossy());
+
+        match (
+            Some(new_index) == object_index,
+            Some(new_index) == filename_index,
+        ) {
+            (true, true) => Ok(false),
+            (true, false) => {
+                log::debug!(
+                    "Updating index of object {self} on disk from {:?} to {new_index} (filename: {})",
+                    filename_index,
+                    self.get_base().file.basename.to_string_lossy()
+                );
+                self.set_filename(self.calculate_filename(), objects)?;
+                Ok(true)
+            }
+            (false, true) => {
+                log::debug!(
+                    "Updating index of object {self} in memory from {:?} to {new_index}",
+                    self.get_base().index
+                );
+                self.get_base_mut().index = Some(new_index);
+                Ok(true)
+            }
+            (false, false) => {
+                log::debug!(
+                    "Updating index of object {self} on disk and in memory from {:?} to {new_index}",
+                    self.get_base().index
+                );
+                self.get_base_mut().index = Some(new_index);
+                self.set_filename(self.calculate_filename(), objects)?;
+                Ok(true)
             }
         }
-
-        self.get_base_mut().index = Some(new_index);
-
-        self.set_filename(self.calculate_filename(), objects)?;
-
-        Ok(true)
     }
 }

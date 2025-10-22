@@ -760,7 +760,10 @@ impl Project {
                             .rescan_indexing(&self.objects);
                     }
                     if found_events {
-                        log::debug!("finished processing events");
+                        log::debug!(
+                            "finished processing events at {:?}",
+                            std::time::Instant::now()
+                        );
                     }
                 }
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),

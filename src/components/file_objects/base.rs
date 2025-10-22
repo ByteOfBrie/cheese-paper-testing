@@ -934,10 +934,13 @@ pub trait FileObject: Debug {
 
     /// Determine if the file should be loaded
     fn should_load(&mut self, file_to_read: &Path) -> Result<bool, CheeseError> {
-        let current_modtime = std::fs::metadata(file_to_read)
-            .expect("attempted to load file that does not exist")
-            .modified()
-            .expect("Modtime not available");
+        let current_modtime = match std::fs::metadata(file_to_read) {
+            Ok(file_metadata) => file_metadata.modified()?,
+            Err(err) => {
+                log::warn!("attempted to load file that does not exist");
+                return Err(err.into());
+            }
+        };
 
         if let Some(old_modtime) = self.get_base().file.modtime
             && old_modtime == current_modtime
@@ -984,6 +987,11 @@ pub trait FileObject: Debug {
 
 impl std::fmt::Display for dyn FileObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[File Object | id={}]", self.id())
+        write!(
+            f,
+            "[File Object | name=\"{}\" | id={}]",
+            self.get_title(),
+            self.id()
+        )
     }
 }

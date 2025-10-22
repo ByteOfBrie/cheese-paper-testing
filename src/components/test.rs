@@ -5025,7 +5025,7 @@ scene4"#;
             _ => panic!("Got a non-scene object"),
         };
         assert_eq!(scene4.text.as_str(), "scene4");
-        assert_eq!(scene4.get_base().index, Some(1));
+        assert_eq!(scene4.get_base().index, Some(0));
         assert!(scene4.get_path().exists());
 
         // And a basic check around text
@@ -5051,6 +5051,7 @@ scene4"#;
     thread::sleep(time::Duration::from_millis(60));
     project.process_updates();
 }
+
 /// Test that files and folders have their metadata populated after creation
 #[test]
 fn test_tracker_metadata_population() {

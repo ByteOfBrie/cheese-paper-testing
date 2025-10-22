@@ -4193,6 +4193,7 @@ fn test_tracker_move_modification() {
             }
         };
         assert_eq!(scene1.text.as_str(), "123456");
+        assert_eq!(scene1.get_base().index, Some(0));
     }
 
     let new_scene_text = r#"id = "1"
@@ -4202,6 +4203,7 @@ asdfjkl123"#;
     let new_scene1_path = base_dir
         .path()
         .join("test_project/text/001-folder1/000-scene1.md");
+    assert!(scene1_path.exists());
     std::fs::rename(&scene1_path, &new_scene1_path).unwrap();
 
     std::fs::write(new_scene1_path, new_scene_text).unwrap();

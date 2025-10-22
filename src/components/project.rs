@@ -1073,11 +1073,10 @@ impl Project {
                 .process_path_update(moving_object.borrow().get_path(), &self.objects);
         }
 
-        if source_directory != dest_directory {
-            // the file has been moved to another part of the tree. We're basically processing a
-            // move, but without doing the actual move outselves. This should probably be
-            // cleaned up/deduplicated later (#128)
-            let dest_file_id = match self.find_object_by_path(dest_directory) {
+        let dest_file_id = if source_directory == dest_directory {
+            source_parent_file_id.clone()
+        } else {
+            match self.find_object_by_path(dest_directory) {
                 Some(dest_file_id) => dest_file_id,
                 None => {
                     log::debug!(
@@ -1085,7 +1084,13 @@ impl Project {
                     );
                     return self.process_delete(dest_path).map(|fileid| vec![fileid]);
                 }
-            };
+            }
+        };
+
+        if source_directory != dest_directory {
+            // the file has been moved to another part of the tree. We're basically processing a
+            // move, but without doing the actual move outselves. This should probably be
+            // cleaned up/deduplicated later (#128)
 
             // Remove the moving object from it's current parent
             let source_parent = self
@@ -1165,7 +1170,15 @@ impl Project {
 
             let id = new_object.borrow().id().clone();
 
-            sync_file_object_descendents(id, new_object, &mut self.objects, &mut descendants);
+            for needs_rescan_id in sync_file_object_descendents(
+                id,
+                new_object,
+                &dest_file_id,
+                &mut self.objects,
+                &mut descendants,
+            ) {
+                need_rescan.push(needs_rescan_id);
+            }
         }
 
         Some(need_rescan)
@@ -1215,8 +1228,6 @@ impl Project {
             .children
             .remove(child_index);
 
-        parent.borrow_mut().fix_indexing(&self.objects);
-
         Some(parent_file_id)
     }
 }
@@ -1227,16 +1238,27 @@ impl Project {
 fn sync_file_object_descendents(
     file_id: FileID,
     file_object: Box<RefCell<dyn FileObject>>,
+    parent_id: &FileID,
     objects: &mut FileObjectStore,
     descendants: &mut FileObjectStore,
-) {
+) -> Vec<FileID> {
+    let mut need_rescan = Vec::new();
+
     // we can always safely start by syncing all of the children
     for child_id in file_object.borrow().get_base().children.iter() {
         let (child_id_owned, child_object) = descendants
             .remove_entry(child_id)
             .expect("all descendants should be in the descendants store");
 
-        sync_file_object_descendents(child_id_owned, child_object, objects, descendants);
+        for needs_rescan_id in sync_file_object_descendents(
+            child_id_owned,
+            child_object,
+            &file_id,
+            objects,
+            descendants,
+        ) {
+            need_rescan.push(needs_rescan_id);
+        }
     }
 
     // determine if this object itself needs to be updated
@@ -1264,8 +1286,29 @@ fn sync_file_object_descendents(
             dest_file_object.borrow_mut().get_base_mut().index =
                 file_object.borrow().get_base().index;
 
-            // TODO: we might need to verify that this file object isn't owned by anything else
-            // in the tree (and thus might need to keep track of the parent of this call)
+            // remove this file object if it's owned by anything else in the tree,
+            for (id, object) in objects.iter() {
+                if id == parent_id {
+                    continue;
+                }
+                let child_search = object
+                    .borrow()
+                    .get_base()
+                    .children
+                    .iter()
+                    .position(|val| *val == file_id);
+                if let Some(child_position) = child_search {
+                    object
+                        .borrow_mut()
+                        .get_base_mut()
+                        .children
+                        .remove(child_position);
+
+                    if !need_rescan.contains(id) {
+                        need_rescan.push(id.clone());
+                    }
+                }
+            }
 
             // Make sure we've synced the contets: reload every file just in case
             if let Err(err) = dest_file_object.borrow_mut().reload_file() {
@@ -1277,6 +1320,7 @@ fn sync_file_object_descendents(
             objects.insert(file_id, file_object);
         }
     }
+    need_rescan
 }
 
 fn u64_to_i64_drop_msb(val: u64) -> i64 {

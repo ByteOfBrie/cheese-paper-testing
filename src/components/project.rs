@@ -10,12 +10,13 @@ use notify::{EventKind, event::ModifyKind};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::{HashMap, VecDeque};
 use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::time::Instant;
 use toml_edit::DocumentMut;
 
 use crate::components::file_objects::utils::{
@@ -43,6 +44,8 @@ pub struct Project {
     pub objects: FileObjectStore,
     toml_header: DocumentMut,
 
+    last_added_event: Option<Instant>,
+    event_queue: VecDeque<DebouncedEvent>,
     file_event_rx: WatcherReceiver,
 
     /// We don't need to do anything to the watcher, but we stop getting events if it's dropped
@@ -240,6 +243,8 @@ impl Project {
             file,
             toml_header: DocumentMut::new(),
             objects: HashMap::new(),
+            last_added_event: None,
+            event_queue: VecDeque::new(),
             file_event_rx,
             _watcher: watcher,
         };
@@ -349,6 +354,8 @@ impl Project {
             worldbuilding_id: worldbuilding.get_base().metadata.id.clone(),
             toml_header,
             objects: descendents,
+            event_queue: VecDeque::new(),
+            last_added_event: None,
             file_event_rx,
             _watcher: watcher,
         };
@@ -687,8 +694,6 @@ impl Project {
         if let Ok(response) = self.file_event_rx.try_recv() {
             match response {
                 Ok(events) => {
-                    let mut file_objects_needing_rescan = HashSet::new();
-                    let mut found_events = false;
                     for event in events {
                         let mut git_event = false;
                         for event_path in event.paths.iter() {
@@ -705,69 +710,75 @@ impl Project {
 
                         // We now have an event that isn't noise from .git or file opens:
                         log::debug!("found event: {event:?}");
-                        found_events = true;
 
-                        match event.kind {
-                            EventKind::Create(_create_kind) => {
-                                let modify_path = event.paths.first().unwrap();
-                                log::debug!("processing creation event: {event:?}");
-                                if let Some(need_rescan_vec) =
-                                    self.process_modify_event(modify_path)
-                                {
-                                    for need_rescan_id in need_rescan_vec {
-                                        file_objects_needing_rescan.insert(need_rescan_id);
-                                    }
-                                }
-                            }
-                            EventKind::Modify(ModifyKind::Data(_data_change)) => {
-                                let modify_path = event.paths.first().unwrap();
-                                log::debug!("processing modify event: {event:?}");
-                                if let Some(need_rescan_vec) =
-                                    self.process_modify_event(modify_path)
-                                {
-                                    for need_rescan_id in need_rescan_vec {
-                                        file_objects_needing_rescan.insert(need_rescan_id);
-                                    }
-                                }
-                            }
-                            EventKind::Modify(ModifyKind::Name(rename_mode)) => {
-                                if let Some(need_rescan_vec) =
-                                    self.process_rename_event(event, rename_mode)
-                                {
-                                    for need_rescan_id in need_rescan_vec {
-                                        file_objects_needing_rescan.insert(need_rescan_id);
-                                    }
-                                }
-                            }
-                            EventKind::Remove(_remove_kind) => {
-                                let delete_path = event
-                                    .paths
-                                    .first()
-                                    .expect("Rename event should have source");
-
-                                if let Some(fileid) = self.process_delete(delete_path) {
-                                    file_objects_needing_rescan.insert(fileid);
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    for object_needing_rescan in file_objects_needing_rescan {
-                        self.objects
-                            .get(&object_needing_rescan)
-                            .unwrap()
-                            .borrow_mut()
-                            .rescan_indexing(&self.objects);
-                    }
-                    if found_events {
-                        log::debug!(
-                            "finished processing events at {:?}",
-                            std::time::Instant::now()
-                        );
+                        self.event_queue.push_back(event);
+                        self.last_added_event = Some(Instant::now());
                     }
                 }
                 Err(err) => log::warn!("Error while trying to watch files: {err:?}"),
             }
+        }
+
+        if let Some(last_event_time) = self.last_added_event
+            && last_event_time.elapsed().as_millis() > (WATCHER_MSEC_DURATION * 2).into()
+        {
+            let mut file_objects_needing_rescan = HashSet::new();
+
+            let queued_events: Vec<DebouncedEvent> = self.event_queue.drain(..).collect();
+            for event in queued_events {
+                match event.kind {
+                    EventKind::Create(_create_kind) => {
+                        let modify_path = event.paths.first().unwrap();
+                        log::debug!("processing creation event: {event:?}");
+                        if let Some(need_rescan_vec) = self.process_modify_event(modify_path) {
+                            for need_rescan_id in need_rescan_vec {
+                                file_objects_needing_rescan.insert(need_rescan_id);
+                            }
+                        }
+                    }
+                    EventKind::Modify(ModifyKind::Data(_data_change)) => {
+                        let modify_path = event.paths.first().unwrap();
+                        log::debug!("processing modify event: {event:?}");
+                        if let Some(need_rescan_vec) = self.process_modify_event(modify_path) {
+                            for need_rescan_id in need_rescan_vec {
+                                file_objects_needing_rescan.insert(need_rescan_id);
+                            }
+                        }
+                    }
+                    EventKind::Modify(ModifyKind::Name(rename_mode)) => {
+                        if let Some(need_rescan_vec) = self.process_rename_event(event, rename_mode)
+                        {
+                            for need_rescan_id in need_rescan_vec {
+                                file_objects_needing_rescan.insert(need_rescan_id);
+                            }
+                        }
+                    }
+                    EventKind::Remove(_remove_kind) => {
+                        let delete_path = event
+                            .paths
+                            .first()
+                            .expect("Rename event should have source");
+
+                        if let Some(fileid) = self.process_delete(delete_path) {
+                            file_objects_needing_rescan.insert(fileid);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            for object_needing_rescan in file_objects_needing_rescan {
+                self.objects
+                    .get(&object_needing_rescan)
+                    .unwrap()
+                    .borrow_mut()
+                    .rescan_indexing(&self.objects);
+            }
+            log::debug!(
+                "finished processing event queue at {:?}",
+                std::time::Instant::now()
+            );
+            self.last_added_event = None;
         }
     }
 

@@ -5177,13 +5177,10 @@ fn test_tracker_reindex_timing() {
 
         write_with_temp_file(&scene1_path, scene1_text.as_bytes()).unwrap();
 
-        project.process_updates();
-        thread::sleep(time::Duration::from_millis(60));
-        project.process_updates();
-        thread::sleep(time::Duration::from_millis(60));
-        project.process_updates();
-        thread::sleep(time::Duration::from_millis(60));
-        project.process_updates();
+        for _ in 0..5 {
+            thread::sleep(time::Duration::from_millis(60));
+            project.process_updates();
+        }
 
         assert!(project.objects.contains_key(&file_id("1")));
         assert!(project.objects.contains_key(&file_id("2")));

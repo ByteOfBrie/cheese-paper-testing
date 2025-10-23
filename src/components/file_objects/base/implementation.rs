@@ -434,9 +434,9 @@ impl dyn FileObject {
             (true, true) => Ok(false),
             (true, false) => {
                 log::debug!(
-                    "Updating index of object {self} on disk from {:?} to {new_index} (filename: {})",
+                    "Updating index of object {self} in filename from {} (index: {:?}) to {new_index}",
+                    self.get_base().file.basename.to_string_lossy(),
                     filename_index,
-                    self.get_base().file.basename.to_string_lossy()
                 );
                 self.set_filename(self.calculate_filename(), objects)?;
                 Ok(true)

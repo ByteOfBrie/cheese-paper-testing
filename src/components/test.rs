@@ -27,7 +27,7 @@ use std::cell::RefCell;
 #[cfg(test)]
 use std::rc::Rc;
 #[cfg(test)]
-use std::{thread, time};
+use std::{fmt::Display, thread, time};
 
 #[cfg(test)]
 fn file_id(s: &str) -> Rc<String> {
@@ -5121,4 +5121,91 @@ fn test_tracker_metadata_population() {
 
     let folder1_name_regex = regex::Regex::new(r#"name\s*=\s*"folder1""#).unwrap();
     assert!(folder1_name_regex.is_match(&folder1_raw));
+}
+
+#[cfg(test)]
+pub struct PanicPrint<'a, D: Display + ?Sized + 'a> {
+    msg: &'a D,
+}
+
+#[cfg(test)]
+impl<'a, D: Display + ?Sized + 'a> PanicPrint<'a, D> {
+    pub fn new(msg: &'a D) -> Self {
+        PanicPrint { msg }
+    }
+}
+
+#[cfg(test)]
+impl<'a, D: Display + ?Sized + 'a> Drop for PanicPrint<'a, D> {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            // TODO: write to stderr directly and check errors so we don't double panic
+            eprintln!("{}", self.msg);
+        }
+    }
+}
+
+/// Create files out of index order, trying to cause a bug around timing
+/// This test is particularly fragile and might be heavily dependent on
+#[test]
+fn test_tracker_reindex_timing() {
+    let _ = env_logger::try_init();
+    for i in 0..20 {
+        let fail_message = format!("Failed on run: {i}");
+        let _fail_printer = PanicPrint::new(&fail_message);
+
+        let base_dir = tempfile::TempDir::new().unwrap();
+
+        let mut project =
+            Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+        let scene1_text = r#"id = "1"
+++++++++
+123456"#;
+
+        let scene2_text = r#"id = "2"
+++++++++
+"#;
+
+        let scene1_path = base_dir.path().join("test_project/text/000-scene1.md");
+        let scene2_path = base_dir.path().join("test_project/text/001-scene2.md");
+
+        write_with_temp_file(&scene2_path, scene2_text.as_bytes()).unwrap();
+
+        project.process_updates();
+        thread::sleep(time::Duration::from_millis(20));
+
+        write_with_temp_file(&scene1_path, scene1_text.as_bytes()).unwrap();
+
+        project.process_updates();
+        thread::sleep(time::Duration::from_millis(60));
+        project.process_updates();
+        thread::sleep(time::Duration::from_millis(60));
+        project.process_updates();
+        thread::sleep(time::Duration::from_millis(60));
+        project.process_updates();
+
+        assert!(project.objects.contains_key(&file_id("1")));
+        assert!(project.objects.contains_key(&file_id("2")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "123456");
+        assert_eq!(scene1.get_base().index, Some(0));
+
+        let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
+        let scene2 = match scene2_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene2.get_base().index, Some(1));
+    }
 }

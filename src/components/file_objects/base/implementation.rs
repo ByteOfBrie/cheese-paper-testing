@@ -156,20 +156,14 @@ impl dyn FileObject {
         log::debug!("Fixing indexing of {}", self);
         for (count, child) in self.children(objects).enumerate() {
             let set_index_result = child.borrow_mut().set_index(count, objects);
-            match set_index_result {
-                Ok(true) => {
-                    log::debug!("Updated index of {} to {count}", child.borrow())
-                }
-                Ok(false) => {}
-                Err(err) => {
-                    log::error!(
-                        "Error while trying to fix indexing of child {}: {err}",
-                        child.borrow()
-                    );
-                    panic!(
-                        "Error during fix_indexing, cannot be sure if we have valid indexes anymore"
-                    );
-                }
+            if let Err(err) = set_index_result {
+                log::error!(
+                    "Error while trying to fix indexing of child {}: {err}",
+                    child.borrow()
+                );
+                panic!(
+                    "Error during fix_indexing, cannot be sure if we have valid indexes anymore"
+                );
             }
         }
     }

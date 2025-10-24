@@ -1109,24 +1109,27 @@ impl Project {
                 .get(&source_parent_file_id)
                 .expect("objects should contain source file id");
 
-            let child_id_position = source_parent
+            let child_id_position_option = source_parent
                 .borrow()
                 .get_base()
                 .children
                 .iter()
-                .position(|val| moving_file_id == *val)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Children should only be removed from their parents. \
-                    child id: {moving_file_id}, parent: {source_parent_file_id}"
-                    )
-                });
+                .position(|val| moving_file_id == *val);
 
-            let child_id_string = source_parent
-                .borrow_mut()
-                .get_base_mut()
-                .children
-                .remove(child_id_position);
+            // We should maybe just use the logic from folder renames (iterate through)
+            // everything and remove it from the source, rather than trying to calculate
+            // the source
+            let child_id_string = if let Some(child_id_position) = child_id_position_option {
+                source_parent
+                    .borrow_mut()
+                    .get_base_mut()
+                    .children
+                    .remove(child_id_position)
+            } else {
+                // We found a child with no parent (seemingly), we don't have anywhere
+                // to remove it from, just clone the ID
+                moving_object.borrow().id().clone()
+            };
 
             let dest_parent = self.objects.get(&dest_file_id).unwrap();
 

@@ -937,7 +937,10 @@ pub trait FileObject: Debug {
         let current_modtime = match std::fs::metadata(file_to_read) {
             Ok(file_metadata) => file_metadata.modified()?,
             Err(err) => {
-                log::warn!("attempted to load file that does not exist");
+                log::warn!(
+                    "attempted to load file that does not exist: {:?}",
+                    file_to_read
+                );
                 return Err(err.into());
             }
         };

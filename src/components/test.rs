@@ -5159,6 +5159,96 @@ scene1"#;
     }
 }
 
+/// Check that we don't keep file objects that no longer exist around
+#[test]
+fn test_tracker_orphaned_file_objects() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    let mut project =
+        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+
+    let text_path = base_dir.path().join("test_project/text");
+
+    let folder1_path_orig = text_path.join("000-folder1");
+    std::fs::create_dir(&folder1_path_orig).unwrap();
+
+    let scene1_path_orig = folder1_path_orig.join("000-scene1.md");
+    let scene1_text_orig = r#"id = "1"
+++++++++
+scene1"#;
+
+    // Write all scenes before sleeping
+    write_with_temp_file(&scene1_path_orig, scene1_text_orig.as_bytes()).unwrap();
+
+    for _ in 0..5 {
+        thread::sleep(time::Duration::from_millis(60));
+        project.process_updates();
+    }
+
+    project.save().unwrap();
+
+    for _ in 0..5 {
+        thread::sleep(time::Duration::from_millis(60));
+        project.process_updates();
+    }
+
+    // Starting assumptions
+    {
+        assert_eq!(project.objects.len(), 5); // 3 top level folders, 2 folders, 4 scenes
+        assert!(project.objects.contains_key(&file_id("1")));
+
+        // Check the file contents (first)
+        let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
+        let scene1 = match scene1_file_object.get_file_type() {
+            FileObjectTypeInterface::Scene(scene) => scene,
+            _ => {
+                panic!("Got a non-scene object");
+            }
+        };
+        assert_eq!(scene1.text.as_str(), "scene1");
+    }
+
+    // grab folder1's id for later
+    let folder1_metadata_path = folder1_path_orig.join("metadata.toml");
+    let folder1_metadata = read_to_string(&folder1_metadata_path).unwrap();
+
+    let id_regex = regex::Regex::new(r#"id\s*=\s*"([a-z0-9\-]+)""#).unwrap();
+    let folder1_id = file_id(
+        id_regex
+            .captures(&folder1_metadata)
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .as_str(),
+    );
+
+    // Move folder1
+    let folder1_path_new = text_path.join("000-folder1-alt");
+    std::fs::rename(&folder1_path_orig, &folder1_path_new).unwrap();
+
+    // And remove scene3
+    std::fs::remove_file(folder1_path_new.join("000-scene1.md")).unwrap();
+
+    for _ in 0..5 {
+        thread::sleep(time::Duration::from_millis(60));
+        project.process_updates();
+    }
+
+    {
+        // Check that we have all of the scenes we would expect
+        assert!(!project.objects.contains_key(&file_id("1")));
+        assert_eq!(project.objects.len(), 4);
+
+        let folder1_object = project.objects.get(&folder1_id).unwrap();
+        assert_eq!(folder1_object.borrow().get_base().children.len(), 0);
+        assert_eq!(folder1_object.borrow().get_base().index, Some(0));
+
+        // folder1 should just have metadata, text should have metadata + folder
+        assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 1);
+        assert_eq!(std::fs::read_dir(&text_path).unwrap().count(), 2);
+    }
+}
+
 /// Test that files and folders have their metadata populated after creation
 #[test]
 fn test_tracker_metadata_population() {

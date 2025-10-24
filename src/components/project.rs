@@ -767,6 +767,7 @@ impl Project {
                 }
             }
 
+            // Rescan anything that needs it
             for object_needing_rescan in file_objects_needing_rescan {
                 self.objects
                     .get(&object_needing_rescan)
@@ -774,6 +775,53 @@ impl Project {
                     .borrow_mut()
                     .rescan_indexing(&self.objects);
             }
+
+            // Clean up any dangling objects
+            {
+                // Start by getting a set of all objects
+                let mut dangling: HashSet<Rc<String>> =
+                    HashSet::from_iter(self.objects.keys().cloned());
+
+                // Remove the three special cases which are supposed to be there
+                dangling.remove(&self.text_id);
+                dangling.remove(&self.characters_id);
+                dangling.remove(&self.worldbuilding_id);
+
+                // Visit every object and remove all children from the dangling list. This will
+                // not find cycles, but if there are cycles in our tree we have bigger problems
+                for file_object in self.objects.values() {
+                    for child in file_object.borrow().get_base().children.iter() {
+                        if !dangling.remove(child) {
+                            // I might regret making this a panic instead of a log, but it
+                            // shouldn't be possible (and I'm not sure how to recover)
+                            panic!("Found two occurances of child {child} in objects");
+                        }
+                    }
+                }
+
+                // If there are any objects left, these are the roots of the trees of dangling
+                // objects and can safely be removed (since they don't exist on disk anymore)
+                if !dangling.is_empty() {
+                    log::debug!("Found dangling file objects, removing them now");
+
+                    let mut queue_to_remove = VecDeque::from_iter(dangling);
+
+                    while let Some(to_remove) = queue_to_remove.pop_front() {
+                        if let Some(removed_object) = self.objects.remove(&to_remove) {
+                            log::debug!("Removed dangling file object: {removed_object:?}");
+
+                            // There might be a better way to do this (since we're dropping it anyway), but
+                            // this is easy
+                            for child in removed_object.borrow().get_base().children.iter() {
+                                queue_to_remove.push_back(child.clone());
+                            }
+                        } else {
+                            log::error!("Could not remove file object: {to_remove}");
+                        }
+                    }
+                }
+            }
+
             log::debug!(
                 "finished processing event queue at {:?}",
                 std::time::Instant::now()

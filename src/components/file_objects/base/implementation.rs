@@ -114,15 +114,9 @@ impl dyn FileObject {
                     .unwrap();
             }
 
-            log::debug!(
-                "created indexing gap in {} at {index}",
-                &self.get_base().metadata.id
-            );
+            log::debug!("created indexing gap in {self} at {index}");
         } else {
-            log::debug!(
-                "indexing gap requested at the end of {}, nothing to do",
-                &self.get_base().metadata.id
-            );
+            log::debug!("indexing gap requested at the end of {self}, nothing to do");
         }
         Ok(())
     }
@@ -283,12 +277,7 @@ impl dyn FileObject {
             return Ok(());
         }
 
-        log::debug!(
-            "moving {} from {:#?} to {:?}",
-            &self.get_base().metadata.name,
-            &old_path,
-            &new_path
-        );
+        log::debug!("moving {self} from {old_path:#?} to {new_path:?}");
 
         self.move_on_disk(old_path, new_path, objects)
     }

@@ -323,6 +323,8 @@ impl Project {
             project.file.modified = true
         }
 
+        project.clean_up_orphaned_objects();
+
         project.save()?;
 
         Ok(project)
@@ -804,8 +806,17 @@ impl Project {
             // 3. every element that needs to be rescanned is removed from their parents (the list of
             //    children), the parents are stored in the needs_reindex set
 
+            let project_info_file = self.get_project_info_file();
+
             // 4. load all of the objects we wanted to rescan
             for path_to_load in paths_to_load {
+                if path_to_load == project_info_file {
+                    if let Err(err) = self.reload_file() {
+                        log::warn!("Error while reloading project info file: {err}");
+                    }
+                    continue;
+                }
+
                 match load_file(&path_to_load, &mut self.objects) {
                     Ok(file_id) => {
                         let parent_path = get_parent_path(&path_to_load);
@@ -847,56 +858,57 @@ impl Project {
             }
 
             // 6. Clean up any dangling objects
-            {
-                // Start by getting a set of all objects
-                let mut dangling: HashSet<Rc<String>> =
-                    HashSet::from_iter(self.objects.keys().cloned());
-
-                // Remove the three special cases which are supposed to be there
-                dangling.remove(&self.text_id);
-                dangling.remove(&self.characters_id);
-                dangling.remove(&self.worldbuilding_id);
-
-                // Visit every object and remove all children from the dangling list. This will
-                // not find cycles, but if there are cycles in our tree we have bigger problems
-                for file_object in self.objects.values() {
-                    for child in file_object.borrow().get_base().children.iter() {
-                        if !dangling.remove(child) {
-                            // I might regret making this a panic instead of a log, but it
-                            // shouldn't be possible (and I'm not sure how to recover)
-                            panic!("Found two occurances of child {child} in objects");
-                        }
-                    }
-                }
-
-                // If there are any objects left, these are the roots of the trees of dangling
-                // objects and can safely be removed (since they don't exist on disk anymore)
-                if !dangling.is_empty() {
-                    log::debug!("Found dangling file objects, removing them now");
-
-                    let mut queue_to_remove = VecDeque::from_iter(dangling);
-
-                    while let Some(to_remove) = queue_to_remove.pop_front() {
-                        if let Some(removed_object) = self.objects.remove(&to_remove) {
-                            log::debug!("Removed dangling file object: {removed_object:?}");
-
-                            // There might be a better way to do this (since we're dropping it anyway), but
-                            // this is easy
-                            for child in removed_object.borrow().get_base().children.iter() {
-                                queue_to_remove.push_back(child.clone());
-                            }
-                        } else {
-                            log::error!("Could not remove file object: {to_remove}");
-                        }
-                    }
-                }
-            }
+            self.clean_up_orphaned_objects();
 
             log::debug!(
                 "finished processing event queue at {:?}",
                 std::time::Instant::now()
             );
             self.last_added_event = None;
+        }
+    }
+
+    pub fn clean_up_orphaned_objects(&mut self) {
+        // Start by getting a set of all objects
+        let mut dangling: HashSet<Rc<String>> = HashSet::from_iter(self.objects.keys().cloned());
+
+        // Remove the three special cases which are supposed to be there
+        dangling.remove(&self.text_id);
+        dangling.remove(&self.characters_id);
+        dangling.remove(&self.worldbuilding_id);
+
+        // Visit every object and remove all children from the dangling list. This will
+        // not find cycles, but if there are cycles in our tree we have bigger problems
+        for file_object in self.objects.values() {
+            for child in file_object.borrow().get_base().children.iter() {
+                if !dangling.remove(child) {
+                    // I might regret making this a panic instead of a log, but it
+                    // shouldn't be possible (and I'm not sure how to recover)
+                    panic!("Found two occurances of child {child} in objects");
+                }
+            }
+        }
+
+        // If there are any objects left, these are the roots of the trees of dangling
+        // objects and can safely be removed (since they don't exist on disk anymore)
+        if !dangling.is_empty() {
+            log::debug!("Found dangling file objects, removing them now");
+
+            let mut queue_to_remove = VecDeque::from_iter(dangling);
+
+            while let Some(to_remove) = queue_to_remove.pop_front() {
+                if let Some(removed_object) = self.objects.remove(&to_remove) {
+                    log::debug!("Removed dangling file object: {removed_object:?}");
+
+                    // There might be a better way to do this (since we're dropping it anyway), but
+                    // this is easy
+                    for child in removed_object.borrow().get_base().children.iter() {
+                        queue_to_remove.push_back(child.clone());
+                    }
+                } else {
+                    log::error!("Could not remove file object: {to_remove}");
+                }
+            }
         }
     }
 }

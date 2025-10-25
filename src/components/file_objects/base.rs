@@ -527,56 +527,43 @@ fn create_index_and_move_on_disk(
 pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
-        dirname: match filename.parent() {
-            Some(dirname) => dirname,
-            None => {
-                return Err(cheese_error!(
-                    "filename supplied to from_file should have a dirname component",
-                ));
-            }
-        }
-        .to_path_buf(),
-        basename: match filename.file_name() {
-            Some(basename) => basename,
-            None => {
-                return Err(cheese_error!(
-                    "filename supplied to from_file should have a basename component",
-                ));
-            }
-        }
-        .to_owned(),
+        dirname: filename
+            .parent()
+            .ok_or(cheese_error!(
+                "filename supplied to from_file should have a dirname component",
+            ))?
+            .to_path_buf(),
+        basename: filename
+            .file_name()
+            .ok_or(cheese_error!(
+                "filename supplied to from_file should have a basename component",
+            ))?
+            .to_owned(),
         modtime: None,
         modified: false,
     };
 
-    // If the filename is a directory, we need to look for the underlying file, otherwise
-    // we already have it
+    // If the filename is a directory, we need to look for the underlying file
     let underlying_file = match filename.is_dir() {
-        true => Path::join(filename, FOLDER_METADATA_FILE_NAME),
+        true => filename.join(FOLDER_METADATA_FILE_NAME),
         false => filename.to_path_buf(),
     };
 
-    let (metadata_str, file_body) = match read_file_contents(&underlying_file) {
-        Ok((metadata_str, file_body)) => (metadata_str, file_body),
-        Err(err) => {
-            if filename.is_dir() {
-                ("".to_string(), "".to_string())
-            } else {
-                log::error!("Failed to read file {:?}: {:?}", &underlying_file, err);
-                return Err(err);
-            }
+    let (metadata_str, file_body) = read_file_contents(&underlying_file).or_else(|err| {
+        if filename.is_dir() {
+            Ok(("".to_string(), "".to_string()))
+        } else {
+            Err(cheese_error!(
+                "Failed to read file {underlying_file:?}: {err}"
+            ))
         }
-    };
+    })?;
 
     let mut metadata = FileObjectMetadata::default();
 
-    let toml_header = match metadata_str.parse::<DocumentMut>() {
-        Ok(toml_header) => toml_header,
-        Err(err) => {
-            log::error!("Error parsing {underlying_file:?}: {err}");
-            return Err(cheese_error!("Error parsing {underlying_file:?}\n{}", err));
-        }
-    };
+    let toml_header = metadata_str
+        .parse::<DocumentMut>()
+        .map_err(|err| cheese_error!("Error parsing {underlying_file:?}: {err}"))?;
 
     if !toml_header.contains_key("name") {
         let file_name = PathBuf::from(&file_info.basename)
@@ -599,10 +586,8 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
         }
     }
 
-    if let Err(err) = load_base_metadata(&toml_header, &mut metadata, &mut file_info) {
-        log::error!("Error while parsing metadata for {:?}: {}", &filename, &err);
-        return Err(err);
-    }
+    load_base_metadata(&toml_header, &mut metadata, &mut file_info)
+        .map_err(|err| cheese_error!("Error while parsing metadata for {filename:?}: {err}"))?;
 
     let file_type: FileType = match toml_header.get("file_type") {
         Some(file_type_toml_item) => match file_type_toml_item.as_str() {
@@ -610,8 +595,9 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
                 cheese_error!("could not get file_type for file {filename:?}: {err}")
             })?,
             None => {
-                log::error!("file header contained non-string value for file_type: {filename:?}");
-                return Err(cheese_error!("non-string file type"));
+                return Err(cheese_error!(
+                    "file header contained non-string value for file_type: {filename:?}"
+                ));
             }
         },
         None => match filename.is_dir() {
@@ -619,11 +605,9 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
             false => match filename.extension().and_then(|ext| ext.to_str()) {
                 Some("md") => FileType::Scene,
                 _ => {
-                    log::error!(
-                        "Unspecified (required) file type while attempt to read {:?}",
-                        &filename,
-                    );
-                    return Err(cheese_error!("unknown file type"));
+                    return Err(cheese_error!(
+                        "Unspecified file type file type while attempting to read {filename:?}"
+                    ));
                 }
             },
         },
@@ -642,87 +626,60 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
 
     // Load children of this file object
     if file_type.is_folder() {
-        if filename.is_dir() {
-            match std::fs::read_dir(filename) {
-                Ok(files) => {
-                    for file in files {
-                        match file {
-                            Ok(file) => {
-                                // We've already read this file, nothing to do
-                                if file.path().file_name()
-                                    == Some(&OsString::from(FOLDER_METADATA_FILE_NAME))
-                                {
-                                    continue;
-                                }
+        if !filename.is_dir() {
+            return Err(cheese_error!(
+                "{filename:?} has a folder-based file_type, but isn't actually a directory",
+            ));
+        }
 
-                                let file_path = file.path();
+        // We rescan and fix the indexing at the end when returning a folder or place, so we can read
+        // the files in any order here. The only files that won't ever be affected by this are the
+        // roots, which don't have indexing anyway
+        for file in std::fs::read_dir(filename).map_err(|err| {
+            cheese_error!("Error while attempt to read folder {filename:?}: {err}")
+        })? {
+            match file {
+                Ok(file) => {
+                    // We've already read this file, nothing to do
+                    if file.file_name() == FOLDER_METADATA_FILE_NAME {
+                        continue;
+                    }
 
-                                // We process every dir but only some files
-                                if !file_path.is_dir() {
-                                    // Check for missing or unknown extension
-                                    if file_path.extension().is_none_or(|extension| {
-                                        extension != "toml" && extension != "md"
-                                    }) {
-                                        log::debug!(
-                                            "skipping regular {file:?} with unknown extension"
-                                        );
-                                        continue;
-                                    }
-                                }
+                    let file_path = file.path();
 
-                                match from_file(&file_path) {
-                                    Ok(created_files) => {
-                                        let (object, mut descendents) = created_files.into_boxed();
+                    // We process every dir, but only `.toml` or `.md` files
+                    if !file_path.is_dir() {
+                        // Check for missing or unknown extension
+                        if file_path
+                            .extension()
+                            .is_none_or(|extension| extension != "toml" && extension != "md")
+                        {
+                            log::debug!("skipping regular {file:?} with unknown extension");
+                            continue;
+                        }
+                    }
 
-                                        let id = object.borrow().id().clone();
-                                        base.children.push(id.clone());
-                                        objects.insert(id, object);
+                    // Just read the children in any order, we'll clean it up later
+                    match from_file(&file_path) {
+                        Ok(created_files) => {
+                            let (object, mut descendents) = created_files.into_boxed();
 
-                                        for (child_file_id, child_file) in descendents.drain() {
-                                            objects.insert(child_file_id, child_file);
-                                        }
-                                    }
-                                    Err(err) => {
-                                        log::warn!(
-                                            "attempted to load invalid file {:?}: {}",
-                                            &file,
-                                            err
-                                        );
-                                    }
-                                }
+                            let id = object.borrow().id().clone();
+                            base.children.push(id.clone());
+                            objects.insert(id, object);
+
+                            for (child_file_id, child_file) in descendents.drain() {
+                                objects.insert(child_file_id, child_file);
                             }
-                            Err(err) => {
-                                warn!("Could not read file {:?}: {}", &filename, &err)
-                            }
+                        }
+                        Err(err) => {
+                            log::warn!("attempted to load invalid file {file:?}: {err}")
                         }
                     }
                 }
-                Err(err) => {
-                    log::error!(
-                        "Error while attempt to read folder {:?}: {}",
-                        &filename,
-                        &err
-                    );
-                    return Err(cheese_error!(
-                        "Error while attempt to read folder {:?}\n{}",
-                        &filename,
-                        err
-                    ));
-                }
+                Err(err) => warn!("Could not read file {filename:?}: {err}"),
             }
-        } else {
-            log::error!(
-                "attempted to construct a folder-type from a non-folder filename {:?}",
-                &filename
-            );
-            return Err(cheese_error!(
-                "{:?} is a folder-type file object, but doesn't have a directory",
-                &filename
-            ));
         }
-        // We fix the indexing at the end when returning a folder or place
-        // This will ensure that all children have the correct indexing. The only file objects
-        // that aren't the children of some folder are the roots, which don't have indexing anyway
     }
 
     match file_type {

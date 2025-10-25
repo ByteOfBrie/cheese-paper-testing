@@ -126,7 +126,9 @@ impl TryFrom<&str> for FileType {
             "folder" => Ok(FileType::Folder),
             "character" => Ok(FileType::Character),
             "worldbuilding" => Ok(FileType::Place),
-            _ => Err(cheese_error!("Unknown file type")),
+            // "worldbuilding" is the proper string, but also accept "place"
+            "place" => Ok(FileType::Place),
+            _ => Err(cheese_error!("Unknown file type: {value}")),
         }
     }
 }
@@ -602,37 +604,29 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
         return Err(err);
     }
 
-    let file_type_str = match toml_header.get("file_type") {
-        Some(val) => val.as_str().unwrap_or("unknown").to_owned(),
-        None => match filename.is_dir() {
-            true => "folder".to_string(),
-            false => filename.extension().map_or_else(
-                || "unknown".to_string(),
-                |val| match val.to_str() {
-                    Some("md") => "scene".to_string(),
-                    Some("toml") => "unknown".to_string(),
-                    _ => "unknown".to_string(),
-                },
-            ),
-        },
-    };
-
-    let file_type: FileType = match file_type_str.as_str().try_into() {
-        Ok(file_type) => file_type,
-        Err(err) => {
-            // The "correct" string is `worldbuilding`, but allow place anyway
-            if file_type_str == "place" {
-                FileType::Place
-            } else {
-                log::error!(
-                    "Found unknown file type ({}) while attempt to read {:?}: {}",
-                    &file_type_str,
-                    &filename,
-                    err
-                );
-                return Err(cheese_error!("unknown file type"));
+    let file_type: FileType = match toml_header.get("file_type") {
+        Some(file_type_toml_item) => match file_type_toml_item.as_str() {
+            Some(file_type_str) => file_type_str.try_into().map_err(|err| {
+                cheese_error!("could not get file_type for file {filename:?}: {err}")
+            })?,
+            None => {
+                log::error!("file header contained non-string value for file_type: {filename:?}");
+                return Err(cheese_error!("non-string file type"));
             }
-        }
+        },
+        None => match filename.is_dir() {
+            true => FileType::Folder,
+            false => match filename.extension().and_then(|ext| ext.to_str()) {
+                Some("md") => FileType::Scene,
+                _ => {
+                    log::error!(
+                        "Unspecified (required) file type while attempt to read {:?}",
+                        &filename,
+                    );
+                    return Err(cheese_error!("unknown file type"));
+                }
+            },
+        },
     };
 
     let mut base = BaseFileObject {

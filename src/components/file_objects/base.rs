@@ -478,10 +478,9 @@ fn create_index_and_move_on_disk(
     let child = objects.get(moving_file_id).unwrap();
 
     // Move the actual child on disk
-    if let Err(err) =
-        child
-            .borrow_mut()
-            .move_object(insertion_index, dest.borrow().get_path(), objects)
+    if let Err(err) = child
+        .borrow_mut()
+        .move_object(new_index, dest.borrow().get_path(), objects)
     {
         // We don't pass enough information around to meaninfully recover here
         log::error!("Encountered error while trying to move {moving_file_id}");

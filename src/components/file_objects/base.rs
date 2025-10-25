@@ -2,7 +2,6 @@ mod implementation;
 pub use implementation::*;
 
 use bitflags::bitflags;
-use log::warn;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -525,6 +524,23 @@ fn create_index_and_move_on_disk(
 
 /// Load an arbitrary file object from a file on disk
 pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
+    if !filename.exists() {
+        return Err(cheese_error!(
+            "from_file cannot load file that does not exist: {filename:?}"
+        ));
+    }
+
+    // We process every dir, but only `.toml` or `.md` files
+    if !filename.is_dir()
+        && filename
+            .extension()
+            .is_none_or(|extension| extension != "toml" && extension != "md")
+    {
+        return Err(cheese_error!(
+            "from_file cannot load file {filename:?} with unknown extension"
+        ));
+    }
+
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: filename
@@ -647,18 +663,6 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
 
                     let file_path = file.path();
 
-                    // We process every dir, but only `.toml` or `.md` files
-                    if !file_path.is_dir() {
-                        // Check for missing or unknown extension
-                        if file_path
-                            .extension()
-                            .is_none_or(|extension| extension != "toml" && extension != "md")
-                        {
-                            log::debug!("skipping regular {file:?} with unknown extension");
-                            continue;
-                        }
-                    }
-
                     // Just read the children in any order, we'll clean it up later
                     match from_file(&file_path) {
                         Ok(created_files) => {
@@ -673,11 +677,11 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
                             }
                         }
                         Err(err) => {
-                            log::warn!("attempted to load invalid file {file:?}: {err}")
+                            log::debug!("Could not load child {file:?}: {err}")
                         }
                     }
                 }
-                Err(err) => warn!("Could not read file {filename:?}: {err}"),
+                Err(err) => log::warn!("Could not read file {filename:?}: {err}"),
             }
         }
     }

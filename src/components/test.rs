@@ -404,28 +404,28 @@ fn test_reload_objects() {
     drop(folder);
     drop(place);
 
-    match from_file(&scene_path, Some(0)).unwrap() {
+    match from_file(&scene_path).unwrap() {
         FileObjectCreation::Scene(scene, _) => {
             assert_eq!(*scene.text, sample_body);
         }
         _ => panic!(),
     }
 
-    match from_file(&character_path, Some(1)).unwrap() {
+    match from_file(&character_path).unwrap() {
         FileObjectCreation::Character(character, _) => {
             assert_eq!(*character.metadata.appearance, character_appearance);
         }
         _ => panic!(),
     }
 
-    match from_file(&folder_path, Some(2)).unwrap() {
+    match from_file(&folder_path).unwrap() {
         FileObjectCreation::Folder(folder, _) => {
             assert_eq!(*folder.metadata.notes, folder_notes);
         }
         _ => panic!(),
     }
 
-    match from_file(&place_path, Some(3)).unwrap() {
+    match from_file(&place_path).unwrap() {
         FileObjectCreation::Place(place, _) => {
             assert_eq!(*place.metadata.description, place_description);
         }
@@ -636,7 +636,7 @@ contents1
         .borrow()
         .get_path();
 
-    match from_file(&scene_path, Some(0)).unwrap() {
+    match from_file(&scene_path).unwrap() {
         FileObjectCreation::Scene(scene, _) => {
             assert_eq!(scene.get_body().trim(), "contents1");
             assert_eq!(
@@ -669,7 +669,7 @@ fn test_name_from_filename() {
     )
     .unwrap();
 
-    match from_file(&text_path, None).unwrap() {
+    match from_file(&text_path).unwrap() {
         FileObjectCreation::Folder(mut folder, contents) => {
             folder.save(&contents).unwrap();
             assert!(folder.get_path().join("000-scene2.md").exists());
@@ -735,7 +735,7 @@ contents123"#
     )
     .unwrap();
 
-    match from_file(&text_path, None).unwrap() {
+    match from_file(&text_path).unwrap() {
         FileObjectCreation::Folder(mut folder, contents) => {
             folder.save(&contents).unwrap();
             assert_eq!(
@@ -2526,7 +2526,7 @@ file_type = "worldbuilding""#;
         .unwrap()
         .borrow()
         .get_path();
-    match from_file(&place_path, Some(0)).unwrap() {
+    match from_file(&place_path).unwrap() {
         FileObjectCreation::Place(place, _) => {
             assert!(
                 read_to_string(place.get_file())
@@ -2543,7 +2543,7 @@ file_type = "worldbuilding""#;
         .unwrap()
         .borrow()
         .get_path();
-    match from_file(&worldbuilding_path, Some(1)).unwrap() {
+    match from_file(&worldbuilding_path).unwrap() {
         FileObjectCreation::Place(place, _) => {
             assert!(
                 read_to_string(place.get_file())

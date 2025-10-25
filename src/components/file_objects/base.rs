@@ -522,7 +522,7 @@ fn create_index_and_move_on_disk(
 }
 
 /// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCreation, CheeseError> {
+pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
     // Create the file info right at the start
     let mut file_info = FileInfo {
         dirname: match filename.parent() {
@@ -637,7 +637,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
 
     let mut base = BaseFileObject {
         metadata,
-        index,
+        index: get_index_from_name(&file_info.basename.to_string_lossy()),
         file: file_info,
         toml_header,
         children: Vec::new(),
@@ -651,8 +651,6 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         if filename.is_dir() {
             match std::fs::read_dir(filename) {
                 Ok(files) => {
-                    let mut indexed_files: Vec<(usize, PathBuf)> = Vec::new();
-                    let mut unindexed_files: Vec<PathBuf> = Vec::new();
                     for file in files {
                         match file {
                             Ok(file) => {
@@ -665,85 +663,42 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
 
                                 let file_path = file.path();
 
-                                let file_name_str = match file_path.file_name() {
-                                    Some(file_name) => match file_name.to_str() {
-                                        Some(file_name_str) => file_name_str,
-                                        None => {
-                                            log::error!(
-                                                "Encountered file without valid unicode name: {file:?}"
-                                            );
-                                            continue;
-                                        }
-                                    },
-                                    None => {
-                                        log::error!(
-                                            "Encountered file without valid basename name: {file:?}"
+                                // We process every dir but only some files
+                                if !file_path.is_dir() {
+                                    // Check for missing or unknown extension
+                                    if file_path.extension().is_none_or(|extension| {
+                                        extension != "toml" && extension != "md"
+                                    }) {
+                                        log::debug!(
+                                            "skipping regular {file:?} with unknown extension"
                                         );
                                         continue;
                                     }
-                                };
+                                }
 
-                                match get_index_from_name(file_name_str) {
-                                    Some(index) => {
-                                        indexed_files.push((index, file.path()));
+                                match from_file(&file_path) {
+                                    Ok(created_files) => {
+                                        let (object, mut descendents) = created_files.into_boxed();
+
+                                        let id = object.borrow().id().clone();
+                                        base.children.push(id.clone());
+                                        objects.insert(id, object);
+
+                                        for (child_file_id, child_file) in descendents.drain() {
+                                            objects.insert(child_file_id, child_file);
+                                        }
                                     }
-                                    None => unindexed_files.push(file.path()),
-                                };
-                            }
-                            Err(err) => {
-                                warn!("Could not read file in folder {:?}: {}", &filename, &err)
-                            }
-                        }
-                    }
-
-                    // sort the list of files and grab the first one
-                    indexed_files.sort();
-                    let max_indexed_file = match indexed_files.last() {
-                        Some((final_index, _file)) => *final_index,
-                        None => 0,
-                    };
-                    let unindexed_offset = max_indexed_file + 1;
-
-                    // add the unindexed files to the list, arbitrarily assigning them indexes
-                    // (assuming they fall strictly *after* the file path)
-                    for (index, file) in unindexed_files.drain(..).enumerate() {
-                        indexed_files.push((index + unindexed_offset, file));
-                    }
-
-                    // Insert all of the files at their given indexes
-                    //
-                    // There may still be gaps at this point, but they'll get filled in at the end
-                    // by `fix_indexing`
-                    for (index, file) in indexed_files {
-                        // We process every dir but only some files
-                        if !file.is_dir() {
-                            // Check for missing or unknown extension
-                            if file
-                                .extension()
-                                .is_none_or(|extension| extension != "toml" && extension != "md")
-                            {
-                                log::debug!("skipping regular {file:?} with unknown extension");
-                                continue;
-                            }
-                        }
-                        match from_file(&file, Some(index)) {
-                            Ok(created_files) => {
-                                let (object, mut descendents) = created_files.into_boxed();
-
-                                let id = object.borrow().id().clone();
-                                base.children.push(id.clone());
-                                objects.insert(id, object);
-
-                                for (child_file_id, child_file) in descendents.drain() {
-                                    objects.insert(child_file_id, child_file);
+                                    Err(err) => {
+                                        log::warn!(
+                                            "attempted to load invalid file {:?}: {}",
+                                            &file,
+                                            err
+                                        );
+                                    }
                                 }
                             }
                             Err(err) => {
-                                log::warn!(
-                                    "found invalid file while attempting to load {:?}, {}",
-                                    &file,
-                                    err
-                                );
+                                warn!("Could not read file {:?}: {}", &filename, &err)
                             }
                         }
                     }
@@ -789,7 +744,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         FileType::Folder => {
             let mut folder = Folder::from_base(base)?;
 
-            <dyn FileObject>::fix_indexing(&mut folder, &objects);
+            <dyn FileObject>::rescan_indexing(&mut folder, &objects);
 
             Ok(FileObjectCreation::Folder(folder, objects))
         }
@@ -797,7 +752,7 @@ pub fn from_file(filename: &Path, index: Option<usize>) -> Result<FileObjectCrea
         FileType::Place => {
             let mut place = Place::from_base(base)?;
 
-            <dyn FileObject>::fix_indexing(&mut place, &objects);
+            <dyn FileObject>::rescan_indexing(&mut place, &objects);
 
             Ok(FileObjectCreation::Place(place, objects))
         }

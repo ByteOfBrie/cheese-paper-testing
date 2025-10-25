@@ -19,9 +19,7 @@ use std::rc::Rc;
 use std::time::Instant;
 use toml_edit::DocumentMut;
 
-use crate::components::file_objects::utils::{
-    get_index_from_name, process_name_for_filename, write_outline_property,
-};
+use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
 
 use crate::components::file_objects::base::{
     FOLDER_METADATA_FILE_NAME, FileID, FileObjectCreation, load_base_metadata,
@@ -115,7 +113,7 @@ fn load_top_level_folder(
 
     let folder_path = &Path::join(project_path, name.to_lowercase());
     if folder_path.exists() {
-        let created_object = from_file(folder_path, None)
+        let created_object = from_file(folder_path)
             .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
         match created_object {
             FileObjectCreation::Folder(folder, contents) => Ok((folder, contents)),
@@ -949,8 +947,6 @@ impl Project {
 
                 let parent_object = self.objects.get(&parent_id).unwrap();
 
-                let new_index = parent_object.borrow_mut().get_base().children.len();
-
                 // We've found a parent, which means we need to load or reload this item
                 let id = get_id_from_file(ancestor);
 
@@ -985,7 +981,7 @@ impl Project {
                     None => {
                         // Either the file isn't already loaded or we didn't successfully load it,
                         // try again either way
-                        let (new_object, descendants) = match from_file(ancestor, Some(new_index)) {
+                        let (new_object, descendants) = match from_file(ancestor) {
                             Ok(file_object_creation) => file_object_creation.into_boxed(),
                             Err(err) => {
                                 log::warn!(
@@ -1082,6 +1078,14 @@ impl Project {
         if source_path == dest_path {
             log::debug!(
                 "Rename event: has the same source and dest ({source_path:?}), nothing to do"
+            );
+            return None;
+        }
+
+        if !dest_path.exists() {
+            log::debug!(
+                "Attempted to process the rename of a file that no longer exists ({source_path:?} to \
+                {dest_path:?}), nothing to do."
             );
             return None;
         }
@@ -1198,14 +1202,6 @@ impl Project {
             need_rescan.push(dest_file_id.clone());
         }
 
-        if !dest_path.exists() {
-            log::debug!(
-                "Attempted to process the rename of a file that no longer exists ({source_path:?} to \
-                {dest_path:?}), nothing to do."
-            );
-            return None;
-        }
-
         // Reload the moving file
         if let Err(err) = moving_object.borrow_mut().reload_file() {
             log::error!(
@@ -1218,17 +1214,16 @@ impl Project {
 
         if is_dir {
             // we're basically forced to reload the file object at this point, unfortunately.
-            let (new_object, mut descendants) =
-                match from_file(dest_path, get_index_from_name(&dest_name.to_string_lossy())) {
-                    Ok(file_object_creation) => file_object_creation.into_boxed(),
-                    Err(err) => {
-                        log::warn!(
-                            "Could not open file as part of processing modifications: {err}, \
+            let (new_object, mut descendants) = match from_file(dest_path) {
+                Ok(file_object_creation) => file_object_creation.into_boxed(),
+                Err(err) => {
+                    log::warn!(
+                        "Could not open file as part of processing modifications: {err}, \
                                     giving up on processing event"
-                        );
-                        return None;
-                    }
-                };
+                    );
+                    return None;
+                }
+            };
 
             let id = new_object.borrow().id().clone();
 

@@ -1,11 +1,13 @@
 #[cfg(test)]
 use crate::components::file_objects::FileObjectStore;
 #[cfg(test)]
-use crate::components::file_objects::base::{FileObjectCreation, FileType};
+use crate::components::file_objects::MutFileObjectTypeInterface;
+#[cfg(test)]
+use crate::components::file_objects::base::FileType;
 #[cfg(test)]
 use crate::components::file_objects::{
-    Character, FileObject, FileObjectTypeInterface, Folder, Place, Scene, from_file, move_child,
-    write_with_temp_file,
+    Character, FileID, FileObject, FileObjectTypeInterface, Folder, Place, Scene, load_file,
+    move_child, write_with_temp_file,
 };
 #[cfg(test)]
 use crate::components::project::Project;
@@ -32,6 +34,53 @@ use std::{fmt::Display, thread, time};
 #[cfg(test)]
 fn file_id(s: &str) -> Rc<String> {
     Rc::new(s.to_string())
+}
+
+/// Helper to get the file id from a path
+#[cfg(test)]
+fn get_id_from_file(filename: &Path) -> Option<FileID> {
+    use toml_edit::DocumentMut;
+
+    use crate::components::file_objects::base::{FOLDER_METADATA_FILE_NAME, read_file_contents};
+
+    if !filename.exists() {
+        return None;
+    }
+
+    // If the filename is a directory, we need to look for the underlying file, otherwise
+    // we already have it
+    let underlying_file = match filename.is_dir() {
+        true => Path::join(filename, FOLDER_METADATA_FILE_NAME),
+        false => filename.to_path_buf(),
+    };
+
+    let (metadata_str, _file_body) = match read_file_contents(&underlying_file) {
+        Ok((metadata_str, file_body)) => (metadata_str, file_body),
+        Err(err) => {
+            if !filename.is_dir() {
+                log::error!("Failed to read file {:?}: {:?}", &underlying_file, err);
+            }
+            return None;
+        }
+    };
+
+    let toml_header = match metadata_str.parse::<DocumentMut>() {
+        Ok(toml_header) => toml_header,
+        Err(err) => {
+            log::error!("Error parsing {underlying_file:?}: {err}");
+            return None;
+        }
+    };
+
+    if let Some(id_item) = toml_header.get("id")
+        && let Some(id_string) = id_item.as_str()
+    {
+        use crate::components::file_objects::FileID;
+
+        return Some(FileID::new(id_string.to_string()));
+    }
+
+    None
 }
 
 #[test]
@@ -392,11 +441,15 @@ fn test_reload_objects() {
     folder.save(&HashMap::new()).unwrap();
     place.save(&HashMap::new()).unwrap();
 
-    // Keep track of paths
+    // Keep track of paths and ids
     let scene_path = scene.get_path();
+    let scene_id = scene.get_base().metadata.id.clone();
     let character_path = character.get_path();
+    let character_id = character.get_base().metadata.id.clone();
     let folder_path = folder.get_path();
+    let folder_id = folder.get_base().metadata.id.clone();
     let place_path = place.get_path();
+    let place_id = place.get_base().metadata.id.clone();
 
     // Drop all of the objects (just to make sure we're reloading them)
     drop(scene);
@@ -404,29 +457,39 @@ fn test_reload_objects() {
     drop(folder);
     drop(place);
 
-    match from_file(&scene_path).unwrap() {
-        FileObjectCreation::Scene(scene, _) => {
+    let mut objects = FileObjectStore::new();
+
+    let scene_id_loaded = load_file(&scene_path, &mut objects).unwrap();
+    assert_eq!(scene_id, scene_id_loaded);
+    match objects.get(&scene_id).unwrap().borrow().get_file_type() {
+        FileObjectTypeInterface::Scene(scene) => {
             assert_eq!(*scene.text, sample_body);
         }
         _ => panic!(),
     }
 
-    match from_file(&character_path).unwrap() {
-        FileObjectCreation::Character(character, _) => {
+    let character_id_loaded = load_file(&character_path, &mut objects).unwrap();
+    assert_eq!(character_id, character_id_loaded);
+    match objects.get(&character_id).unwrap().borrow().get_file_type() {
+        FileObjectTypeInterface::Character(character) => {
             assert_eq!(*character.metadata.appearance, character_appearance);
         }
         _ => panic!(),
     }
 
-    match from_file(&folder_path).unwrap() {
-        FileObjectCreation::Folder(folder, _) => {
+    let folder_id_loaded = load_file(&folder_path, &mut objects).unwrap();
+    assert_eq!(folder_id, folder_id_loaded);
+    match objects.get(&folder_id).unwrap().borrow().get_file_type() {
+        FileObjectTypeInterface::Folder(folder) => {
             assert_eq!(*folder.metadata.notes, folder_notes);
         }
         _ => panic!(),
     }
 
-    match from_file(&place_path).unwrap() {
-        FileObjectCreation::Place(place, _) => {
+    let place_id_loaded = load_file(&place_path, &mut objects).unwrap();
+    assert_eq!(place_id, place_id_loaded);
+    match objects.get(&place_id).unwrap().borrow().get_file_type() {
+        FileObjectTypeInterface::Place(place) => {
             assert_eq!(*place.metadata.description, place_description);
         }
         _ => panic!(),
@@ -636,8 +699,16 @@ contents1
         .borrow()
         .get_path();
 
-    match from_file(&scene_path).unwrap() {
-        FileObjectCreation::Scene(scene, _) => {
+    let scene_id_loaded = load_file(&scene_path, &mut project.objects).unwrap();
+
+    match project
+        .objects
+        .get(&scene_id_loaded)
+        .unwrap()
+        .borrow()
+        .get_file_type()
+    {
+        FileObjectTypeInterface::Scene(scene) => {
             assert_eq!(scene.get_body().trim(), "contents1");
             assert_eq!(
                 *scene.metadata.summary,
@@ -663,15 +734,23 @@ fn test_name_from_filename() {
         .unwrap()
         .get_path();
 
+    let mut objects = FileObjectStore::new();
+
     write_with_temp_file(
         &text_path.join("4-scene2.md"),
         "contents1".to_string().as_bytes(),
     )
     .unwrap();
 
-    match from_file(&text_path).unwrap() {
-        FileObjectCreation::Folder(mut folder, contents) => {
-            folder.save(&contents).unwrap();
+    let scene_id_loaded = load_file(&text_path, &mut objects).unwrap();
+    match objects
+        .get(&scene_id_loaded)
+        .unwrap()
+        .borrow_mut()
+        .get_file_type_mut()
+    {
+        MutFileObjectTypeInterface::Folder(folder) => {
+            folder.save(&objects).unwrap();
             assert!(folder.get_path().join("000-scene2.md").exists());
         }
         _ => panic!(),
@@ -735,14 +814,22 @@ contents123"#
     )
     .unwrap();
 
-    match from_file(&text_path).unwrap() {
-        FileObjectCreation::Folder(mut folder, contents) => {
-            folder.save(&contents).unwrap();
+    let mut objects = FileObjectStore::new();
+
+    let scene_id_loaded = load_file(&text_path, &mut objects).unwrap();
+    match objects
+        .get(&scene_id_loaded)
+        .unwrap()
+        .borrow_mut()
+        .get_file_type_mut()
+    {
+        MutFileObjectTypeInterface::Folder(folder) => {
+            folder.save(&objects).unwrap();
             assert_eq!(
                 folder.base.children,
                 vec![file_id("0"), file_id("1"), file_id("2"), file_id("3")]
             );
-            let child = contents.get(&file_id("1-0")).unwrap();
+            let child = objects.get(&file_id("1-0")).unwrap();
             assert_eq!(child.borrow().get_base().index, Some(0));
             assert_eq!(child.borrow().get_body(), "contents123\n");
         }
@@ -2520,14 +2607,14 @@ file_type = "worldbuilding""#;
     let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
     project.save().unwrap();
 
-    let place_path = project
+    match project
         .objects
         .get(&file_id("1"))
         .unwrap()
         .borrow()
-        .get_path();
-    match from_file(&place_path).unwrap() {
-        FileObjectCreation::Place(place, _) => {
+        .get_file_type()
+    {
+        FileObjectTypeInterface::Place(place) => {
             assert!(
                 read_to_string(place.get_file())
                     .unwrap()
@@ -2537,14 +2624,14 @@ file_type = "worldbuilding""#;
         _ => panic!(),
     }
 
-    let worldbuilding_path = project
+    match project
         .objects
         .get(&file_id("2"))
         .unwrap()
         .borrow()
-        .get_path();
-    match from_file(&worldbuilding_path).unwrap() {
-        FileObjectCreation::Place(place, _) => {
+        .get_file_type()
+    {
+        FileObjectTypeInterface::Place(place) => {
             assert!(
                 read_to_string(place.get_file())
                     .unwrap()
@@ -4940,26 +5027,8 @@ scene4"#;
     let folder1_metadata_new = folder1_metadata.replace("folder1", "folder1 alt");
     std::fs::write(&folder1_metadata_path, folder1_metadata_new).unwrap();
 
-    let folder2_metadata_path = folder2_path.join("metadata.toml");
-    let folder2_metadata = read_to_string(&folder2_metadata_path).unwrap();
-
-    let id_regex = regex::Regex::new(r#"id\s*=\s*"([a-z0-9\-]+)""#).unwrap();
-    let folder1_id = file_id(
-        id_regex
-            .captures(&folder1_metadata)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str(),
-    );
-    let folder2_id = file_id(
-        id_regex
-            .captures(&folder2_metadata)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str(),
-    );
+    let folder1_id = get_id_from_file(&folder1_path_orig).unwrap();
+    let folder2_id = get_id_from_file(&folder2_path).unwrap();
 
     let folder1_path_new = base_dir.path().join("test_project/text/000-folder1_alt");
 
@@ -5106,18 +5175,7 @@ scene1"#;
     }
 
     // grab folder1's id for later
-    let folder1_metadata_path = folder1_path_orig.join("metadata.toml");
-    let folder1_metadata = read_to_string(&folder1_metadata_path).unwrap();
-
-    let id_regex = regex::Regex::new(r#"id\s*=\s*"([a-z0-9\-]+)""#).unwrap();
-    let folder1_id = file_id(
-        id_regex
-            .captures(&folder1_metadata)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str(),
-    );
+    let folder1_id = get_id_from_file(&folder1_path_orig).unwrap();
 
     // simulate a move that cheese-paper would do for scene1 being index 0 in text
     let folder1_path_new = text_path.join("001-folder1");
@@ -5209,18 +5267,7 @@ scene1"#;
     }
 
     // grab folder1's id for later
-    let folder1_metadata_path = folder1_path_orig.join("metadata.toml");
-    let folder1_metadata = read_to_string(&folder1_metadata_path).unwrap();
-
-    let id_regex = regex::Regex::new(r#"id\s*=\s*"([a-z0-9\-]+)""#).unwrap();
-    let folder1_id = file_id(
-        id_regex
-            .captures(&folder1_metadata)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str(),
-    );
+    let folder1_id = get_id_from_file(&folder1_path_orig).unwrap();
 
     // Move folder1
     let folder1_path_new = text_path.join("000-folder1-alt");

@@ -18,10 +18,6 @@ pub type FileID = Rc<String>;
 pub type FileObjectStore = HashMap<FileID, Box<RefCell<dyn FileObject>>>;
 
 impl dyn FileObject {
-    pub fn id(&self) -> &Rc<String> {
-        &self.get_base().metadata.id
-    }
-
     pub fn children<'a>(
         &self,
         objects: &'a FileObjectStore,
@@ -171,6 +167,11 @@ impl dyn FileObject {
     /// Reorder the children based on their index (self reported in basename), followed by a call to
     /// fix_indexing
     pub fn rescan_indexing(&mut self, objects: &FileObjectStore) {
+        if !self.is_folder() {
+            // nothing to do
+            return;
+        }
+
         self.get_base_mut().children.sort_by_key(|child_id| {
             match get_index_from_name(
                 &objects

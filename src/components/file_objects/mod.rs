@@ -8,7 +8,7 @@ pub mod utils;
 
 pub use base::{
     FileID, FileInfo, FileObject, FileObjectMetadata, FileObjectStore, FileObjectTypeInterface,
-    FileType, MutFileObjectTypeInterface, from_file, move_child,
+    FileType, MutFileObjectTypeInterface, load_file, move_child,
 };
 pub use character::Character;
 pub use folder::Folder;

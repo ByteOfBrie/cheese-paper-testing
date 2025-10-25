@@ -2,7 +2,6 @@ mod implementation;
 pub use implementation::*;
 
 use bitflags::bitflags;
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::cheese_error;
@@ -340,35 +339,6 @@ pub fn load_base_metadata(
     Ok(())
 }
 
-/// The object that was requested,
-/// All of the descendents of that file object (including children) in a hashmap that owns them
-#[derive(Debug)]
-pub enum FileObjectCreation {
-    Scene(Scene, FileObjectStore),
-    Folder(Folder, FileObjectStore),
-    Character(Character, FileObjectStore),
-    Place(Place, FileObjectStore),
-}
-
-impl FileObjectCreation {
-    pub fn into_boxed(self) -> (Box<RefCell<dyn FileObject>>, FileObjectStore) {
-        match self {
-            FileObjectCreation::Scene(parent, children) => {
-                (Box::new(RefCell::new(parent)), children)
-            }
-            FileObjectCreation::Character(parent, children) => {
-                (Box::new(RefCell::new(parent)), children)
-            }
-            FileObjectCreation::Folder(parent, children) => {
-                (Box::new(RefCell::new(parent)), children)
-            }
-            FileObjectCreation::Place(parent, children) => {
-                (Box::new(RefCell::new(parent)), children)
-            }
-        }
-    }
-}
-
 fn parent_contains(parent_id: &FileID, checking_id: &FileID, objects: &FileObjectStore) -> bool {
     let parent = objects.get(parent_id).unwrap();
 
@@ -522,8 +492,8 @@ fn create_index_and_move_on_disk(
     dest.borrow_mut().fix_indexing(objects);
 }
 
-/// Load an arbitrary file object from a file on disk
-pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
+/// Load an arbitrary file object from a file on disk into objects
+pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileID, CheeseError> {
     if !filename.exists() {
         return Err(cheese_error!(
             "from_file cannot load file that does not exist: {filename:?}"
@@ -541,23 +511,22 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
         ));
     }
 
-    // Create the file info right at the start
-    let mut file_info = FileInfo {
-        dirname: filename
-            .parent()
-            .ok_or(cheese_error!(
-                "filename supplied to from_file should have a dirname component",
-            ))?
-            .to_path_buf(),
-        basename: filename
-            .file_name()
-            .ok_or(cheese_error!(
-                "filename supplied to from_file should have a basename component",
-            ))?
-            .to_owned(),
-        modtime: None,
-        modified: false,
-    };
+    // Create the file info components right at the start
+    let dirname = filename
+        .parent()
+        .ok_or(cheese_error!(
+            "filename supplied to from_file should have a dirname component",
+        ))?
+        .to_path_buf();
+
+    let basename = filename
+        .file_name()
+        .ok_or(cheese_error!(
+            "filename supplied to from_file should have a basename component",
+        ))?
+        .to_owned();
+
+    let mut modified = false;
 
     // If the filename is a directory, we need to look for the underlying file
     let underlying_file = match filename.is_dir() {
@@ -582,7 +551,7 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
         .map_err(|err| cheese_error!("Error parsing {underlying_file:?}: {err}"))?;
 
     if !toml_header.contains_key("name") {
-        let file_name = PathBuf::from(&file_info.basename)
+        let file_name = PathBuf::from(&basename)
             .file_stem()
             .unwrap_or_default()
             .to_string_lossy()
@@ -598,12 +567,9 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
 
         metadata.name = name_to_parse.replace("_", " ").trim().to_string();
         if !metadata.name.is_empty() {
-            file_info.modified = true;
+            modified = true;
         }
     }
-
-    load_base_metadata(&toml_header, &mut metadata, &mut file_info)
-        .map_err(|err| cheese_error!("Error while parsing metadata for {filename:?}: {err}"))?;
 
     let file_type: FileType = match toml_header.get("file_type") {
         Some(file_type_toml_item) => match file_type_toml_item.as_str() {
@@ -629,16 +595,7 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
         },
     };
 
-    let mut base = BaseFileObject {
-        metadata,
-        index: get_index_from_name(&file_info.basename.to_string_lossy()),
-        file: file_info,
-        toml_header,
-        children: Vec::new(),
-    };
-
-    // Will eventually return this and all children
-    let mut objects: FileObjectStore = HashMap::new();
+    let mut children = Vec::new();
 
     // Load children of this file object
     if file_type.is_folder() {
@@ -664,21 +621,9 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
                     let file_path = file.path();
 
                     // Just read the children in any order, we'll clean it up later
-                    match from_file(&file_path) {
-                        Ok(created_files) => {
-                            let (object, mut descendents) = created_files.into_boxed();
-
-                            let id = object.borrow().id().clone();
-                            base.children.push(id.clone());
-                            objects.insert(id, object);
-
-                            for (child_file_id, child_file) in descendents.drain() {
-                                objects.insert(child_file_id, child_file);
-                            }
-                        }
-                        Err(err) => {
-                            log::debug!("Could not load child {file:?}: {err}")
-                        }
+                    match load_file(&file_path, objects) {
+                        Ok(child_id) => children.push(child_id.clone()),
+                        Err(err) => log::debug!("Could not load child {file:?}: {err}"),
                     }
                 }
                 Err(err) => log::warn!("Could not read file {filename:?}: {err}"),
@@ -686,31 +631,68 @@ pub fn from_file(filename: &Path) -> Result<FileObjectCreation, CheeseError> {
         }
     }
 
-    match file_type {
-        FileType::Scene => {
-            let mut scene = Scene::from_file_object(base)?;
-            scene.load_body(file_body);
-            Ok(FileObjectCreation::Scene(scene, objects))
-        }
-        FileType::Character => Ok(FileObjectCreation::Character(
-            Character::from_base(base)?,
-            objects,
-        )),
-        FileType::Folder => {
-            let mut folder = Folder::from_base(base)?;
+    let index = get_index_from_name(&basename.to_string_lossy());
 
-            <dyn FileObject>::rescan_indexing(&mut folder, &objects);
+    // Check if we're loading a file object that we already know about
+    if let Some(existing_file_id) = toml_header
+        .get("id")
+        .and_then(|id_item| id_item.as_str())
+        .map(|id_str| FileID::new(id_str.to_owned()))
+        && objects.contains_key(&existing_file_id)
+    {
+        // we just update the object in place
+        let mut file_object = objects.get(&existing_file_id).unwrap().borrow_mut();
+        file_object.get_base_mut().children = children;
 
-            Ok(FileObjectCreation::Folder(folder, objects))
-        }
+        file_object.get_base_mut().file.dirname = dirname;
+        file_object.get_base_mut().file.basename = basename;
 
-        FileType::Place => {
-            let mut place = Place::from_base(base)?;
+        file_object.get_base_mut().index = index;
 
-            <dyn FileObject>::rescan_indexing(&mut place, &objects);
+        file_object.reload_file()?;
 
-            Ok(FileObjectCreation::Place(place, objects))
-        }
+        Ok(existing_file_id)
+    } else {
+        // we need to create a new object
+
+        let mut file_info = FileInfo {
+            dirname,
+            basename,
+            modtime: None,
+            modified,
+        };
+
+        load_base_metadata(&toml_header, &mut metadata, &mut file_info)
+            .map_err(|err| cheese_error!("Error while parsing metadata for {filename:?}: {err}"))?;
+
+        let base = BaseFileObject {
+            metadata,
+            index,
+            file: file_info,
+            toml_header,
+            children,
+        };
+
+        let file_id = base.metadata.id.clone();
+
+        // load the object into a box
+        let boxed_object: Box<RefCell<dyn FileObject>> = match file_type {
+            FileType::Scene => {
+                let mut scene = Scene::from_file_object(base)?;
+                scene.load_body(file_body);
+
+                Box::new(RefCell::new(scene))
+            }
+            FileType::Character => Box::new(RefCell::new(Character::from_base(base)?)),
+            FileType::Folder => Box::new(RefCell::new(Folder::from_base(base)?)),
+            FileType::Place => Box::new(RefCell::new(Place::from_base(base)?)),
+        };
+
+        boxed_object.borrow_mut().rescan_indexing(objects);
+
+        objects.insert(file_id.clone(), boxed_object);
+
+        Ok(file_id)
     }
 }
 
@@ -779,6 +761,10 @@ pub trait FileObject: Debug {
     ) -> bool {
         // we don't do anything by default, but we want to pass on the include
         include_break
+    }
+
+    fn id(&self) -> &Rc<String> {
+        &self.get_base().metadata.id
     }
 
     /// Loads the file-specific metadata from the toml document

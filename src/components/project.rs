@@ -22,8 +22,8 @@ use toml_edit::DocumentMut;
 use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
 
 use crate::components::file_objects::base::{
-    FileID, load_base_metadata, metadata_extract_bool, metadata_extract_string,
-    metadata_extract_u64,
+    FOLDER_METADATA_FILE_NAME, FileID, load_base_metadata, metadata_extract_bool,
+    metadata_extract_string, metadata_extract_u64,
 };
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
@@ -832,9 +832,21 @@ impl Project {
                     continue;
                 }
 
-                match load_file(&path_to_load, &mut self.objects) {
+                let event_path = if path_to_load.file_name().and_then(|name| name.to_str())
+                    == Some(FOLDER_METADATA_FILE_NAME)
+                {
+                    path_to_load.parent().unwrap().to_owned()
+                } else {
+                    path_to_load
+                };
+
+                if !self.is_relevant_event_path(&event_path) {
+                    continue;
+                }
+
+                match load_file(&event_path, &mut self.objects) {
                     Ok(file_id) => {
-                        let parent_path = get_parent_path(&path_to_load);
+                        let parent_path = get_parent_path(&event_path);
                         let parent_id_option = self.find_object_by_path(parent_path);
                         if let Some(parent_id) = parent_id_option {
                             let parent_object = self.objects.get(&parent_id).unwrap();
@@ -859,7 +871,7 @@ impl Project {
                             );
                         }
                     }
-                    Err(err) => log::debug!("Could not load {path_to_load:?}: {err}"),
+                    Err(err) => log::debug!("Could not load {event_path:?}: {err}"),
                 }
             }
 
@@ -925,6 +937,54 @@ impl Project {
                 }
             }
         }
+    }
+
+    /// Determine if we care about an event happening at this path. This filters out things like events
+    /// starting with `.git/`, hidden files (on linux), unknown extensions, or files not in one of the
+    /// three top level folders
+    ///
+    /// It does not check for files existing, and does not do anything specific to modification types.
+    /// The string argument is only to provide better log message output
+    fn is_relevant_event_path(&self, modify_path: &Path) -> bool {
+        // We assume that any files that don't have an extension are folders but this function
+        // not checking disk means we can't verify that
+        if modify_path
+            .extension()
+            .is_some_and(|extension| extension != "md" && extension != "toml")
+        {
+            // we write .tmp files and then immediately remove them and other editors can do the same
+            // we also don't care about files that other programs generate
+            return false;
+        }
+
+        if modify_path
+            .file_name()
+            .is_none_or(|filename| filename.to_string_lossy().starts_with('.'))
+        {
+            // modified files should have a name, and we don't want to look at hidden files
+            return false;
+        }
+
+        let relative_path = match modify_path.strip_prefix(self.get_path()) {
+            Ok(relative_path) => relative_path,
+            Err(err) => {
+                log::error!("invalid event path not in project: {err}");
+                return false;
+            }
+        };
+
+        if !(relative_path.starts_with("text")
+            || relative_path.starts_with("characters")
+            || relative_path.starts_with("worldbuilding"))
+        {
+            if !relative_path.starts_with(".git") {
+                // We expect a bunch of git events, but other events are unexpected, so log it
+                log::debug!("invalid event path not in project folders: {modify_path:?}");
+            }
+            return false;
+        }
+
+        true
     }
 }
 

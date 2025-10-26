@@ -767,11 +767,25 @@ impl Project {
                         }
                         paths_to_load.insert(dest_path);
                     }
-                    EventKind::Modify(ModifyKind::Name(_)) => {
-                        // Give up, we don't want to make assumptions at this stage
-                        log::warn!(
-                            "Encountered rename event: {event:?}, not enough information to continue processing"
+                    EventKind::Modify(_) => {
+                        log::debug!(
+                            "Found unknown modify event: {event:?}, trying to process anyway"
                         );
+
+                        let source_path_option = event.paths.first();
+
+                        let dest_path_option = event.paths.last();
+
+                        if let Some(dest_path) = dest_path_option
+                            && let Some(source_path) = source_path_option
+                        {
+                            if let Some(parent_id) = self.remove_path_from_parent(source_path) {
+                                file_objects_needing_rescan.insert(parent_id);
+                            }
+                            paths_to_load.insert(dest_path.to_owned());
+                        } else {
+                            log::debug!("unable to process modify(any) event");
+                        }
                     }
                     EventKind::Remove(_remove_kind) => {
                         let delete_path = event

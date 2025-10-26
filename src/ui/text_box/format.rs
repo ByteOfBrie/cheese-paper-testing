@@ -57,6 +57,7 @@ fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text
 
     let mut format = TextFormat {
         font_id,
+        italics: text_style.italic,
         ..Default::default()
     };
 

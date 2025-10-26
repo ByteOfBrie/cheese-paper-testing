@@ -95,7 +95,7 @@ fn test_basic_create_project() {
 
     let project = Project::new(base_dir.path().to_path_buf(), project_name.to_string()).unwrap();
 
-    assert_eq!(project_path, project.get_path());
+    assert_eq!(project_path.canonicalize().unwrap(), project.get_path());
 
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 1);
     assert!(project_path.exists());

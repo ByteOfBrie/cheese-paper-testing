@@ -159,9 +159,10 @@ fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
 impl Project {
     /// Create a new project
     pub fn new(dirname: PathBuf, project_name: String) -> Result<Self, CheeseError> {
+        let canonical_dirname = dirname.canonicalize().unwrap();
         // Not truncating here (for now)
         let file_safe_name = process_name_for_filename(&project_name);
-        let project_path = dirname.join(&file_safe_name);
+        let project_path = canonical_dirname.join(&file_safe_name);
 
         if project_path.exists() {
             return Err(cheese_error!(
@@ -176,7 +177,7 @@ impl Project {
         let worldbuilding = Folder::new_top_level(project_path.clone(), "Worldbuilding")?;
 
         let file = FileInfo {
-            dirname,
+            dirname: canonical_dirname,
             basename: OsString::from(file_safe_name),
             modtime: None,
             modified: true, // Newly added files are modified (they don't exist on disk)

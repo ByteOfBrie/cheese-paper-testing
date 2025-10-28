@@ -1,10 +1,12 @@
 mod format;
 mod spellcheck;
 
+use std::ops::Range;
+
 use crate::ui::prelude::*;
 use crate::ui::project_editor::search::textbox_search;
-use egui::TextBuffer;
-use egui::text::LayoutJob;
+use egui::text::{CCursorRange, LayoutJob};
+use egui::{Key, KeyboardShortcut, Modifiers, TextBuffer};
 
 pub type Store = RenderDataStore<usize, TextBox>;
 
@@ -103,6 +105,9 @@ impl TextBox {
     }
 }
 
+pub const SHORTCUT_BOLD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::B);
+pub const SHORTCUT_ITALICS: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, Key::I);
+
 impl Text {
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Response {
         let rdata = ctx.stores.text_box.get(&self.struct_uid);
@@ -116,7 +121,7 @@ impl Text {
 
         let text_box_id = self.struct_uid;
 
-        let output = egui::TextEdit::multiline(self)
+        let mut output = egui::TextEdit::multiline(self)
             .desired_width(f32::INFINITY)
             .layouter(&mut layouter)
             .min_size(egui::Vec2 { x: 50.0, y: 100.0 })
@@ -285,7 +290,162 @@ impl Text {
             }
         });
 
+        // process hotkeys like ctrl-b and ctrl-i:
+        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id)
+            && let Some(output_cursor_range) = state.cursor.char_range()
+        {
+            let mut cursor_range = output_cursor_range;
+            let mut changed_formatting = false;
+
+            ui.input_mut(|i| {
+                for (shortcut, pattern) in [(SHORTCUT_ITALICS, "*"), (SHORTCUT_BOLD, "**")] {
+                    if i.consume_shortcut(&shortcut) {
+                        // make the change to the text
+                        self.toggle_formatting(&mut cursor_range, pattern);
+                        changed_formatting = true;
+                    }
+                }
+            });
+
+            if changed_formatting {
+                state.cursor.set_char_range(Some(cursor_range));
+                state.store(ui.ctx(), output.response.id);
+                output.response.mark_changed();
+            }
+        }
+
         output.response
+    }
+
+    /// Toggles formatting like italic or bold
+    fn toggle_formatting(&mut self, cursor_range: &mut CCursorRange, pattern: &str) {
+        let current_working_range = self.get_selection_range(cursor_range);
+
+        let already_surrounded = match pattern {
+            "*" => self.is_italic(&current_working_range),
+            _ => self.is_formatted_generic(&current_working_range, pattern),
+        };
+
+        if already_surrounded {
+            let deletion_range_start =
+                current_working_range.start..current_working_range.start + pattern.len();
+            let deletion_range_end =
+                current_working_range.end - pattern.len()..current_working_range.end;
+
+            // delete the text from the end first to avoid spoiling our indexes
+            self.text.drain(deletion_range_end);
+            self.text.drain(deletion_range_start);
+
+            cursor_range.primary.index -= pattern.len();
+            cursor_range.secondary.index -= pattern.len();
+        } else {
+            // add to the end first to avoid spoiling our indexes
+            self.text.insert_str(current_working_range.end, pattern);
+            self.text.insert_str(current_working_range.start, pattern);
+
+            cursor_range.primary.index += pattern.len();
+            cursor_range.secondary.index += pattern.len();
+        }
+
+        self.version += 1;
+    }
+
+    fn is_formatted_generic(&self, current_working_range: &Range<usize>, pattern: &str) -> bool {
+        let working_range_len = current_working_range.end - current_working_range.start;
+
+        // check for basic validity: if there are less than twice as many characters as the pattern, it can't
+        // have a starting and ending token, so it can't be formatted
+        if working_range_len < pattern.len() * 2 {
+            return false;
+        }
+
+        match self.text.get(current_working_range.clone()) {
+            Some(working_text) => {
+                // check if we start end end with the pattern
+                working_text.starts_with(pattern) && working_text.ends_with(pattern)
+            }
+            None => {
+                log::error!("Encountered invalid index of text: {current_working_range:?}");
+                false
+            }
+        }
+    }
+
+    fn is_italic(&self, current_working_range: &Range<usize>) -> bool {
+        let working_range_len = current_working_range.end - current_working_range.start;
+
+        // check for basic validity: if there are less than two characters, we can't have a starting
+        // and ending token, so it can't be formatted
+        if working_range_len < 2 {
+            return false;
+        }
+
+        match self.text.get(current_working_range.clone()) {
+            Some(working_text) => {
+                // special case: we have exactly two characters and they're `*`:
+                if working_text.len() == 2 && working_text == "**" {
+                    return true;
+                }
+
+                // validate that we have `*` (italic) or `***` (bold and italic) but not `**` (just bold)
+                let italic_start = working_text.starts_with("***")
+                    || (working_text.starts_with('*') && !working_text.starts_with("**"));
+                let italic_end = working_text.ends_with("***")
+                    || (working_text.ends_with('*') && !working_text.ends_with("**"));
+                italic_start && italic_end
+            }
+            None => {
+                log::error!("Encountered invalid index of text: {current_working_range:?}");
+                false
+            }
+        }
+    }
+
+    /// Get the range of the current selection as byte indexes in the text
+    ///
+    /// This does a bunch of separate calls to `get_current_word` which does a copy, we could reduce
+    /// copies by making that take the char list as an argument, but we haven't bothered so far
+    fn get_selection_range(&self, cursor_range: &CCursorRange) -> Range<usize> {
+        let [primary, secondary] = cursor_range.sorted_cursors();
+
+        // Simple case: no selection, just select the word
+        if primary == secondary {
+            return spellcheck::get_current_word(&self.text, primary.index);
+        }
+
+        let chars: Vec<_> = self.text.char_indices().collect();
+        let mut starting_index = primary.index;
+        let mut ending_index = secondary.index;
+
+        let starting_text = &chars[primary.index..secondary.index];
+
+        // if the selection is all whitespace, we should just return it
+        if starting_text.iter().all(|pos| pos.1.is_whitespace()) {
+            let starting_byte_index = chars[starting_index].0;
+            let ending_byte_index = chars[ending_index].0;
+            return starting_byte_index..ending_byte_index;
+        }
+
+        // clamp down on whitespace at beginning and ending
+        while (chars[starting_index].1.is_whitespace()
+            || (chars[starting_index].1.is_ascii_punctuation() && chars[starting_index].1 != '*'))
+            && starting_index < ending_index
+        {
+            starting_index += 1;
+        }
+
+        while (chars[ending_index - 1].1.is_whitespace()
+            || (chars[ending_index - 1].1.is_ascii_punctuation()
+                && chars[ending_index - 1].1 != '*'))
+            && starting_index <= ending_index
+        {
+            ending_index -= 1;
+        }
+
+        let starting_word = spellcheck::get_current_word(&self.text, starting_index);
+        let ending_word = spellcheck::get_current_word(&self.text, ending_index);
+
+        starting_word.start..ending_word.end
     }
 
     pub fn word_count(&self, ctx: &mut EditorContext) -> usize {

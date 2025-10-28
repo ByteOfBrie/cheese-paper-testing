@@ -52,35 +52,54 @@ impl ProjectTracker {
             Err(err) => return Err(format!("failed to get state of tracker repo head: {err}")),
         }
 
+        let needs_initial_commit = match repo.head() {
+            Ok(head) => match head.peel_to_commit() {
+                Ok(_commit) => false,
+                Err(err) => {
+                    log::debug!("Could not peel back first commit: {err}");
+                    true
+                }
+            },
+            Err(err) => {
+                log::debug!("failed to get tracker head: {err}");
+                true
+            }
+        };
+
+        if needs_initial_commit {
+            // no initial commit, we need to create one
+            log::debug!("Attempting to create initial commit");
+
+            let committer = Signature::now(COMMITTER_NAME, COMMITTER_EMAIL).unwrap();
+
+            let current_index_tree_oid = match repo.index().and_then(|mut index| index.write_tree())
+            {
+                Ok(oid) => oid,
+                Err(err) => return Err(format!("failed to get tree oid: {err}")),
+            };
+
+            let tree = match repo.find_tree(current_index_tree_oid) {
+                Ok(tree) => tree,
+                Err(err) => return Err(format!("failed to get tree: {err}")),
+            };
+
+            if let Err(err) = repo.commit(
+                Some("HEAD"),
+                &committer,
+                &committer,
+                "initial commit",
+                &tree,
+                &Vec::new(),
+            ) {
+                return Err(format!("failed to create initial commit: {err}"));
+            }
+        }
+
+        // match repo.head again to see if we fixed it
         match repo.head() {
             Ok(head) => match head.peel_to_commit() {
                 Ok(_commit) => {}
-                Err(_err) => {
-                    // no initial commit, we need to create one
-                    let committer = Signature::now(COMMITTER_NAME, COMMITTER_EMAIL).unwrap();
-
-                    let current_index_tree_oid =
-                        match repo.index().and_then(|mut index| index.write_tree()) {
-                            Ok(oid) => oid,
-                            Err(err) => return Err(format!("failed to get tree oid: {err}")),
-                        };
-
-                    let tree = match repo.find_tree(current_index_tree_oid) {
-                        Ok(tree) => tree,
-                        Err(err) => return Err(format!("failed to get tree: {err}")),
-                    };
-
-                    if let Err(err) = repo.commit(
-                        Some("HEAD"),
-                        &committer,
-                        &committer,
-                        "initial_commit",
-                        &tree,
-                        &Vec::new(),
-                    ) {
-                        return Err(format!("failed to create initial commit: {err}"));
-                    }
-                }
+                Err(err) => return Err(format!("Could not peel back first commit: {err}")),
             },
             Err(err) => return Err(format!("failed to get tracker head: {err}")),
         }

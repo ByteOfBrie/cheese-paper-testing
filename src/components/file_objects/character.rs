@@ -66,37 +66,37 @@ impl FileObject for Character {
     fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
-        match metadata_extract_string(&self.base.toml_header, "summary")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "summary")? {
             Some(summary) => self.metadata.summary = summary.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "notes")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "notes")? {
             Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "appearance")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "appearance")? {
             Some(appearance) => self.metadata.appearance = appearance.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "personality")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "personality")? {
             Some(personality) => self.metadata.personality = personality.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "goal")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "goal")? {
             Some(goal) => self.metadata.goal = goal.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "conflict")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "conflict")? {
             Some(conflict) => self.metadata.conflict = conflict.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "habits")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "habits")? {
             Some(habits) => self.metadata.habits = habits.into(),
             None => modified = true,
         }

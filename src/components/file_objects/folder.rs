@@ -94,17 +94,17 @@ impl FileObject for Folder {
     fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
-        match metadata_extract_string(&self.base.toml_header, "summary")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "summary")? {
             Some(value) => self.metadata.summary = value.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "notes")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "notes")? {
             Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
-        match metadata_extract_u64(&self.base.toml_header, "compile_status", true)? {
+        match metadata_extract_u64(self.base.toml_header.as_table(), "compile_status", true)? {
             Some(compile_status) => {
                 self.metadata.compile_status = CompileStatus::from_bits_retain(compile_status)
             }

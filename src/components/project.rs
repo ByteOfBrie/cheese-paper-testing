@@ -291,7 +291,7 @@ impl Project {
 
         log::debug!("Finished loading all project file objects, continuing");
 
-        load_base_metadata(&toml_header, &mut base_metadata, &mut file_info)?;
+        load_base_metadata(toml_header.as_table(), &mut base_metadata, &mut file_info)?;
 
         // Create the watcher path by hand since we can't call get_path() yet
         let watcher_path = file_info.dirname.join(&file_info.basename);
@@ -376,6 +376,7 @@ impl Project {
 
             // Update modtime based on what we just wrote
             self.file.modtime = Some(new_modtime);
+            self.file.modified = false;
         }
 
         text_result?;
@@ -397,18 +398,40 @@ impl Project {
         self.toml_header["author"] = toml_edit::value(&self.metadata.author);
         self.toml_header["email"] = toml_edit::value(&self.metadata.email);
 
-        self.toml_header["export.include_all_folder_titles"] =
-            toml_edit::value(self.metadata.export.include_all_folder_titles);
-        self.toml_header["export.include_folder_title_depth"] = toml_edit::value(
-            u64_to_i64_drop_msb(self.metadata.export.include_folder_title_depth),
+        // If the table doesn't already exist, we create it so we can get it immediately after
+        if !self.toml_header.contains_key("export") {
+            self.toml_header["export"] = toml_edit::value(toml_edit::InlineTable::new());
+        }
+
+        let export_table = self
+            .toml_header
+            .get_mut("export")
+            .unwrap()
+            .as_inline_table_mut()
+            .unwrap();
+
+        export_table.insert(
+            "include_all_folder_titles",
+            self.metadata.export.include_all_folder_titles.into(),
         );
-        self.toml_header["export.include_all_scene_files"] =
-            toml_edit::value(self.metadata.export.include_all_scene_titles);
-        self.toml_header["export.include_scene_title_depth"] = toml_edit::value(
-            u64_to_i64_drop_msb(self.metadata.export.include_scene_title_depth),
+
+        export_table.insert(
+            "include_folder_title_depth",
+            u64_to_i64_drop_msb(self.metadata.export.include_folder_title_depth).into(),
         );
-        self.toml_header["export.insert_break_at_end"] =
-            toml_edit::value(self.metadata.export.insert_break_at_end);
+
+        export_table.insert(
+            "include_all_scene_files",
+            self.metadata.export.include_all_scene_titles.into(),
+        );
+        export_table.insert(
+            "include_scene_title_depth",
+            u64_to_i64_drop_msb(self.metadata.export.include_scene_title_depth).into(),
+        );
+        export_table.insert(
+            "insert_break_at_end",
+            self.metadata.export.insert_break_at_end.into(),
+        );
     }
 
     pub fn get_path(&self) -> PathBuf {
@@ -425,57 +448,65 @@ impl Project {
     fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
-        match metadata_extract_string(&self.toml_header, "summary")? {
+        match metadata_extract_string(self.toml_header.as_table(), "summary")? {
             Some(summary) => self.metadata.summary = summary.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.toml_header, "notes")? {
+        match metadata_extract_string(self.toml_header.as_table(), "notes")? {
             Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.toml_header, "genre")? {
+        match metadata_extract_string(self.toml_header.as_table(), "genre")? {
             Some(genre) => self.metadata.genre = genre,
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.toml_header, "author")? {
+        match metadata_extract_string(self.toml_header.as_table(), "author")? {
             Some(author) => self.metadata.author = author,
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.toml_header, "email")? {
+        match metadata_extract_string(self.toml_header.as_table(), "email")? {
             Some(email) => self.metadata.email = email,
             None => modified = true,
         }
 
-        match metadata_extract_bool(&self.toml_header, "export.include_all_folder_titles")? {
-            Some(val) => self.metadata.export.include_all_folder_titles = val,
-            None => modified = true,
-        }
+        match self.toml_header.get("export") {
+            Some(export_item) => match export_item.as_table_like() {
+                Some(export_table) => {
+                    match metadata_extract_bool(export_table, "include_all_folder_titles")? {
+                        Some(val) => self.metadata.export.include_all_folder_titles = val,
+                        None => modified = true,
+                    }
 
-        match metadata_extract_u64(
-            &self.toml_header,
-            "export.include_folder_title_depth",
-            false,
-        )? {
-            Some(val) => self.metadata.export.include_folder_title_depth = val,
-            None => modified = true,
-        }
+                    match metadata_extract_u64(export_table, "include_folder_title_depth", false)? {
+                        Some(val) => self.metadata.export.include_folder_title_depth = val,
+                        None => modified = true,
+                    }
 
-        match metadata_extract_bool(&self.toml_header, "export.include_all_scene_files")? {
-            Some(val) => self.metadata.export.include_all_scene_titles = val,
-            None => modified = true,
-        }
+                    match metadata_extract_bool(export_table, "include_all_scene_files")? {
+                        Some(val) => self.metadata.export.include_all_scene_titles = val,
+                        None => modified = true,
+                    }
 
-        match metadata_extract_u64(&self.toml_header, "export.include_scene_title_depth", false)? {
-            Some(val) => self.metadata.export.include_scene_title_depth = val,
-            None => modified = true,
-        }
+                    match metadata_extract_u64(export_table, "include_scene_title_depth", false)? {
+                        Some(val) => self.metadata.export.include_scene_title_depth = val,
+                        None => modified = true,
+                    }
 
-        match metadata_extract_bool(&self.toml_header, "export.insert_break_at_end")? {
-            Some(val) => self.metadata.export.insert_break_at_end = val,
+                    match metadata_extract_bool(export_table, "insert_break_at_end")? {
+                        Some(val) => self.metadata.export.insert_break_at_end = val,
+                        None => modified = true,
+                    }
+                }
+                None => {
+                    return Err(cheese_error!(
+                        "Project Metadata has non-table value for export"
+                    ));
+                }
+            },
             None => modified = true,
         }
 
@@ -514,7 +545,11 @@ impl Project {
 
         self.toml_header = new_toml_header;
 
-        load_base_metadata(&self.toml_header, &mut self.base_metadata, &mut self.file)?;
+        load_base_metadata(
+            self.toml_header.as_table(),
+            &mut self.base_metadata,
+            &mut self.file,
+        )?;
         self.load_metadata()?;
 
         Ok(())

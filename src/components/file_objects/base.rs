@@ -18,7 +18,7 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::SystemTime;
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, TableLike};
 
 /// the maximum length of a name before we start trying to truncate it
 const FILENAME_MAX_LENGTH: usize = 30;
@@ -247,7 +247,7 @@ pub enum IncludeOptions {
 }
 
 pub fn metadata_extract_u64(
-    table: &DocumentMut,
+    table: &dyn TableLike,
     field_name: &str,
     allow_bool: bool,
 ) -> Result<Option<u64>, CheeseError> {
@@ -266,7 +266,7 @@ pub fn metadata_extract_u64(
 }
 
 pub fn metadata_extract_string(
-    table: &DocumentMut,
+    table: &dyn TableLike,
     field_name: &str,
 ) -> Result<Option<String>, CheeseError> {
     Ok(match table.get(field_name) {
@@ -281,7 +281,7 @@ pub fn metadata_extract_string(
 }
 
 pub fn metadata_extract_bool(
-    table: &DocumentMut,
+    table: &dyn TableLike,
     field_name: &str,
 ) -> Result<Option<bool>, CheeseError> {
     Ok(match table.get(field_name) {
@@ -317,7 +317,7 @@ pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String), Chees
 /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
 /// appropriate
 pub fn load_base_metadata(
-    metadata_table: &DocumentMut,
+    metadata_table: &dyn TableLike,
     metadata_object: &mut FileObjectMetadata,
     file_info: &mut FileInfo,
 ) -> Result<(), CheeseError> {
@@ -661,7 +661,7 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
             modified,
         };
 
-        load_base_metadata(&toml_header, &mut metadata, &mut file_info)
+        load_base_metadata(toml_header.as_table(), &mut metadata, &mut file_info)
             .map_err(|err| cheese_error!("Error while parsing metadata for {filename:?}: {err}"))?;
 
         let base = BaseFileObject {
@@ -868,7 +868,7 @@ pub trait FileObject: Debug {
         let base_file_object = self.get_base_mut();
 
         load_base_metadata(
-            &new_toml_header,
+            new_toml_header.as_table(),
             &mut base_file_object.metadata,
             &mut base_file_object.file,
         )?;

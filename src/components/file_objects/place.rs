@@ -66,27 +66,27 @@ impl FileObject for Place {
     fn load_metadata(&mut self) -> Result<bool, CheeseError> {
         let mut modified = false;
 
-        match metadata_extract_string(&self.base.toml_header, "connection")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "connection")? {
             Some(connection) => self.metadata.connection = connection.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "description")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "description")? {
             Some(description) => self.metadata.description = description.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "appearance")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "appearance")? {
             Some(appearance) => self.metadata.appearance = appearance.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "other_senses")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "other_senses")? {
             Some(other_senses) => self.metadata.other_senses = other_senses.into(),
             None => modified = true,
         }
 
-        match metadata_extract_string(&self.base.toml_header, "notes")? {
+        match metadata_extract_string(self.base.toml_header.as_table(), "notes")? {
             Some(notes) => self.metadata.notes = notes.into(),
             None => modified = true,
         }

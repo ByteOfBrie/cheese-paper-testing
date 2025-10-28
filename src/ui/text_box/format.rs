@@ -146,6 +146,40 @@ fn format_rule_bold_italic(
                     bold_start = Some(ag.start());
                 }
             }
+            3 => {
+                // Toggle both bold and italic
+                // This might not be correct but it's better than nothing, TBD:
+                if let Some(start) = bold_start {
+                    bold.push(StyleMarker {
+                        idx: start,
+                        style: StyleOption::Strong,
+                        on: true,
+                    });
+                    bold.push(StyleMarker {
+                        idx: ag.end(),
+                        style: StyleOption::Strong,
+                        on: false,
+                    });
+                    bold_start = None;
+                } else {
+                    bold_start = Some(ag.start());
+                }
+                if let Some(start) = italic_start {
+                    italic.push(StyleMarker {
+                        idx: start,
+                        style: StyleOption::Italic,
+                        on: true,
+                    });
+                    italic.push(StyleMarker {
+                        idx: ag.end(),
+                        style: StyleOption::Italic,
+                        on: false,
+                    });
+                    italic_start = None;
+                } else {
+                    italic_start = Some(ag.start());
+                }
+            }
             _ => (),
         }
     }

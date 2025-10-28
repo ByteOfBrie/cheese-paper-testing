@@ -49,6 +49,15 @@ impl Style {
 }
 
 fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text::TextFormat {
+    let Style {
+        strong,
+        italic: italics,
+        misspelled,
+        search_highlight,
+        search_highlight_focus,
+        newline: _newline,
+    } = *text_style;
+
     let font_id = egui_style
         .text_styles
         .get(&egui::TextStyle::Body)
@@ -57,28 +66,28 @@ fn format_from_style(egui_style: &egui::Style, text_style: &Style) -> egui::text
 
     let mut format = TextFormat {
         font_id,
-        italics: text_style.italic,
+        italics,
         ..Default::default()
     };
 
-    if text_style.strong {
+    if strong {
         format.color = egui_style.visuals.strong_text_color()
     } else {
         format.color = egui_style.visuals.text_color()
     };
 
-    if text_style.misspelled {
+    if misspelled {
         format.underline = Stroke {
             width: 2.0,
             color: egui_style.visuals.error_fg_color,
         }
     }
 
-    if text_style.search_highlight {
+    if search_highlight {
         format.background = Color32::YELLOW;
     }
 
-    if text_style.search_highlight_focus {
+    if search_highlight_focus {
         format.background = Color32::ORANGE;
     }
 

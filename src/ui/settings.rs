@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use directories::ProjectDirs;
 use egui::Color32;
+use rand::{Rng, rngs::ThreadRng};
 use toml_edit::{DocumentMut, TableLike, value};
 
 /// Most of the colors from https://docs.rs/egui/latest/egui/style/struct.Visuals.html
@@ -46,12 +47,50 @@ pub struct Theme {
     pub open_widget: Option<WidgetTheme>,
 }
 
+impl Theme {
+    fn new_random() -> Self {
+        let mut rng = rand::rng();
+
+        Self {
+            override_text_color: Some(random_color32(&mut rng)),
+            weak_text_color: Some(random_color32(&mut rng)),
+            hyperlink_color: Some(random_color32(&mut rng)),
+            faint_bg_color: Some(random_color32(&mut rng)),
+            extreme_bg_color: Some(random_color32(&mut rng)),
+            text_edit_bg_color: Some(random_color32(&mut rng)),
+            warn_fg_color: Some(random_color32(&mut rng)),
+            error_fg_color: Some(random_color32(&mut rng)),
+            window_fill_color: Some(random_color32(&mut rng)),
+            panel_fill_color: Some(random_color32(&mut rng)),
+            window_stroke_color: Some(random_color32(&mut rng)),
+            selection_bg_color: Some(random_color32(&mut rng)),
+            selection_fg_stroke_color: Some(random_color32(&mut rng)),
+            active_widget: Some(WidgetTheme::new_random(&mut rng)),
+            inactive_widget: Some(WidgetTheme::new_random(&mut rng)),
+            noninteractive_widget: Some(WidgetTheme::new_random(&mut rng)),
+            hovered_widget: Some(WidgetTheme::new_random(&mut rng)),
+            open_widget: Some(WidgetTheme::new_random(&mut rng)),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WidgetTheme {
     pub fg_stroke_color: Option<Color32>,
     pub bg_stroke_color: Option<Color32>,
     pub bg_fill: Option<Color32>,
     pub weak_bg_fill: Option<Color32>,
+}
+
+impl WidgetTheme {
+    fn new_random(rng: &mut ThreadRng) -> Self {
+        Self {
+            fg_stroke_color: Some(random_color32(rng)),
+            bg_stroke_color: Some(random_color32(rng)),
+            bg_fill: Some(random_color32(rng)),
+            weak_bg_fill: Some(random_color32(rng)),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -96,6 +135,10 @@ fn read_color32(table: &dyn TableLike, field: &str) -> Option<Color32> {
                 None
             }
         })
+}
+
+fn random_color32(rng: &mut ThreadRng) -> Color32 {
+    Color32::from_rgb(rng.random(), rng.random(), rng.random())
 }
 
 fn read_widget_theme(table: &dyn TableLike, field: &str) -> Option<WidgetTheme> {
@@ -237,5 +280,11 @@ impl Settings {
 
     pub fn theme(&self) -> Option<Theme> {
         self.0.borrow().theme.clone()
+    }
+
+    pub fn randomize_theme(&mut self) {
+        let new_theme = Theme::new_random();
+        log::debug!("Generated randomized theme: {new_theme:#?}");
+        self.0.borrow_mut().theme = Some(new_theme);
     }
 }

@@ -361,6 +361,11 @@ impl ProjectEditor {
                         if ui.button("Find (Global)").clicked() {
                             self.editor_context.search.show();
                         }
+
+                        if ui.button("Randomize Theme").clicked() {
+                            self.editor_context.settings.randomize_theme();
+                            self.updates_needed.theme = true;
+                        }
                     });
                 });
             });
@@ -389,7 +394,6 @@ impl ProjectEditor {
     }
 
     fn update_theme(&self, ctx: &egui::Context) {
-        log::debug!("called update_theme");
         if let Some(settings_theme) = self.editor_context.settings.theme() {
             ctx.style_mut(|style| {
                 style.visuals.override_text_color = settings_theme.override_text_color;
@@ -459,8 +463,6 @@ impl ProjectEditor {
                 );
 
                 update_widget_theme(&settings_theme.open_widget, &mut style.visuals.widgets.open);
-
-                log::debug!("loaded visuals: {:#?}", style.visuals);
             });
         }
     }

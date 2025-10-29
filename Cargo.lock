@@ -679,6 +679,7 @@ dependencies = [
  "log",
  "notify",
  "notify-debouncer-full",
+ "rand",
  "regex",
  "rfd",
  "serde",

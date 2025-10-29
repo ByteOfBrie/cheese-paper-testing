@@ -9,11 +9,13 @@ use crate::components::file_objects::utils::process_name_for_filename;
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
+use crate::ui::settings::WidgetTheme;
 
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::path::PathBuf;
 
+use egui::style::WidgetVisuals;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::TreeViewState;
@@ -33,6 +35,13 @@ pub struct TypingStatus {
     pub current_word: Range<usize>,
 }
 
+#[derive(Debug)]
+struct UpdatesNeeded {
+    title: bool,
+
+    theme: bool,
+}
+
 pub struct ProjectEditor {
     pub project: Project,
 
@@ -41,7 +50,7 @@ pub struct ProjectEditor {
 
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
-    title_needs_update: bool,
+    updates_needed: UpdatesNeeded,
 
     pub editor_context: EditorContext,
 
@@ -60,7 +69,7 @@ impl Debug for ProjectEditor {
         f.debug_struct("ProjectEditor")
             .field("project", &self.project)
             .field("dock_state", &self.dock_state)
-            .field("title_needs_update", &self.title_needs_update)
+            .field("updates_needed", &self.updates_needed)
             .field("editor_context", &self.editor_context)
             .field("tracker", &self.tracker)
             .finish()
@@ -169,6 +178,26 @@ fn update_title(project_name: &str, ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
         "Cheese Paper - {project_name}",
     )));
+}
+
+fn update_widget_theme(widget_theme_option: &Option<WidgetTheme>, widget: &mut WidgetVisuals) {
+    if let Some(widget_theme) = widget_theme_option {
+        if let Some(fg_stroke_color) = widget_theme.fg_stroke_color {
+            widget.fg_stroke.color = fg_stroke_color;
+        }
+
+        if let Some(bg_stroke_color) = widget_theme.bg_stroke_color {
+            widget.bg_stroke.color = bg_stroke_color;
+        }
+
+        if let Some(bg_fill) = widget_theme.bg_fill {
+            widget.bg_fill = bg_fill;
+        }
+
+        if let Some(weak_bg_fill) = widget_theme.weak_bg_fill {
+            widget.weak_bg_fill = weak_bg_fill;
+        }
+    }
 }
 
 impl ProjectEditor {
@@ -359,13 +388,95 @@ impl ProjectEditor {
         }
     }
 
+    fn update_theme(&self, ctx: &egui::Context) {
+        log::debug!("called update_theme");
+        if let Some(settings_theme) = self.editor_context.settings.theme() {
+            ctx.style_mut(|style| {
+                style.visuals.override_text_color = settings_theme.override_text_color;
+
+                style.visuals.weak_text_color = settings_theme.weak_text_color;
+
+                style.visuals.text_edit_bg_color = settings_theme.text_edit_bg_color;
+
+                if let Some(defined_hyperlink_color) = settings_theme.hyperlink_color {
+                    style.visuals.hyperlink_color = defined_hyperlink_color;
+                }
+
+                if let Some(defined_faint_bg_color) = settings_theme.faint_bg_color {
+                    style.visuals.faint_bg_color = defined_faint_bg_color;
+                }
+
+                if let Some(defined_extreme_bg_color) = settings_theme.extreme_bg_color {
+                    style.visuals.extreme_bg_color = defined_extreme_bg_color;
+                }
+
+                if let Some(defined_warn_fg_color) = settings_theme.warn_fg_color {
+                    style.visuals.warn_fg_color = defined_warn_fg_color;
+                }
+
+                if let Some(defined_error_fg_color) = settings_theme.error_fg_color {
+                    style.visuals.error_fg_color = defined_error_fg_color;
+                }
+
+                if let Some(defined_window_fill_color) = settings_theme.window_fill_color {
+                    style.visuals.window_fill = defined_window_fill_color;
+                }
+
+                if let Some(defined_panel_fill_color) = settings_theme.panel_fill_color {
+                    style.visuals.panel_fill = defined_panel_fill_color;
+                }
+
+                if let Some(window_stroke_color) = settings_theme.window_stroke_color {
+                    style.visuals.window_stroke.color = window_stroke_color;
+                }
+
+                if let Some(selection_bg_color) = settings_theme.selection_bg_color {
+                    style.visuals.selection.bg_fill = selection_bg_color;
+                }
+
+                if let Some(selection_fg_stroke_color) = settings_theme.selection_fg_stroke_color {
+                    style.visuals.selection.stroke.color = selection_fg_stroke_color;
+                }
+
+                update_widget_theme(
+                    &settings_theme.active_widget,
+                    &mut style.visuals.widgets.active,
+                );
+
+                update_widget_theme(
+                    &settings_theme.inactive_widget,
+                    &mut style.visuals.widgets.inactive,
+                );
+
+                update_widget_theme(
+                    &settings_theme.noninteractive_widget,
+                    &mut style.visuals.widgets.noninteractive,
+                );
+
+                update_widget_theme(
+                    &settings_theme.hovered_widget,
+                    &mut style.visuals.widgets.hovered,
+                );
+
+                update_widget_theme(&settings_theme.open_widget, &mut style.visuals.widgets.open);
+
+                log::debug!("loaded visuals: {:#?}", style.visuals);
+            });
+        }
+    }
+
     fn process_state(&mut self, ctx: &egui::Context) {
         // update window title. silly that we have to do it here, but we can't set it when calling new()
         // since we don't have the `egui::Context`. This will also need to happen once we can actually
         // set project names
-        if self.title_needs_update {
+        if self.updates_needed.title {
             update_title(&self.project.base_metadata.name, ctx);
-            self.title_needs_update = false;
+            self.updates_needed.title = false;
+        }
+
+        if self.updates_needed.theme {
+            self.update_theme(ctx);
+            self.updates_needed.theme = false;
         }
 
         if self.editor_context.search.exiting_search {
@@ -447,7 +558,10 @@ impl ProjectEditor {
         Self {
             project,
             dock_state: DockState::new(open_tabs),
-            title_needs_update: true,
+            updates_needed: UpdatesNeeded {
+                title: true,
+                theme: true,
+            },
             editor_context: EditorContext {
                 settings,
                 dictionary,

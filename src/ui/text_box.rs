@@ -6,7 +6,7 @@ use std::ops::Range;
 use crate::ui::prelude::*;
 use crate::ui::project_editor::search::textbox_search;
 use egui::text::{CCursorRange, LayoutJob};
-use egui::{Key, KeyboardShortcut, Modifiers, TextBuffer};
+use egui::{Key, KeyboardShortcut, Label, Modifiers, TextBuffer};
 
 pub type Store = RenderDataStore<usize, TextBox>;
 
@@ -244,12 +244,17 @@ impl Text {
 
             let word_boundaries = spellcheck::get_current_word(&self.text, clicked_pos);
 
-            let raw_word = &self.text[word_boundaries];
+            let raw_word = &self.text[word_boundaries.clone()];
 
             // Will need word_range when spellcheck corrections are implemented, but it's not needed now
-            let (check_word, _word_range) = spellcheck::trim_word_for_spellcheck(raw_word);
+            let (check_word, word_range) = spellcheck::trim_word_for_spellcheck(raw_word);
+
+            let actual_word_start = word_boundaries.start + word_range.start;
+            let actual_word_length = word_range.end - word_range.start;
+            let actual_word_end = actual_word_start + actual_word_length;
 
             ctx.spellcheck_status.selected_word = check_word.to_string();
+            ctx.spellcheck_status.word_range = actual_word_start..actual_word_end;
 
             if let Some(dictionary) = ctx.dictionary.as_ref() {
                 if dictionary.check(&ctx.spellcheck_status.selected_word) {
@@ -266,25 +271,34 @@ impl Text {
         }
 
         output.response.context_menu(|ui| {
+            // TODO: add select all buttons (and maybe more)
             if ctx.spellcheck_status.selected_word.is_empty() {
                 ui.close();
             }
 
-            if ctx.spellcheck_status.correct {
-                ui.label(format!(
-                    "spelled {:?} correctly",
-                    ctx.spellcheck_status.selected_word
-                ));
-            } else {
-                ui.label(format!(
-                    "misspelled {:?}",
-                    ctx.spellcheck_status.selected_word
-                ));
-
+            if !ctx.spellcheck_status.correct {
                 for suggestion in ctx.spellcheck_status.suggestions.iter() {
                     if ui.button(suggestion).clicked() {
-                        // TODO: implement replacement
-                        println!("clicked {suggestion}");
+                        let drained_text: String = self
+                            .text
+                            .drain(ctx.spellcheck_status.word_range.clone())
+                            .collect();
+
+                        // double check we didn't mess up indexes or something, we can still
+                        // go back to the previous state
+                        if drained_text == ctx.spellcheck_status.selected_word {
+                            self.text
+                                .insert_str(ctx.spellcheck_status.word_range.start, suggestion);
+                            self.version += 1;
+                        } else {
+                            log::error!(
+                                "Tried to remove {} at {:?}, but instead got {drained_text}",
+                                ctx.spellcheck_status.selected_word,
+                                ctx.spellcheck_status.word_range
+                            );
+                            self.text
+                                .insert_str(ctx.spellcheck_status.word_range.start, &drained_text);
+                        }
                     }
                 }
             }

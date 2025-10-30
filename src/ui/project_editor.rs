@@ -27,6 +27,7 @@ pub struct SpellCheckStatus {
     pub selected_word: String,
     pub correct: bool,
     pub suggestions: Vec<String>,
+    pub word_range: Range<usize>,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

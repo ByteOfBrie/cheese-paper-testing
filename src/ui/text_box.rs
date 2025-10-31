@@ -6,7 +6,7 @@ use std::ops::Range;
 use crate::ui::prelude::*;
 use crate::ui::project_editor::search::textbox_search;
 use egui::text::{CCursorRange, LayoutJob};
-use egui::{Key, KeyboardShortcut, Label, Modifiers, TextBuffer};
+use egui::{Key, KeyboardShortcut, Modifiers, TextBuffer};
 
 pub type Store = RenderDataStore<usize, TextBox>;
 
@@ -271,9 +271,20 @@ impl Text {
         }
 
         output.response.context_menu(|ui| {
-            // TODO: add select all buttons (and maybe more)
-            if ctx.spellcheck_status.selected_word.is_empty() {
-                ui.close();
+            if ui.button("Select All").clicked()
+                && let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id)
+            {
+                let ccursor = egui::text::CCursorRange::two(
+                    egui::text::CCursor::new(0),
+                    egui::text::CCursor::new(self.text.chars().count()),
+                );
+
+                state.cursor.set_char_range(Some(ccursor));
+
+                log::debug!("new range: {:?}, {:?}", state.cursor, output.response.id);
+                state.store(ui.ctx(), output.response.id);
+                ui.ctx()
+                    .memory_mut(|mem| mem.request_focus(output.response.id));
             }
 
             if !ctx.spellcheck_status.correct {

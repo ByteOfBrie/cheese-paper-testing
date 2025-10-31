@@ -316,7 +316,9 @@ impl Text {
         });
 
         // process hotkeys like ctrl-b and ctrl-i:
-        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id)
+        if let Some(focused_window) = ui.ctx().memory(|i| i.focused())
+            && focused_window == output.response.id
+            && let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id)
             && let Some(output_cursor_range) = state.cursor.char_range()
         {
             let mut cursor_range = output_cursor_range;

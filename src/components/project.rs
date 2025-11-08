@@ -116,7 +116,27 @@ fn load_top_level_folder(
     if folder_path.exists() {
         let created_object = load_file(folder_path, objects)
             .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
-        if objects.get(&created_object).unwrap().borrow().is_folder() {
+
+        let created_object_box = objects.get(&created_object).unwrap();
+        let is_folder = created_object_box.borrow().is_folder();
+        if is_folder {
+            // A whole bunch of code to ensure that we get a capital letter if this object didn't already
+            // have a name
+            let modified = created_object_box.borrow().get_base().file.modified;
+            if modified {
+                let update_name = created_object_box.borrow().get_base().metadata.name != name
+                    && created_object_box
+                        .borrow()
+                        .get_base()
+                        .metadata
+                        .name
+                        .eq_ignore_ascii_case(name);
+
+                if update_name {
+                    created_object_box.borrow_mut().get_base_mut().metadata.name = name.to_string();
+                }
+            }
+
             Ok(created_object)
         } else {
             Err(cheese_error!(

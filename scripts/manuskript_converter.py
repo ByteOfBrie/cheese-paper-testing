@@ -181,6 +181,7 @@ def parse_text_header(
         header["notes"] = old_header["notes"]
 
     if "compile" in old_header:
+        # `"0"` needs to be false, every other int is true (and non-ints are errors)
         header["compile_status"] = int(bool(int(old_header["compile"])))
 
     # look up what we've changed the IDs to
@@ -241,6 +242,7 @@ def parse_folder_header(
         header["notes"] = old_header["notes"]
 
     if "compile" in old_header:
+        # `"0"` needs to be false, every other int is true (and non-ints are errors)
         header["compile_status"] = int(bool(int(old_header["compile"])))
 
     # look up what we've changed the IDs to

@@ -98,10 +98,10 @@ struct SettingsData {
     /// size of the text font
     font_size: f32,
 
-    /// auto indentation at the start of lines ?
+    /// visual indentation at the start of lines (buggy)
     indent_line_start: bool,
 
-    /// re-open the last project when launching the app ?
+    /// re-open the last project when launching the app
     reopen_last: bool,
 
     /// Location of the Dictionary
@@ -268,6 +268,10 @@ impl Settings {
 
     pub fn reopen_last(&self) -> bool {
         self.0.borrow().reopen_last
+    }
+
+    pub fn set_reopen_last(&mut self, reopen_last: bool) {
+        self.0.borrow_mut().reopen_last = reopen_last;
     }
 
     pub fn indent_line_start(&self) -> bool {

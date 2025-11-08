@@ -470,12 +470,12 @@ impl CheesePaperApp {
             ui.add_space(80.0 - label_size);
 
             ui.vertical_centered(|ui| {
-                let checkbox_response = ui.checkbox(
-                    &mut self.state.settings.reopen_last(),
-                    "Automatically reopen project",
-                );
+                let mut reopen_last = self.state.settings.reopen_last();
+                let checkbox_response =
+                    ui.checkbox(&mut reopen_last, "Automatically reopen project");
                 if checkbox_response.clicked() {
                     self.state.modified = true;
+                    self.state.settings.set_reopen_last(reopen_last);
                 }
             });
 

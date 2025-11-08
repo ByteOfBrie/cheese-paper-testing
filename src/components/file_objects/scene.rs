@@ -1,3 +1,5 @@
+use regex::Regex;
+
 use crate::components::file_objects::FileObjectStore;
 use crate::components::file_objects::FileType;
 use crate::components::file_objects::base::{
@@ -158,9 +160,27 @@ impl FileObject for Scene {
                 export_string.push_str("----\n\n");
             }
 
+            let body_text_unprocessed = &self.get_body();
+
+            // add in smart quotes, other platforms will insert some and it's easier to be consistent here
+            // regexes from https://webapps.stackexchange.com/questions/166314/how-to-replace-dumb-quotes-with-smart-quotes-in-google-docs/169065#169065
+            // quotes preceded by whitespace or at the start of a block are beginning quotes
+            let opening_double_quote = Regex::new(r#"((^|\s)\*{0,3})""#).unwrap();
+            let closing_double_quote = Regex::new("\"").unwrap();
+
+            // same thing for opening quotes
+            let opening_single_quote = Regex::new(r#"((^|\s)\*{0,3})'"#).unwrap();
+            let closing_single_quote = Regex::new("'").unwrap();
+
+            let body_text = opening_double_quote.replace_all(body_text_unprocessed, "$1“");
+            let body_text = closing_double_quote.replace_all(&body_text, "”");
+
+            let body_text = opening_single_quote.replace_all(&body_text, "$1‘");
+            let body_text = closing_single_quote.replace_all(&body_text, "’");
+
             // This should probably eventually be split into a `get_body_export` and `get_body_save`
             // function once those are different (probably for in-text-notes)
-            export_string.push_str(&self.get_body());
+            export_string.push_str(&body_text);
 
             while !export_string.ends_with("\n\n") {
                 export_string.push('\n');

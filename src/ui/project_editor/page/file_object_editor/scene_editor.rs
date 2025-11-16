@@ -72,6 +72,15 @@ impl Scene {
 
         let mut ids = Vec::new();
 
+        egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
+            ui.add_space(4.0);
+            let words = self.text.word_count(ctx);
+            let text = format!("{words} Words");
+            ui.vertical_centered(|ui| {
+                ui.label(text);
+            });
+        });
+
         ScrollArea::vertical().id_salt("metadata").show(ui, |ui| {
             let response = ui.add(
                 egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
@@ -83,8 +92,9 @@ impl Scene {
             self.process_response(&response);
             ids.push(response.id);
 
+            let text_box_height = response.rect.height().abs();
+
             // Tab selection
-            // TODO: make selectable_values here more subtle (e.g., different color gray)
             ui.horizontal(|ui| {
                 ui.selectable_value(
                     &mut scene_data.sidebar_tab,
@@ -96,16 +106,8 @@ impl Scene {
 
             ui.separator();
 
-            egui::TopBottomPanel::bottom("word_count").show_inside(ui, |ui| {
-                let words = self.text.word_count(ctx);
-                let text = format!("{words} Words");
-                ui.vertical_centered(|ui| {
-                    ui.label(text);
-                });
-            });
-
             let sidebar_other_ids = match scene_data.sidebar_tab {
-                SidebarTab::Notes => self.show_sidebar_metadata(ui, ctx),
+                SidebarTab::Notes => self.show_sidebar_metadata(ui, ctx, text_box_height),
                 SidebarTab::Export => self.show_sidebar_export(ui),
             };
 
@@ -114,12 +116,22 @@ impl Scene {
         ids
     }
 
-    fn show_sidebar_metadata(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+    fn show_sidebar_metadata(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &mut EditorContext,
+        text_box_height: f32,
+    ) -> Vec<Id> {
         let mut ids = Vec::new();
-        // Make each text box take up a bit of the screen by default
-        // this could be smarter, but available/2.5 is visually better than /3, and /2
-        // doesn't work (because the collapsing headers themself take up space)
-        let min_height = ui.available_height() / 2.5;
+
+        // half of the available height should go to each widget
+        let widget_space = ui.available_height() / 2.0;
+
+        // we assume that the widget metadata itself will take up slightly more room than the text box
+        let metadata_text_space = widget_space - text_box_height * 1.2;
+
+        // make sure we don't go smaller than one line (which would be meaningless)
+        let min_height = metadata_text_space.max(text_box_height);
 
         egui::CollapsingHeader::new("Summary")
             .default_open(true)

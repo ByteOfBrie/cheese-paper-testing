@@ -96,8 +96,6 @@ pub fn trim_word_for_spellcheck(word: &str) -> (Cow<'_, str>, Range<usize>) {
     let start_trimmed_word = word.trim_start_matches(|chr: char| chr.is_ascii_punctuation());
     let trimmed_word = start_trimmed_word.trim_end_matches(|chr: char| chr.is_ascii_punctuation());
 
-    // TODO: filter out links and stuff (and maybe numbers?)
-
     // Rare case, allow for mid-word formatting changes (without unnecessary allocation)
     let check_word = trimmed_word.cow_replace("*", "");
 

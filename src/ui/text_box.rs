@@ -346,7 +346,7 @@ impl Text {
 
     /// Toggles formatting like italic or bold
     fn toggle_formatting(&mut self, cursor_range: &mut CCursorRange, pattern: &str) {
-        let current_working_range = self.get_selection_range(cursor_range);
+        let current_working_range = self.get_selection_range_trimmed(cursor_range);
 
         let already_surrounded = match pattern {
             "*" => self.is_italic(&current_working_range),
@@ -426,6 +426,29 @@ impl Text {
                 false
             }
         }
+    }
+
+    /// Gets the range of the current selection or word for hotkeys, filtering out punctuation that
+    /// isn't `*` (useful for format hotkeys)
+    fn get_selection_range_trimmed(&self, cursor_range: &CCursorRange) -> Range<usize> {
+        let selection_range = self.get_selection_range(cursor_range);
+
+        let selection = self.get(selection_range.clone()).unwrap();
+
+        let start_trimmed_selection = selection.trim_start_matches(|chr: char| {
+            (chr.is_ascii_punctuation() && chr != '*') || chr.is_whitespace()
+        });
+        let trimmed_selection = start_trimmed_selection.trim_end_matches(|chr: char| {
+            (chr.is_ascii_punctuation() && chr != '*') || chr.is_whitespace()
+        });
+
+        let chars_trimmed_start = selection.len() - start_trimmed_selection.len();
+        let chars_trimmed_end = start_trimmed_selection.len() - trimmed_selection.len();
+
+        let trimmed_selection_start = selection_range.start + chars_trimmed_start;
+        let trimmed_selection_end = selection_range.end - chars_trimmed_end;
+
+        trimmed_selection_start..trimmed_selection_end
     }
 
     /// Get the range of the current selection as byte indexes in the text

@@ -42,30 +42,47 @@ impl Project {
             self.process_response(&response);
             ids.push(response.id);
 
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut self.metadata.author)
-                    .id_salt("author")
-                    .hint_text("Author Name")
-                    .lock_focus(true)
-                    .desired_width(f32::INFINITY),
-            );
-            self.process_response(&response);
-            ids.push(response.id);
+            ui.horizontal(|ui| {
+                let half_width = ui.available_width() / 2.0;
 
-            let response = ui.add(
-                egui::TextEdit::singleline(&mut self.metadata.email)
-                    .id_salt("email")
-                    .hint_text("Author Email")
-                    .lock_focus(true)
-                    .desired_width(f32::INFINITY),
-            );
-            self.process_response(&response);
-            ids.push(response.id);
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.metadata.author)
+                        .id_salt("author")
+                        .hint_text("Author Name")
+                        .lock_focus(true)
+                        .desired_width(half_width),
+                );
+                self.process_response(&response);
+                ids.push(response.id);
+
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.metadata.email)
+                        .id_salt("email")
+                        .hint_text("Author Email")
+                        .lock_focus(true)
+                        .desired_width(half_width),
+                );
+                self.process_response(&response);
+                ids.push(response.id);
+            });
+
+            // extract the height from some arbitrary text box, it shouldn't matter much
+            let text_box_height = response.rect.height().abs();
+
+            // Two widgets, each take up half the space
+            let widget_height_total = ui.available_height() / 2.0;
+
+            // We want to guess at the space that the collapsingheader will take up, it doesn't matter
+            // if we're not completely right
+            let widget_height = widget_height_total - text_box_height;
 
             egui::CollapsingHeader::new("Story Description/Summary")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let response = ui.add(|ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx));
+                    let response = ui.add_sized(
+                        egui::vec2(ui.available_width(), widget_height),
+                        |ui: &'_ mut Ui| self.metadata.summary.ui(ui, ctx),
+                    );
                     self.process_response(&response);
                     ids.push(response.id);
                 });
@@ -73,7 +90,11 @@ impl Project {
             egui::CollapsingHeader::new("Notes")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let response = ui.add(|ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx));
+                    let response = ui.add_sized(
+                        egui::vec2(ui.available_width(), widget_height),
+                        |ui: &'_ mut Ui| self.metadata.notes.ui(ui, ctx),
+                    );
+
                     self.process_response(&response);
                     ids.push(response.id);
                 });

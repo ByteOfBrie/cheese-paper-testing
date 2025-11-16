@@ -26,7 +26,7 @@ impl FileObjectEditor for Scene {
         let sidebar_ids = egui::SidePanel::right("metadata sidebar")
             .resizable(true)
             .default_width(200.0)
-            .width_range(50.0..=500.0)
+            .width_range(50.0..)
             .show_inside(ui, |ui| self.show_sidebar(ui, ctx))
             .inner;
 

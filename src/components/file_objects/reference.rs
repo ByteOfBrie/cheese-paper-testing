@@ -33,16 +33,23 @@ impl ObjectReference {
                 value.remove(0);
             }
             match value.split_once('|') {
+                Some(("", "")) => ObjectReference::None,
                 Some((name, id)) => ObjectReference::Unknown(UnknownReference {
                     name: name.to_string(),
                     id: id.to_string(),
                     file_type,
                 }),
-                None => ObjectReference::Unknown(UnknownReference {
-                    name: value,
-                    id: String::new(),
-                    file_type,
-                }),
+                None => {
+                    if value.is_empty() {
+                        ObjectReference::None
+                    } else {
+                        ObjectReference::Unknown(UnknownReference {
+                            name: value,
+                            id: String::new(),
+                            file_type,
+                        })
+                    }
+                }
             }
         }
     }

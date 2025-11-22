@@ -129,8 +129,8 @@ pub fn find_misspelled_words(text: &str, ctx: &EditorContext) -> Vec<(usize, usi
     // we only spellcheck if we have a dictionary:
     if let Some(dict) = &ctx.dictionary {
         // words in this case means everything that isn't whitespace, we'll take care of
-        // trimming
-        static WORD_REGEX: SavedRegex = SavedRegex::new(|| Regex::new(r"([^\s]+)").unwrap());
+        // trimming. We also split on `/` because those separate words without whitespace
+        static WORD_REGEX: SavedRegex = SavedRegex::new(|| Regex::new(r"([^\s/]+)").unwrap());
 
         for word_match in WORD_REGEX.find_iter(text) {
             let (check_word, word_range) = trim_word_for_spellcheck(word_match.as_str());

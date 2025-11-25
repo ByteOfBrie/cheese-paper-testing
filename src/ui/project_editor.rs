@@ -11,6 +11,7 @@ use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use crate::ui::settings::WidgetTheme;
 
+use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::path::PathBuf;
@@ -78,9 +79,102 @@ impl Debug for ProjectEditor {
 }
 
 #[derive(Debug)]
+pub struct DictionaryState {
+    pub dictionary: Option<Dictionary>,
+    _fresh_dictionary: Option<Dictionary>,
+    /// The words that are explictly ignored, are stored in the data toml file
+    ignored_words: HashSet<String>,
+    characters_and_places: HashSet<String>,
+    added_file_object_names: HashSet<String>,
+}
+
+impl DictionaryState {
+    pub fn new(dict: Option<Dictionary>) -> Self {
+        Self {
+            dictionary: dict.clone(),
+            _fresh_dictionary: dict,
+            ignored_words: HashSet::new(),
+            characters_and_places: HashSet::new(),
+            added_file_object_names: HashSet::new(),
+        }
+    }
+
+    pub fn add_ignored(&mut self, ignored_word: &str) {
+        if let Some(dictionary) = &mut self.dictionary
+            && !dictionary.check(ignored_word)
+        {
+            if let Err(err) = dictionary.add(ignored_word) {
+                log::error!("Could not add word {ignored_word} to dictionary: {err}");
+            };
+            self.ignored_words.insert(ignored_word.to_string());
+        }
+    }
+
+    pub fn add_file_object_name(&mut self, object_name: &str) {
+        if let Some(dictionary) = &mut self.dictionary {
+            for part in object_name.split(&[' ', '/'][..]) {
+                let trimmed = part.trim_matches('"');
+
+                if !dictionary.check(trimmed) {
+                    self.characters_and_places.insert(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    pub fn resync_file_names(&mut self) {
+        let names_to_remove = self
+            .added_file_object_names
+            .difference(&self.characters_and_places);
+
+        if names_to_remove.count() != 0 {
+            // we have words added to the dictionary that need to be removed now, the only way we can do
+            // this is to freshly clone the dictionary and add everything back
+            self.dictionary = self._fresh_dictionary.clone();
+
+            if let Some(dictionary) = &mut self.dictionary {
+                for word in &self.ignored_words {
+                    if !dictionary.check(word)
+                        && let Err(err) = dictionary.add(word)
+                    {
+                        log::error!(
+                            "Could not add already ignored word {word} to dictionary: {err}"
+                        );
+                    }
+                }
+            }
+            self.added_file_object_names.clear();
+        }
+
+        if let Some(dictionary) = &mut self.dictionary {
+            let names_to_add: Vec<_> = self
+                .characters_and_places
+                .difference(&self.added_file_object_names)
+                .cloned()
+                .collect();
+
+            for file_object_word in names_to_add {
+                if !dictionary.check(&file_object_word) {
+                    match dictionary.add(&file_object_word) {
+                        Ok(()) => {
+                            self.added_file_object_names.insert(file_object_word);
+                        }
+                        Err(err) => {
+                            log::error!(
+                                "Could not add word {file_object_word} from file object to dictionary: {err}"
+                            );
+                        }
+                    };
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct EditorContext {
     pub settings: Settings,
-    pub dictionary: Option<Dictionary>,
+    pub dictionary_state: DictionaryState,
     pub spellcheck_status: SpellCheckStatus,
     pub typing_status: TypingStatus,
     pub search: Search,
@@ -567,7 +661,7 @@ impl ProjectEditor {
             },
             editor_context: EditorContext {
                 settings,
-                dictionary,
+                dictionary_state: DictionaryState::new(dictionary),
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),
                 search: Search::default(),

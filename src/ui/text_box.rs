@@ -256,7 +256,7 @@ impl Text {
             ctx.spellcheck_status.selected_word = check_word.to_string();
             ctx.spellcheck_status.word_range = actual_word_start..actual_word_end;
 
-            if let Some(dictionary) = ctx.dictionary.as_ref() {
+            if let Some(dictionary) = ctx.dictionary_state.dictionary.as_ref() {
                 if dictionary.check(&ctx.spellcheck_status.selected_word) {
                     ctx.spellcheck_status.correct = true;
                 } else {

@@ -22,6 +22,10 @@ pub struct Data {
     pub last_project_parent_folder: PathBuf,
     pub last_export_folder: PathBuf,
     pub last_open_file_ids: HashMap<String, Vec<String>>,
+
+    /// Words that have been ignored by the user. Maybe should be in a separate file, but they're here for
+    /// now
+    pub custom_dictionary: Vec<String>,
 }
 
 impl Default for Data {
@@ -37,6 +41,7 @@ impl Default for Data {
                 .home_dir()
                 .to_path_buf(),
             last_open_file_ids: HashMap::new(),
+            custom_dictionary: Vec::new(),
         }
     }
 }
@@ -93,6 +98,17 @@ impl Data {
                 }
             }
         }
+
+        if let Some(custom_dictionary) = table
+            .get("custom_dictionary")
+            .and_then(|val| val.as_array())
+        {
+            for word_value in custom_dictionary {
+                if let Some(word) = word_value.as_str() {
+                    self.custom_dictionary.push(word.to_string());
+                }
+            }
+        }
     }
 
     fn save(&self, table: &mut DocumentMut) {
@@ -125,6 +141,11 @@ impl Data {
             last_open_file_ids.insert(project_id, value(open_file_ids_arr).into_value().unwrap());
         }
         table.insert("last_open_file_ids", value(last_open_file_ids));
+
+        table.insert(
+            "custom_dictionary",
+            value(toml_edit::Array::from_iter(self.custom_dictionary.iter())),
+        );
     }
 
     fn get_path(project_dirs: &ProjectDirs) -> PathBuf {

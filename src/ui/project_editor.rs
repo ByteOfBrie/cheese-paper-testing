@@ -3,6 +3,7 @@ pub mod page;
 pub mod search;
 mod util;
 
+use crate::components::file_objects::FileObjectTypeInterface;
 use crate::ui::prelude::*;
 
 use crate::components::file_objects::utils::process_name_for_filename;
@@ -85,6 +86,7 @@ pub struct DictionaryState {
     /// The words that are explictly ignored, are stored in the data toml file
     ignored_words: HashSet<String>,
     characters_and_places: HashSet<String>,
+    old_characters_and_places: HashSet<String>,
     added_file_object_names: HashSet<String>,
 }
 
@@ -95,6 +97,7 @@ impl DictionaryState {
             _fresh_dictionary: dict,
             ignored_words: HashSet::new(),
             characters_and_places: HashSet::new(),
+            old_characters_and_places: HashSet::new(),
             added_file_object_names: HashSet::new(),
         }
     }
@@ -110,12 +113,13 @@ impl DictionaryState {
         }
     }
 
-    pub fn add_file_object_name(&mut self, object_name: &str) {
+    pub fn add_file_object_name(&mut self, object_name: impl AsRef<str>) {
         if let Some(dictionary) = &mut self.dictionary {
-            for part in object_name.split(&[' ', '/'][..]) {
+            for part in object_name.as_ref().split(&[' ', '/'][..]) {
                 let trimmed = part.trim_matches('"');
 
-                if !dictionary.check(trimmed) {
+                if self.old_characters_and_places.contains(trimmed) || !dictionary.check(trimmed) {
+                    log::debug!("Dictionary: Adding word from file object: {trimmed}");
                     self.characters_and_places.insert(trimmed.to_string());
                 }
             }
@@ -633,6 +637,7 @@ impl ProjectEditor {
         dictionary: Option<Dictionary>,
         settings: Settings,
         last_export_folder: PathBuf,
+        ignored_words: impl IntoIterator<Item: AsRef<str>>,
     ) -> Self {
         let tracker = match ProjectTracker::new(&project.get_path()) {
             Ok(mut tracker) => {
@@ -647,12 +652,19 @@ impl ProjectEditor {
             }
         };
 
+        // Spellbook docs say not to do this in the UI thread
+        let mut dictionary_state = DictionaryState::new(dictionary);
+
+        for ignored_word in ignored_words.into_iter() {
+            dictionary_state.add_ignored(ignored_word.as_ref());
+        }
+
         let open_tabs = open_tab_ids
             .iter()
             .map(|tab_id| Page::from_id(tab_id))
             .collect();
 
-        Self {
+        let mut project_editor = Self {
             project,
             dock_state: DockState::new(open_tabs),
             updates_needed: UpdatesNeeded {
@@ -661,7 +673,7 @@ impl ProjectEditor {
             },
             editor_context: EditorContext {
                 settings,
-                dictionary_state: DictionaryState::new(dictionary),
+                dictionary_state,
                 spellcheck_status: SpellCheckStatus::default(),
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
@@ -672,6 +684,36 @@ impl ProjectEditor {
             tracker,
             tree_state: Default::default(),
             current_open_tab: None,
+        };
+
+        project_editor.update_spellcheck_file_object_names();
+        project_editor
+            .editor_context
+            .dictionary_state
+            .resync_file_names();
+        project_editor.editor_context.version += 1;
+
+        project_editor
+    }
+
+    pub fn update_spellcheck_file_object_names(&mut self) {
+        // first, reset the listing of characters and places
+        self.editor_context
+            .dictionary_state
+            .old_characters_and_places =
+            std::mem::take(&mut self.editor_context.dictionary_state.characters_and_places);
+
+        for object in self.project.objects.values() {
+            let should_parse = matches!(
+                object.borrow().get_file_type(),
+                FileObjectTypeInterface::Character(_) | FileObjectTypeInterface::Place(_)
+            );
+
+            if should_parse {
+                self.editor_context
+                    .dictionary_state
+                    .add_file_object_name(object.borrow().get_title());
+            }
         }
     }
 

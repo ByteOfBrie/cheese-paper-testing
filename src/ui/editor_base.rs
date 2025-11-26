@@ -269,6 +269,9 @@ pub struct CheesePaperApp {
     /// to propagate the event downwards
     last_save: Instant,
 
+    /// We want to keep track of this separately from the save logic (probably?)
+    last_dictionary_update: Instant,
+
     /// Dictionary for spellchecking, if we managed to load it
     dictionary: Option<Dictionary>,
 
@@ -310,6 +313,21 @@ impl eframe::App for CheesePaperApp {
 
                     project_editor.save();
                     self.last_save = current_time;
+                }
+                // is it better to have a potential lag spike happen during a save (making the lag worse,
+                // or separately, making it smaller but separate)? not sure if this will even be an issue
+                // so I'm not thinking too hard about it right now
+                if current_time.duration_since(self.last_dictionary_update)
+                    > Duration::from_secs(20)
+                {
+                    project_editor.update_spellcheck_file_object_names();
+                    project_editor
+                        .editor_context
+                        .dictionary_state
+                        .resync_file_names();
+                    project_editor.editor_context.version += 1;
+
+                    self.last_dictionary_update = current_time;
                 }
             }
             None => match self.state.new_project_dir.is_none() {
@@ -428,6 +446,7 @@ impl CheesePaperApp {
             project_editor: None,
             state,
             last_save: Instant::now(),
+            last_dictionary_update: Instant::now(),
             dictionary,
 
             #[cfg(feature = "metrics")]
@@ -568,6 +587,7 @@ impl CheesePaperApp {
                                         self.dictionary.clone(),
                                         self.state.settings.clone(),
                                         self.state.data.last_export_folder.clone(),
+                                        &self.state.data.custom_dictionary,
                                     ));
                                 }
                                 Err(err) => {
@@ -645,6 +665,7 @@ impl CheesePaperApp {
                     self.dictionary.clone(),
                     self.state.settings.clone(),
                     self.state.data.last_export_folder.clone(),
+                    &self.state.data.custom_dictionary,
                 ));
 
                 Ok(())

@@ -156,9 +156,10 @@ impl Data {
 pub struct EditorState {
     pub settings: Settings,
     settings_toml: DocumentMut,
+    settings_modified: bool,
     pub data: Data,
     data_toml: DocumentMut,
-    modified: bool,
+    data_modified: bool,
     project_dirs: ProjectDirs,
     error_message: Option<(String, Instant)>,
     new_project_dir: Option<PathBuf>,
@@ -172,8 +173,9 @@ impl std::fmt::Debug for EditorState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditorState")
             .field("settings", &self.settings)
+            .field("settings_modified", &self.settings_modified)
             .field("data", &self.data)
-            .field("modified", &self.modified)
+            .field("data_modified", &self.data_modified)
             .field("project_dirs", &self.project_dirs)
             .finish()
     }
@@ -200,7 +202,7 @@ impl Default for EditorState {
             },
         };
 
-        let modified = settings.load(&settings_toml);
+        let settings_modified = settings.load(&settings_toml);
 
         let mut data = Data::default();
 
@@ -222,9 +224,10 @@ impl Default for EditorState {
         Self {
             settings,
             settings_toml,
+            settings_modified,
             data,
             data_toml,
-            modified,
+            data_modified: false,
             project_dirs,
             error_message: None,
             new_project_dir: None,
@@ -237,14 +240,16 @@ impl Default for EditorState {
 
 impl EditorState {
     fn save(&mut self) -> Result<(), CheeseError> {
-        if self.modified {
+        if self.data_modified {
             self.data.save(&mut self.data_toml);
             write_with_temp_file(
                 create_dir_if_missing(&Data::get_path(&self.project_dirs))?,
                 self.data_toml.to_string().as_bytes(),
             )
             .map_err(|err| cheese_error!("Error while saving app data\n{}", err))?;
+        }
 
+        if self.settings_modified {
             self.settings.save(&mut self.settings_toml);
             write_with_temp_file(
                 create_dir_if_missing(&Settings::get_path(&self.project_dirs))?,
@@ -514,7 +519,7 @@ impl CheesePaperApp {
                 let checkbox_response =
                     ui.checkbox(&mut reopen_last, "Automatically reopen project");
                 if checkbox_response.clicked() {
-                    self.state.modified = true;
+                    self.state.settings_modified = true;
                     self.state.settings.set_reopen_last(reopen_last);
                 }
             });
@@ -580,7 +585,7 @@ impl CheesePaperApp {
                                         .data
                                         .recent_projects
                                         .insert(0, project.get_path());
-                                    self.state.modified = true;
+                                    self.state.data_modified = true;
                                     self.project_editor = Some(ProjectEditor::new(
                                         project,
                                         Vec::new(),
@@ -623,7 +628,7 @@ impl CheesePaperApp {
                     && let Some(path) = project_path.parent()
                 {
                     self.state.data.last_project_parent_folder = path.to_path_buf();
-                    self.state.modified = true;
+                    self.state.data_modified = true;
                 }
 
                 let project_path_position = self
@@ -638,7 +643,7 @@ impl CheesePaperApp {
                         if position != 0 {
                             let project_pathbuf = self.state.data.recent_projects.remove(position);
                             self.state.data.recent_projects.insert(0, project_pathbuf);
-                            self.state.modified = true;
+                            self.state.data_modified = true;
                         }
                     }
                     None => {
@@ -646,7 +651,7 @@ impl CheesePaperApp {
                             .data
                             .recent_projects
                             .insert(0, project_path.clone());
-                        self.state.modified = true;
+                        self.state.data_modified = true;
                     }
                 };
 
@@ -699,12 +704,27 @@ impl CheesePaperApp {
                     open_tabs_ids,
                 );
 
-                self.state.modified = true;
+                self.state.data_modified = true;
             }
         }
     }
 
     fn save(&mut self) {
+        if let Some(project_editor) = &self.project_editor
+            && project_editor
+                .editor_context
+                .dictionary_state
+                .ignore_list_updated
+        {
+            self.state.data.custom_dictionary = project_editor
+                .editor_context
+                .dictionary_state
+                .get_ignore_list()
+                .into_iter()
+                .collect();
+            self.state.data_modified = true;
+        }
+
         self.update_open_tabs();
 
         if let Err(err) = self.state.save() {

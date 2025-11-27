@@ -288,6 +288,7 @@ impl Text {
             }
 
             if !ctx.spellcheck_status.correct {
+                ui.separator();
                 for suggestion in ctx.spellcheck_status.suggestions.iter() {
                     if ui.button(suggestion).clicked() {
                         let drained_text: String = self
@@ -311,6 +312,13 @@ impl Text {
                                 .insert_str(ctx.spellcheck_status.word_range.start, &drained_text);
                         }
                     }
+                }
+                ui.separator();
+
+                if ui.button("Add to Dictionary").clicked() {
+                    ctx.dictionary_state
+                        .add_ignored(&ctx.spellcheck_status.selected_word);
+                    ctx.version += 1;
                 }
             }
         });

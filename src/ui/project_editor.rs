@@ -88,6 +88,7 @@ pub struct DictionaryState {
     characters_and_places: HashSet<String>,
     old_characters_and_places: HashSet<String>,
     added_file_object_names: HashSet<String>,
+    pub ignore_list_updated: bool,
 }
 
 impl DictionaryState {
@@ -99,10 +100,22 @@ impl DictionaryState {
             characters_and_places: HashSet::new(),
             old_characters_and_places: HashSet::new(),
             added_file_object_names: HashSet::new(),
+            ignore_list_updated: false,
         }
     }
 
-    pub fn add_ignored(&mut self, ignored_word: &str) {
+    pub fn add_ignored(&mut self, ignored_word: &str) -> bool {
+        if self.add_ignored_startup(ignored_word) {
+            self.ignore_list_updated = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    // Version of add_ignored that doesn't count as an update, should be used for words being added
+    // at startup or the like
+    pub fn add_ignored_startup(&mut self, ignored_word: &str) -> bool {
         if let Some(dictionary) = &mut self.dictionary
             && !dictionary.check(ignored_word)
         {
@@ -110,7 +123,14 @@ impl DictionaryState {
                 log::error!("Could not add word {ignored_word} to dictionary: {err}");
             };
             self.ignored_words.insert(ignored_word.to_string());
+            true
+        } else {
+            false
         }
+    }
+
+    pub fn get_ignore_list(&self) -> HashSet<String> {
+        self.ignored_words.clone()
     }
 
     pub fn add_file_object_name(&mut self, object_name: impl AsRef<str>) {

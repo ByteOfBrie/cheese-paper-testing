@@ -1,3 +1,4 @@
+use crate::components::file_objects::reference::ObjectReference;
 use crate::{components::file_objects::base::CompileStatus, ui::prelude::*};
 
 use super::FileObjectEditor;
@@ -123,6 +124,58 @@ impl Scene {
         text_box_height: f32,
     ) -> Vec<Id> {
         let mut ids = Vec::new();
+
+        // I am doing horrible things here but the borrow checker must be satisifed
+        let changed = {
+            let mut object_pov = self.metadata.pov.borrow_mut();
+            let mut pov = object_pov.clone();
+
+            ui.horizontal(|ui| {
+                ui.label("POV: ");
+                egui::ComboBox::from_id_salt("metadata pov")
+                    .selected_text(match &pov {
+                        ObjectReference::Known(known_current_pov) => {
+                            if let Some(current_pov_name) =
+                                ctx.references.characters.get(known_current_pov)
+                            {
+                                current_pov_name.clone()
+                            } else {
+                                format!("Ref: {known_current_pov}")
+                            }
+                        }
+                        ObjectReference::Unknown(unknown_reference) => {
+                            if unknown_reference.name.is_empty() {
+                                format!("Ref: {}", unknown_reference.id)
+                            } else {
+                                format!("Ref: {}|{}", unknown_reference.name, unknown_reference.id)
+                            }
+                        }
+                        ObjectReference::None => "None".to_string(),
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut pov, ObjectReference::None, "None");
+                        for (character_reference, name) in ctx.references.characters.iter() {
+                            ui.selectable_value(
+                                &mut pov,
+                                ObjectReference::Known(character_reference.clone()),
+                                name,
+                            );
+                        }
+                    });
+            });
+
+            // We don't have an actual response here so we have to manually process
+            if pov != *object_pov {
+                *object_pov = pov;
+                true
+            } else {
+                false
+            }
+        };
+
+        if changed {
+            self.get_base_mut().file.modified = true;
+        }
 
         // half of the available height should go to each widget
         let widget_space = ui.available_height() / 2.0;

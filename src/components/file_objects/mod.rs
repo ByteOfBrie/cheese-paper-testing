@@ -2,7 +2,7 @@ pub mod base;
 mod character;
 mod folder;
 mod place;
-mod reference;
+pub mod reference;
 mod scene;
 pub mod utils;
 

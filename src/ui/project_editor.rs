@@ -12,7 +12,7 @@ use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use crate::ui::settings::WidgetTheme;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::path::PathBuf;
@@ -139,7 +139,6 @@ impl DictionaryState {
                 let trimmed = part.trim_matches('"');
 
                 if self.old_characters_and_places.contains(trimmed) || !dictionary.check(trimmed) {
-                    log::debug!("Dictionary: Adding word from file object: {trimmed}");
                     self.characters_and_places.insert(trimmed.to_string());
                 }
             }
@@ -196,6 +195,43 @@ impl DictionaryState {
 }
 
 #[derive(Debug)]
+pub struct References {
+    pub characters: BTreeMap<FileID, String>,
+}
+
+impl References {
+    pub fn new(objects: &FileObjectStore) -> Self {
+        let mut references = Self {
+            characters: BTreeMap::new(),
+        };
+
+        references.update(objects);
+
+        references
+    }
+
+    /// Populate the list of references based on the objects, complete with names (for use in UI)
+    pub fn update(&mut self, objects: &FileObjectStore) {
+        let mut old_characters = std::mem::take(&mut self.characters);
+
+        for file_object in objects.values() {
+            let object_borrowed = file_object.borrow();
+            if let FileObjectTypeInterface::Character(character) = object_borrowed.get_file_type() {
+                // write code as if we care about avoiding a clone
+                if let Some(old_name) = old_characters.remove(character.id())
+                    && character.get_base().metadata.name == old_name
+                {
+                    self.characters.insert(character.id().clone(), old_name);
+                } else {
+                    self.characters
+                        .insert(character.id().clone(), object_borrowed.get_title());
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct EditorContext {
     pub settings: Settings,
     pub dictionary_state: DictionaryState,
@@ -203,6 +239,7 @@ pub struct EditorContext {
     pub typing_status: TypingStatus,
     pub search: Search,
     pub stores: Stores,
+    pub references: References,
 
     /// Duplicates the value from state.data, which is then more recent
     pub last_export_folder: PathBuf,
@@ -604,9 +641,13 @@ impl ProjectEditor {
             self.editor_context.version += 1;
         }
 
+        // This is kinda dumb but will ensure that the names are always up to date
+        // We can always optimize this later if needed
+        self.editor_context.references.update(&self.project.objects);
+
         self.project.process_updates();
 
-        // automatically track progerss if we have a tracker
+        // automatically track progress if we have a tracker
         if let Some(tracker) = &mut self.tracker
             && tracker.snapshot_time.elapsed().as_secs() >= 60 * 15
             && let Err(err) = tracker.snapshot("Autosave")
@@ -684,6 +725,8 @@ impl ProjectEditor {
             .map(|tab_id| Page::from_id(tab_id))
             .collect();
 
+        let references = References::new(&project.objects);
+
         let mut project_editor = Self {
             project,
             dock_state: DockState::new(open_tabs),
@@ -698,6 +741,7 @@ impl ProjectEditor {
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
                 stores: Stores::default(),
+                references,
                 last_export_folder,
                 version: 0,
             },

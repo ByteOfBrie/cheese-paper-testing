@@ -103,7 +103,7 @@ fn format_rule_bold_italic(
     let mut bold = Vec::new();
     let mut italic = Vec::new();
 
-    static ASTERIX_GROUPS: SavedRegex = SavedRegex::new(|| Regex::new(r#"\*+"#).unwrap());
+    static ASTERIX_GROUPS: SavedRegex = SavedRegex::new(|| Regex::new(r#"(\*+|\n)"#).unwrap());
 
     let mut italic_start = None;
     let mut bold_start = None;
@@ -111,8 +111,8 @@ fn format_rule_bold_italic(
     for ag in ASTERIX_GROUPS.captures_iter(text) {
         let ag = ag.get(0).unwrap();
 
-        match ag.len() {
-            1 => {
+        match ag.as_str() {
+            "*" => {
                 if let Some(start) = italic_start {
                     italic.push(StyleMarker {
                         idx: start,
@@ -129,7 +129,7 @@ fn format_rule_bold_italic(
                     italic_start = Some(ag.start());
                 }
             }
-            2 => {
+            "**" => {
                 if let Some(start) = bold_start {
                     bold.push(StyleMarker {
                         idx: start,
@@ -146,7 +146,7 @@ fn format_rule_bold_italic(
                     bold_start = Some(ag.start());
                 }
             }
-            3 => {
+            "***" => {
                 // Toggle both bold and italic
                 // This might not be correct but it's better than nothing, TBD:
                 if let Some(start) = bold_start {
@@ -179,6 +179,11 @@ fn format_rule_bold_italic(
                 } else {
                     italic_start = Some(ag.start());
                 }
+            }
+            "\n" => {
+                // We just want to reset to nothing at the start of the line
+                italic_start = None;
+                bold_start = None;
             }
             _ => (),
         }

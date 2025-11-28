@@ -735,7 +735,6 @@ pub trait FileObject: Debug {
     fn extension(&self) -> &'static str;
 
     /// Allow for downcasting this as a reference, useful for some UI components
-    #[allow(dead_code)]
     fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
     /// Allow for downcasting this as a mutable reference, useful for some UI components
     fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
@@ -765,6 +764,8 @@ pub trait FileObject: Debug {
     fn id(&self) -> &Rc<String> {
         &self.get_base().metadata.id
     }
+
+    fn resolve_references(&mut self, _objects: &FileObjectStore) {}
 
     /// Loads the file-specific metadata from the toml document
     ///

@@ -346,6 +346,7 @@ impl Project {
 
         project.clean_up_orphaned_objects();
 
+        project.resolve_references();
         project.save()?;
 
         Ok(project)
@@ -719,6 +720,12 @@ impl Project {
         export_string
     }
 
+    pub fn resolve_references(&mut self) {
+        for object in self.objects.values() {
+            object.borrow_mut().resolve_references(&self.objects);
+        }
+    }
+
     pub fn process_updates(&mut self) {
         // check for file system events and process them
         if let Ok(response) = self.file_event_rx.try_recv() {
@@ -947,6 +954,9 @@ impl Project {
                 std::time::Instant::now()
             );
             self.last_added_event = None;
+
+            // 7. Any other steps
+            self.resolve_references();
         }
     }
 

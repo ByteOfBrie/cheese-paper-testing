@@ -131,7 +131,7 @@ impl Scene {
             let mut pov = object_pov.clone();
 
             ui.horizontal(|ui| {
-                ui.label("POV: ");
+                ui.label("POV ");
                 egui::ComboBox::from_id_salt("metadata pov")
                     .selected_text(match &pov {
                         ObjectReference::Known(known_current_pov) => {

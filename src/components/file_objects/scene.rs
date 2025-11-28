@@ -100,6 +100,15 @@ impl FileObject for Scene {
         super::MutFileObjectTypeInterface::Scene(self)
     }
 
+    fn resolve_references(&mut self, objects: &FileObjectStore) {
+        let mut pov = self.metadata.pov.borrow_mut();
+        if let ObjectReference::Unknown(pov_unknown_ref) = pov.clone()
+            && let Some(known_pov) = pov_unknown_ref.resolve(objects)
+        {
+            *pov = ObjectReference::Known(known_pov);
+        }
+    }
+
     fn get_body(&self) -> String {
         let mut full_text = String::new();
 

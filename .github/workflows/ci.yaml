@@ -37,4 +37,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: cheese-paper-${{ matrix.name }}
-        path: target/release/${{ archive_name }}
+        path: target/release/${{ matrix.archive_name }}

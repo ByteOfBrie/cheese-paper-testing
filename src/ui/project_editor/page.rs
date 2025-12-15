@@ -58,6 +58,16 @@ impl Page {
             Self::ProjectMetadata => true,
         }
     }
+
+    pub fn open(self) -> OpenPage {
+        OpenPage { page: self }
+    }
+}
+
+/// the identifier for a Page which has been open in a Tab
+#[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpenPage {
+    pub page: Page,
 }
 
 #[derive(Debug, Default)]
@@ -77,9 +87,9 @@ enum FocusShiftDirection {
     Previous,
 }
 
-impl Page {
+impl OpenPage {
     pub fn ui(&self, ui: &mut Ui, project: &mut Project, ctx: &mut EditorContext) {
-        let rdata = ctx.stores.page.get(self);
+        let rdata = ctx.stores.page.get(&self.page);
         let page_data: &mut PageData = &mut rdata.borrow_mut();
 
         let focus_shift_option = if ui.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Tab)) {
@@ -90,23 +100,23 @@ impl Page {
             None
         };
 
-        let page_search_active = if self.is_searchable() {
+        let page_search_active = if self.page.is_searchable() {
             self.process_page_search(page_data, ui, project, ctx)
         } else {
             false
         };
 
         // Draw the UI, saving the ids of the (selectable) elements to do tabbing on
-        let page_tabable_ids = match self {
-            Self::ProjectMetadata => project.metadata_ui(ui, ctx),
-            Self::FileObject(file_object_id) => {
+        let page_tabable_ids = match &self.page {
+            Page::ProjectMetadata => project.metadata_ui(ui, ctx),
+            Page::FileObject(file_object_id) => {
                 if let Some(file_object) = project.objects.get(file_object_id) {
                     file_object.borrow_mut().as_editor_mut().ui(ui, ctx)
                 } else {
                     Vec::new()
                 }
             }
-            Self::Export => project.export_ui(ui, ctx),
+            Page::Export => project.export_ui(ui, ctx),
         };
 
         if let Some(focus_shift) = focus_shift_option {
@@ -209,8 +219,8 @@ impl Page {
             if page_data.search.redo_search {
                 page_data.search.search_results = Some(HashMap::new());
 
-                if let Some(searchable) = project.get_searchable(self) {
-                    searchable.search(self, &mut page_data.search);
+                if let Some(searchable) = project.get_searchable(&self.page) {
+                    searchable.search(&self.page, &mut page_data.search);
                 }
 
                 ctx.version += 1;
@@ -231,8 +241,8 @@ impl Page {
 }
 
 // Needs to be &mut Tab since `egui_dock::TabViewer::id` gives us a mut reference
-impl From<&mut Page> for egui::Id {
-    fn from(val: &mut Page) -> Self {
+impl From<&mut OpenPage> for egui::Id {
+    fn from(val: &mut OpenPage) -> Self {
         egui::Id::new(val)
     }
 }

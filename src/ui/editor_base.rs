@@ -689,7 +689,7 @@ impl CheesePaperApp {
             let open_tabs_ids = project_editor
                 .get_open_tabs()
                 .iter()
-                .map(|tab| tab.get_id().to_owned())
+                .map(|tab| tab.page.get_id().to_owned())
                 .collect();
 
             if Some(&open_tabs_ids)

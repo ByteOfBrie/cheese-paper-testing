@@ -49,7 +49,7 @@ pub struct ProjectEditor {
     pub project: Project,
 
     /// List of tabs that are open (egui::Dock requires state to be stored this way)
-    dock_state: DockState<Page>,
+    dock_state: DockState<OpenPage>,
 
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
@@ -63,7 +63,7 @@ pub struct ProjectEditor {
     tree_state: TreeViewState<Page>,
 
     /// Set by the tab viewer, used to sync the file tree
-    current_open_tab: Option<Page>,
+    current_open_tab: Option<OpenPage>,
 }
 
 impl Debug for ProjectEditor {
@@ -264,18 +264,18 @@ pub enum TabMove {
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
-    pub open_tab: &'a mut Option<Page>,
+    pub open_tab: &'a mut Option<OpenPage>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
-    type Tab = Page;
+    type Tab = OpenPage;
 
     fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
         tab.into()
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        match tab {
+        match &tab.page {
             Page::ProjectMetadata => "Project Metadata".into(),
             Page::FileObject(file_id) => {
                 if let Some(object) = self.project.objects.get(file_id) {
@@ -368,7 +368,7 @@ impl ProjectEditor {
         });
 
         // Before rendering the tab view, clear out any deleted scenes
-        self.dock_state.retain_tabs(|tab| match tab {
+        self.dock_state.retain_tabs(|tab| match &tab.page {
             Page::ProjectMetadata => true,
             Page::Export => true,
             Page::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
@@ -393,10 +393,14 @@ impl ProjectEditor {
             self.current_open_tab = None
         }
 
-        if self.current_open_tab.as_ref() != self.tree_state.selected().first()
-            && let Some(open_tab) = &self.current_open_tab
+        if let Some(open_tab) = &self.current_open_tab
+            && self
+                .tree_state
+                .selected()
+                .first()
+                .is_none_or(|page| page != &open_tab.page)
         {
-            self.tree_state.set_one_selected(open_tab.clone());
+            self.tree_state.set_one_selected(open_tab.page.clone());
         }
     }
 
@@ -457,7 +461,7 @@ impl ProjectEditor {
                     .unwrap_or_else(|| open_tabs.len() - 1),
             };
 
-            self.set_editor_tab(open_tabs.get(new_pos).unwrap());
+            self.set_editor_tab(&open_tabs.get(new_pos).unwrap().page);
         }
     }
 
@@ -671,9 +675,9 @@ impl ProjectEditor {
         }
     }
 
-    fn set_editor_tab(&mut self, tab: &Page) {
+    fn set_editor_tab(&mut self, page: &Page) {
         // We don't want to open these, so just exit early
-        if let Page::FileObject(id) = tab
+        if let Page::FileObject(id) = page
             && (*id == self.project.text_id
                 || *id == self.project.characters_id
                 || *id == self.project.worldbuilding_id)
@@ -681,12 +685,15 @@ impl ProjectEditor {
             return;
         }
 
-        if let Some(tab_position) = self.dock_state.find_tab(tab) {
+        if let Some(tab_position) = self
+            .dock_state
+            .find_tab_from(|open_tab| &open_tab.page == page)
+        {
             // We've already opened this, just select it
             self.dock_state.set_active_tab(tab_position);
         } else {
             // New file object, open it for editing
-            self.dock_state.push_to_first_leaf(tab.clone());
+            self.dock_state.push_to_first_leaf(page.clone().open());
         }
     }
 
@@ -722,7 +729,7 @@ impl ProjectEditor {
 
         let open_tabs = open_tab_ids
             .iter()
-            .map(|tab_id| Page::from_id(tab_id))
+            .map(|tab_id| Page::from_id(tab_id).open())
             .collect();
 
         let references = References::new(&project.objects);
@@ -781,7 +788,7 @@ impl ProjectEditor {
         }
     }
 
-    pub fn get_open_tabs(&self) -> Vec<Page> {
+    pub fn get_open_tabs(&self) -> Vec<OpenPage> {
         // the indexes provided to use are meaningless (I think), just put all the tabs in the
         // order it gave us.
         self.dock_state

@@ -6,7 +6,7 @@ pub use {
         text::{Text, TextUID},
     },
     crate::ui::{
-        project_editor::page::Page,
+        project_editor::page::{OpenPage, Page},
         project_editor::{EditorContext, ProjectEditor, search::Search},
         render_data::RenderDataStore,
         settings::Settings,

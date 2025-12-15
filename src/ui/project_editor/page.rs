@@ -4,6 +4,7 @@ mod project_metadata_editor;
 
 use crate::ui::prelude::*;
 
+use crate::ui::settings::settings_page::SettingsPage;
 pub use file_object_editor::FileObjectEditor;
 
 use egui::{Id, Key, Modifiers};
@@ -18,12 +19,14 @@ use egui::{Id, Key, Modifiers};
 pub enum Page {
     ProjectMetadata,
     FileObject(FileID),
+    Settings,
     Export,
 }
 
 impl Page {
     const PROJECT_METADATA_ID: &str = "project_metadata";
     const EXPORT_ID: &str = "export";
+    const SETTINGS_ID: &str = "settings";
 
     /// Get an id from a string. This (and its reverse, `get_id`) could be replaced by `From`
     /// (and `Into`), but this seems like it might be more explicit?
@@ -39,6 +42,7 @@ impl Page {
         match self {
             Self::ProjectMetadata => Self::PROJECT_METADATA_ID,
             Self::Export => Self::EXPORT_ID,
+            Self::Settings => Self::SETTINGS_ID,
             Self::FileObject(id) => id,
         }
     }
@@ -54,6 +58,7 @@ impl Page {
     pub fn is_searchable(&self) -> bool {
         match self {
             Self::Export => false,
+            Self::Settings => false,
             Self::FileObject(_) => true,
             Self::ProjectMetadata => true,
         }
@@ -77,6 +82,8 @@ pub struct OpenPage {
 pub struct PageData {
     search: Search,
     last_selected_id: Option<Id>,
+
+    settings_page: Option<SettingsPage>,
 }
 
 pub type Store = RenderDataStore<Page, PageData>;
@@ -104,6 +111,7 @@ impl OpenPage {
                 }
             }
             Page::Export => "Export".into(),
+            Page::Settings => "Settings".into(),
         };
 
         let text = if self.keep { text } else { text.italics() };
@@ -140,6 +148,13 @@ impl OpenPage {
                 }
             }
             Page::Export => project.export_ui(ui, ctx),
+            Page::Settings => {
+                if page_data.settings_page.is_none() {
+                    page_data.settings_page = Some(SettingsPage::load(ctx));
+                }
+                let settings_page = page_data.settings_page.as_mut().unwrap();
+                settings_page.ui(ui, ctx)
+            }
         };
 
         if let Some(focus_shift) = focus_shift_option {

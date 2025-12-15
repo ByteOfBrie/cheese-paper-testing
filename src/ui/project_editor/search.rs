@@ -132,6 +132,7 @@ impl Project {
             }
             Page::ProjectMetadata => Some(Searchable::ProjectMetadata(&self.metadata)),
             Page::Export => None,
+            Page::Settings => None,
         }
     }
 }

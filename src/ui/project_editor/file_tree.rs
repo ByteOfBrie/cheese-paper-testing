@@ -173,7 +173,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
             Action::SetSelected(selected_file_ids) => {
                 // Open nodes when they're selected
                 if let Some(file_id) = selected_file_ids.first() {
-                    editor.set_editor_tab(file_id);
+                    editor.set_editor_tab(file_id, false);
                 }
             }
             Action::Activate(activation_info) => {

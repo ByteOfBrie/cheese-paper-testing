@@ -156,7 +156,6 @@ impl Data {
 pub struct EditorState {
     pub settings: Settings,
     settings_toml: DocumentMut,
-    settings_modified: bool,
     pub data: Data,
     data_toml: DocumentMut,
     data_modified: bool,
@@ -173,7 +172,6 @@ impl std::fmt::Debug for EditorState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditorState")
             .field("settings", &self.settings)
-            .field("settings_modified", &self.settings_modified)
             .field("data", &self.data)
             .field("data_modified", &self.data_modified)
             .field("project_dirs", &self.project_dirs)
@@ -202,7 +200,7 @@ impl Default for EditorState {
             },
         };
 
-        let settings_modified = settings.load(&settings_toml);
+        settings.load(&settings_toml);
 
         let mut data = Data::default();
 
@@ -224,7 +222,6 @@ impl Default for EditorState {
         Self {
             settings,
             settings_toml,
-            settings_modified,
             data,
             data_toml,
             data_modified: false,
@@ -249,7 +246,7 @@ impl EditorState {
             .map_err(|err| cheese_error!("Error while saving app data\n{}", err))?;
         }
 
-        if self.settings_modified {
+        if self.settings.modified() {
             self.settings.save(&mut self.settings_toml);
             write_with_temp_file(
                 create_dir_if_missing(&Settings::get_path(&self.project_dirs))?,
@@ -513,16 +510,6 @@ impl CheesePaperApp {
             };
 
             ui.add_space(80.0 - label_size);
-
-            ui.vertical_centered(|ui| {
-                let mut reopen_last = self.state.settings.reopen_last();
-                let checkbox_response =
-                    ui.checkbox(&mut reopen_last, "Automatically reopen project");
-                if checkbox_response.clicked() {
-                    self.state.settings_modified = true;
-                    self.state.settings.set_reopen_last(reopen_last);
-                }
-            });
 
             ui.horizontal_centered(|ui| {
                 ui.columns(5, |cols| {

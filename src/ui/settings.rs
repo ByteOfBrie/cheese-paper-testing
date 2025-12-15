@@ -1,3 +1,5 @@
+pub mod settings_page;
+
 use crate::ui::prelude::*;
 
 use std::path::PathBuf;
@@ -109,6 +111,8 @@ struct SettingsData {
 
     /// optional theming for visuals. will not be written back
     theme: Option<Theme>,
+
+    modified: bool,
 }
 
 impl Default for SettingsData {
@@ -119,6 +123,7 @@ impl Default for SettingsData {
             indent_line_start: false,
             dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
             theme: None,
+            modified: false,
         }
     }
 }
@@ -164,7 +169,7 @@ fn read_widget_theme(table: &dyn TableLike, field: &str) -> Option<WidgetTheme> 
 pub struct Settings(Rc<RefCell<SettingsData>>);
 
 impl Settings {
-    pub fn load(&mut self, table: &DocumentMut) -> bool {
+    pub fn load(&mut self, table: &DocumentMut) {
         let mut modified = false;
 
         let mut data = self.0.borrow_mut();
@@ -248,14 +253,17 @@ impl Settings {
             data.theme = Some(theme);
         }
 
-        modified
+        data.modified = modified
     }
 
     pub fn save(&self, table: &mut DocumentMut) {
-        let data = self.0.borrow();
+        let mut data = self.0.borrow_mut();
+        println!("saving settings: {:?}", data);
         table.insert("font_size", value(data.font_size as f64));
         table.insert("reopen_last", value(data.reopen_last));
         table.insert("indent_line_start", value(data.indent_line_start));
+
+        data.modified = false;
     }
 
     pub fn get_path(project_dirs: &ProjectDirs) -> PathBuf {
@@ -284,6 +292,10 @@ impl Settings {
 
     pub fn theme(&self) -> Option<Theme> {
         self.0.borrow().theme.clone()
+    }
+
+    pub fn modified(&self) -> bool {
+        self.0.borrow().modified
     }
 
     pub fn randomize_theme(&mut self) {

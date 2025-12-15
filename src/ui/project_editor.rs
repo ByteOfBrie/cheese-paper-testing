@@ -374,6 +374,7 @@ impl ProjectEditor {
         self.dock_state.retain_tabs(|tab| match &tab.page {
             Page::ProjectMetadata => true,
             Page::Export => true,
+            Page::Settings => true,
             Page::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
         });
 
@@ -446,6 +447,8 @@ impl ProjectEditor {
     fn move_tab(&mut self, tab_move: TabMove) {
         // We could probably get around this by learning how dock_state works better, but
         // this is easy and reliable
+        // Eve note: nah this is probably the best way actually. egui_dock doesn't expose the logic
+        // for "next tab" and "previous tab" except in the iterator function
         let open_tabs: Vec<_> = self.get_open_tabs();
 
         // Make sure we have something to do
@@ -464,7 +467,11 @@ impl ProjectEditor {
                     .unwrap_or_else(|| open_tabs.len() - 1),
             };
 
-            self.set_editor_tab(&open_tabs.get(new_pos).unwrap().page);
+            let new_tab_index = self
+                .dock_state
+                .find_tab(open_tabs.get(new_pos).unwrap())
+                .unwrap();
+            self.dock_state.set_active_tab(new_tab_index);
         }
     }
 
@@ -488,7 +495,7 @@ impl ProjectEditor {
                         });
 
                         if ui.button("Export Story Text").clicked() {
-                            self.set_editor_tab(&Page::Export);
+                            self.set_editor_tab(&Page::Export, true);
                         }
 
                         if ui.button("Export Outline").clicked() {
@@ -523,6 +530,10 @@ impl ProjectEditor {
                     ui.menu_button("Edit", |ui| {
                         if ui.button("Find (Global)").clicked() {
                             self.editor_context.search.show();
+                        }
+
+                        if ui.button("Settings").clicked() {
+                            self.set_editor_tab(&Page::Settings, true);
                         }
 
                         if ui.button("Randomize Theme").clicked() {
@@ -674,7 +685,7 @@ impl ProjectEditor {
             && let Some(search_results) = &self.editor_context.search.search_results.as_ref()
             && let Some(focused_text_box) = search_results.get(uid)
         {
-            self.set_editor_tab(&focused_text_box.page.clone());
+            self.set_editor_tab(&focused_text_box.page.clone(), false);
         }
 
         let actions = std::mem::take(&mut self.editor_context.actions);
@@ -683,7 +694,7 @@ impl ProjectEditor {
         }
     }
 
-    fn set_editor_tab(&mut self, page: &Page) {
+    fn set_editor_tab(&mut self, page: &Page, keep: bool) {
         // We don't want to open these, so just exit early
         if let Page::FileObject(id) = page
             && (*id == self.project.text_id
@@ -705,7 +716,7 @@ impl ProjectEditor {
                 self.dock_state.remove_tab(tab_position);
             }
             // New file object, open it for editing
-            self.dock_state.push_to_first_leaf(page.clone().open(false));
+            self.dock_state.push_to_first_leaf(page.clone().open(keep));
         }
     }
 

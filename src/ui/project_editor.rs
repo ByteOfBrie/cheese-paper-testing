@@ -1,3 +1,4 @@
+pub mod action;
 mod file_tree;
 pub mod page;
 pub mod search;
@@ -11,6 +12,8 @@ use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use crate::ui::settings::WidgetTheme;
+
+use action::Action;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
@@ -240,6 +243,7 @@ pub struct EditorContext {
     pub search: Search,
     pub stores: Stores,
     pub references: References,
+    pub actions: Vec<Action>,
 
     /// Duplicates the value from state.data, which is then more recent
     pub last_export_folder: PathBuf,
@@ -661,6 +665,11 @@ impl ProjectEditor {
         {
             self.set_editor_tab(&focused_text_box.page.clone());
         }
+
+        let actions = std::mem::take(&mut self.editor_context.actions);
+        for action in actions {
+            action.perform(self);
+        }
     }
 
     fn set_editor_tab(&mut self, page: &Page) {
@@ -749,6 +758,7 @@ impl ProjectEditor {
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
                 stores: Stores::default(),
+                actions: Vec::new(),
                 references,
                 last_export_folder,
                 version: 0,

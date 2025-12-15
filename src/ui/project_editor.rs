@@ -315,6 +315,17 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         tab.ui(ui, self.project, self.editor_context);
     }
 
+    fn on_tab_button(&mut self, tab: &mut Self::Tab, response: &egui::Response) {
+        if response.double_clicked() {
+            let page = tab.page.clone();
+            self.editor_context
+                .actions
+                .push(Action::new(move |project_editor| {
+                    project_editor.keep_editor_tab(&page)
+                }))
+        }
+    }
+
     fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
         // disable moving tabs into windows (untested, could maybe be supported later)
         false

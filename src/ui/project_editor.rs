@@ -275,19 +275,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        match &tab.page {
-            Page::ProjectMetadata => "Project Metadata".into(),
-            Page::FileObject(file_id) => {
-                if let Some(object) = self.project.objects.get(file_id) {
-                    object.borrow().get_title().into()
-                } else {
-                    // any deleted scenes should be cleaned up before we get here, but we have this
-                    // logic instead of panicking anyway
-                    "<Deleted>".into()
-                }
-            }
-            Page::Export => "Export".into(),
-        }
+        tab.title(self.project)
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
@@ -692,8 +680,21 @@ impl ProjectEditor {
             // We've already opened this, just select it
             self.dock_state.set_active_tab(tab_position);
         } else {
+            if let Some(tab_position) = self.dock_state.find_tab_from(|tab| !tab.keep) {
+                // there's a tab open in browsing mode, close it
+                self.dock_state.remove_tab(tab_position);
+            }
             // New file object, open it for editing
-            self.dock_state.push_to_first_leaf(page.clone().open());
+            self.dock_state.push_to_first_leaf(page.clone().open(false));
+        }
+    }
+
+    /// set an editor tab to edit mode, indicating it should be kept
+    fn keep_editor_tab(&mut self, page: &Page) {
+        for (_, tab) in self.dock_state.iter_all_tabs_mut() {
+            if &tab.page == page {
+                tab.keep = true;
+            }
         }
     }
 
@@ -729,7 +730,7 @@ impl ProjectEditor {
 
         let open_tabs = open_tab_ids
             .iter()
-            .map(|tab_id| Page::from_id(tab_id).open())
+            .map(|tab_id| Page::from_id(tab_id).open(true))
             .collect();
 
         let references = References::new(&project.objects);

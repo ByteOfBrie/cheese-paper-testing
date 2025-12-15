@@ -176,6 +176,11 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
                     editor.set_editor_tab(file_id);
                 }
             }
+            Action::Activate(activation_info) => {
+                if let Some(file_id) = activation_info.selected.first() {
+                    editor.keep_editor_tab(file_id);
+                }
+            }
             Action::Move(drag_and_drop) => {
                 // Moves only make sense if the source and target are both file objects.
                 // This logic only allows for moving individual file objects,

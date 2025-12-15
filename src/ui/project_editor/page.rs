@@ -59,8 +59,8 @@ impl Page {
         }
     }
 
-    pub fn open(self) -> OpenPage {
-        OpenPage { page: self }
+    pub fn open(self, keep: bool) -> OpenPage {
+        OpenPage { page: self, keep }
     }
 }
 
@@ -68,6 +68,9 @@ impl Page {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenPage {
     pub page: Page,
+
+    /// indicate if the page should be kept. if not, it will be closed when a new tab is opened.
+    pub keep: bool,
 }
 
 #[derive(Debug, Default)]
@@ -88,6 +91,26 @@ enum FocusShiftDirection {
 }
 
 impl OpenPage {
+    pub fn title(&self, project: &mut Project) -> egui::WidgetText {
+        let text: egui::RichText = match &self.page {
+            Page::ProjectMetadata => "Project Metadata".into(),
+            Page::FileObject(file_id) => {
+                if let Some(object) = project.objects.get(file_id) {
+                    object.borrow().get_title().into()
+                } else {
+                    // any deleted scenes should be cleaned up before we get here, but we have this
+                    // logic instead of panicking anyway
+                    "<Deleted>".into()
+                }
+            }
+            Page::Export => "Export".into(),
+        };
+
+        let text = if self.keep { text } else { text.italics() };
+
+        text.into()
+    }
+
     pub fn ui(&self, ui: &mut Ui, project: &mut Project, ctx: &mut EditorContext) {
         let rdata = ctx.stores.page.get(&self.page);
         let page_data: &mut PageData = &mut rdata.borrow_mut();

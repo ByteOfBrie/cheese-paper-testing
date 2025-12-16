@@ -4,8 +4,8 @@ pub mod page;
 pub mod search;
 mod util;
 
-use crate::components::file_objects::FileObjectTypeInterface;
-use crate::ui::prelude::*;
+use crate::components::file_objects::reference;
+use crate::ui::{prelude::*, render_data};
 
 use crate::components::file_objects::utils::process_name_for_filename;
 use crate::ui::editor_base::EditorState;
@@ -199,36 +199,62 @@ impl DictionaryState {
 
 #[derive(Debug)]
 pub struct References {
-    pub characters: BTreeMap<FileID, String>,
+    pub file_types: &'static [FileType],
+    pub r: HashMap<FileType, BTreeMap<FileID, String>>,
 }
 
 impl References {
-    pub fn new(objects: &FileObjectStore) -> Self {
+    pub fn new(project: &Project) -> Self {
         let mut references = Self {
-            characters: BTreeMap::new(),
+            file_types: project.schema.get_all_file_types(),
+            r: HashMap::new(),
         };
 
-        references.update(objects);
+        for file_type in references.file_types {
+            references
+                .r
+                .insert(file_type, BTreeMap::new())
+                .expect("hash map insertion should succeed");
+        }
+
+        references.update(&project.objects);
 
         references
     }
 
+    pub fn for_type(&self, file_type: FileType) -> &BTreeMap<FileID, String> {
+        self.r.get(&file_type).expect("FileType should exist")
+    }
+
     /// Populate the list of references based on the objects, complete with names (for use in UI)
     pub fn update(&mut self, objects: &FileObjectStore) {
-        let mut old_characters = std::mem::take(&mut self.characters);
+        // Eve note: I'm pretty sure that these shenanigans have a higher performance cost than
+        // the malloc you're trying to avoid with them. I will however leave them here, out of respect for the craft
+
+        let mut old_refs = std::mem::take(&mut self.r);
+        for file_type in self.file_types {
+            self.r
+                .insert(file_type, BTreeMap::new())
+                .expect("hash map insertion should succeed");
+        }
 
         for file_object in objects.values() {
             let object_borrowed = file_object.borrow();
-            if let FileObjectTypeInterface::Character(character) = object_borrowed.get_file_type() {
-                // write code as if we care about avoiding a clone
-                if let Some(old_name) = old_characters.remove(character.id())
-                    && character.get_base().metadata.name == old_name
-                {
-                    self.characters.insert(character.id().clone(), old_name);
-                } else {
-                    self.characters
-                        .insert(character.id().clone(), object_borrowed.get_title());
-                }
+            if let Some(old_name) = old_refs
+                .get_mut(object_borrowed.get_type())
+                .unwrap()
+                .remove(object_borrowed.id())
+                && object_borrowed.get_base().metadata.name == old_name
+            {
+                self.r
+                    .get_mut(object_borrowed.get_type())
+                    .unwrap()
+                    .insert(object_borrowed.id().clone(), old_name);
+            } else {
+                self.r
+                    .get_mut(object_borrowed.get_type())
+                    .unwrap()
+                    .insert(object_borrowed.id().clone(), object_borrowed.get_title());
             }
         }
     }
@@ -256,8 +282,7 @@ pub struct EditorContext {
 pub struct Stores {
     pub text_box: crate::ui::text_box::Store,
     pub page: page::Store,
-    pub scene: page::file_object_editor::scene_editor::Store,
-    pub folder: page::file_object_editor::folder_editor::Store,
+    pub file_objects: render_data::FileObjectRDStore,
 }
 
 pub enum TabMove {
@@ -764,7 +789,7 @@ impl ProjectEditor {
             .map(|tab_id| Page::from_id(tab_id).open(true))
             .collect();
 
-        let references = References::new(&project.objects);
+        let references = References::new(&project);
 
         let mut project_editor = Self {
             project,
@@ -808,15 +833,10 @@ impl ProjectEditor {
             std::mem::take(&mut self.editor_context.dictionary_state.characters_and_places);
 
         for object in self.project.objects.values() {
-            let should_parse = matches!(
-                object.borrow().get_file_type(),
-                FileObjectTypeInterface::Character(_) | FileObjectTypeInterface::Place(_)
-            );
-
-            if should_parse {
+            for item in object.borrow().as_editor().provide_spellcheck_additions() {
                 self.editor_context
                     .dictionary_state
-                    .add_file_object_name(object.borrow().get_title());
+                    .add_file_object_name(item);
             }
         }
     }

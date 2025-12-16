@@ -1,0 +1,109 @@
+pub mod base;
+pub mod reference;
+pub mod utils;
+
+use crate::components::Schema;
+use crate::components::schema::FileType;
+
+use crate::components::project::ExportOptions;
+use crate::ui::FileObjectEditor;
+
+pub use base::{FileID, FileInfo, FileObjectStore, load_file, move_child};
+
+use crate::util::CheeseError;
+use std::cell::RefCell;
+use std::ffi::OsString;
+use std::fmt::Debug;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
+use std::time::SystemTime;
+use toml_edit::{DocumentMut, TableLike};
+
+pub use utils::{create_dir_if_missing, write_with_temp_file};
+
+/// Loading a file:
+/// 1. Parse filename as a name -> metadata.name
+/// 2. Load file, storing the metadata in some intermediate place
+/// 3. Store the rest of the file into the metadata automatically (as present)
+/// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
+///
+/// Baseline metadata for all file objects
+#[derive(Debug)]
+pub struct FileObjectMetadata {
+    /// Version of the object, can eventually be used to detect compatibility changes
+    pub version: u64,
+    /// Name of the object (e.g., title of a scene, character name)
+    pub name: String,
+    /// ID unique across all objects. The reference implementations use UUIDv4, but any string
+    /// is acceptable
+    pub id: Rc<String>,
+}
+
+#[derive(Debug)]
+pub struct BaseFileObject {
+    pub metadata: FileObjectMetadata,
+    /// Index (ordering within parent)
+    pub index: Option<usize>,
+    pub file: FileInfo,
+    pub toml_header: DocumentMut,
+    pub children: Vec<FileID>,
+}
+
+pub trait FileObject: Debug {
+    fn get_type(&self) -> FileType;
+
+    fn get_schema(&self) -> &'static dyn Schema;
+
+    fn get_base(&self) -> &BaseFileObject;
+    fn get_base_mut(&mut self) -> &mut BaseFileObject;
+
+    /// Load the body when loading this file object
+    fn load_body(&mut self, body: String);
+    /// Gets the contents of the body to be written when saving
+    fn get_body(&self) -> String;
+
+    // /// Allow for downcasting this as a reference, useful for some UI components
+    // fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
+    // /// Allow for downcasting this as a mutable reference, useful for some UI components
+    // fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
+
+    /// Display the outline, writing all relevant non-prose information we have to a single
+    /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
+    /// on export, everything gets included
+    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore);
+
+    /// Generate an export of story text, will be overridden by objects that actually generate
+    /// (folder and scene)
+    ///
+    /// `include_break` adds a break at the beginning if appropriate, and this function returns
+    /// `true` if the next function should include a break
+    fn generate_export(
+        &self,
+        _current_depth: u64,
+        _export_string: &mut String,
+        _objects: &FileObjectStore,
+        _export_options: &ExportOptions,
+        include_break: bool,
+    ) -> bool {
+        // we don't do anything by default, but we want to pass on the include
+        include_break
+    }
+
+    fn id(&self) -> &Rc<String> {
+        &self.get_base().metadata.id
+    }
+
+    fn resolve_references(&mut self, _objects: &FileObjectStore) {}
+
+    /// Loads the file-specific metadata from the toml document
+    ///
+    /// pulls from the file object instead of an argument (otherwise it's slightly tricky to do ownership)
+    fn load_metadata(&mut self) -> Result<bool, CheeseError>;
+
+    /// Writes the current type-specific metadata to the BaseFileObjects toml_header
+    fn write_metadata(&mut self, objects: &FileObjectStore);
+
+    fn as_editor(&self) -> &dyn FileObjectEditor;
+
+    fn as_editor_mut(&mut self) -> &mut dyn FileObjectEditor;
+}

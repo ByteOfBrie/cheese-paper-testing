@@ -129,7 +129,7 @@ impl UnknownReference {
                 // If we have a known file object type and this doesn't match it (e.g., we're trying to
                 // resolve a character reference and this is a scene, give up)
                 if let Some(this_file_type) = self.file_type
-                    && this_file_type != object.get_file_type().into()
+                    && this_file_type != object.get_type()
                 {
                     continue;
                 }
@@ -192,12 +192,12 @@ impl UnknownReference {
                 let object = object_ref.borrow();
 
                 if let Some(this_file_type) = self.file_type
-                    && this_file_type != object.get_file_type().into()
+                    && this_file_type != object.get_type()
                 {
                     log::warn!(
                         "Found object with id {}, but it has type {:?}, was expecting type {:?}",
                         &self.id,
-                        std::convert::Into::<FileType>::into(object.get_file_type()),
+                        std::convert::Into::<FileType>::into(object.get_type()),
                         this_file_type
                     );
                     None

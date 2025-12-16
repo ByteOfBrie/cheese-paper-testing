@@ -7,7 +7,7 @@ mod text_box;
 mod project_editor;
 mod project_tracker;
 
-mod prelude;
+pub mod prelude;
 
 pub use editor_base::CheesePaperApp;
 pub use project_editor::page::FileObjectEditor;

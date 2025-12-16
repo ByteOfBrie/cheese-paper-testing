@@ -1,10 +1,11 @@
 pub use {
     crate::cheese_error,
     crate::components::{
-        file_objects::{FileID, FileObject, FileObjectStore, FileType},
+        file_objects::{FileID, FileObject, FileObjectStore},
         project::Project,
         text::{Text, TextUID},
     },
+    crate::schemas::FileType,
     crate::ui::{
         project_editor::page::{OpenPage, Page},
         project_editor::{EditorContext, ProjectEditor, search::Search},
@@ -14,7 +15,7 @@ pub use {
     crate::util::CheeseError,
     egui::{Response, Ui},
     regex::Regex,
-    std::{cell::RefCell, collections::HashMap, rc::Rc},
+    std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc},
 };
 
 pub type SavedRegex = std::sync::LazyLock<Regex>;

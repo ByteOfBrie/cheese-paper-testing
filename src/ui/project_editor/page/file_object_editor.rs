@@ -1,7 +1,7 @@
-mod character_editor;
-pub mod folder_editor;
-mod place_editor;
-pub mod scene_editor;
+// mod character_editor;
+// pub mod folder_editor;
+// mod place_editor;
+// pub mod scene_editor;
 
 use crate::ui::prelude::*;
 
@@ -14,6 +14,11 @@ pub trait FileObjectEditor: FileObject {
 
     #[allow(dead_code)] // included for the sake of completeness
     fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str));
+
+    /// provide a list of words that this fileobject wants to automatically add to the spellcheck dictionary
+    fn provide_spellcheck_additions(&self) -> Vec<&str> {
+        Vec::new()
+    }
 
     fn process_response(&mut self, response: &egui::Response) {
         if response.changed() {

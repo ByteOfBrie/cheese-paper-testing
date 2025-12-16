@@ -4,17 +4,19 @@ pub use implementation::*;
 use bitflags::bitflags;
 use uuid::Uuid;
 
+use super::{BaseFileObject, FileObject, FileObjectMetadata};
 use crate::cheese_error;
 use crate::components::file_objects::utils::{
     add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
 };
-use crate::components::file_objects::{Character, Folder, Place, Scene};
-use crate::components::project::ExportOptions;
-use crate::ui::FileObjectEditor;
+// use crate::components::file_objects::{Character, Folder, Place, Scene};
+use crate::components::schema::{FileType, Schema};
 use crate::util::CheeseError;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt::Debug;
+use std::fs::create_dir;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::SystemTime;
@@ -29,70 +31,42 @@ pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 /// Value that splits the header of any file that contains non-metadata content
 const HEADER_SPLIT: &str = "++++++++";
 
-/// Loading a file:
-/// 1. Parse filename as a name -> metadata.name
-/// 2. Load file, storing the metadata in some intermediate place
-/// 3. Store the rest of the file into the metadata automatically (as present)
-/// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
-///
-/// Baseline metadata for all file objects
-#[derive(Debug)]
-pub struct FileObjectMetadata {
-    /// Version of the object, can eventually be used to detect compatibility changes
-    pub version: u64,
-    /// Name of the object (e.g., title of a scene, character name)
-    pub name: String,
-    /// ID unique across all objects. The reference implementations use UUIDv4, but any string
-    /// is acceptable
-    pub id: Rc<String>,
-}
-
 /// List of known file types in this version of the editor. File types that aren't known will not
 /// be read in
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileType {
-    Scene,
-    Folder,
-    Character,
-    Place,
-}
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// pub enum FileType {
+//     Scene,
+//     Folder,
+//     Character,
+//     Place,
+// }
 
-#[derive(Debug)]
-#[allow(dead_code)]
-pub enum FileObjectTypeInterface<'a> {
-    Scene(&'a Scene),
-    Folder(&'a Folder),
-    Character(&'a Character),
-    Place(&'a Place),
-}
+// #[derive(Debug)]
+// #[allow(dead_code)]
+// pub enum FileObjectTypeInterface<'a> {
+//     Scene(&'a Scene),
+//     Folder(&'a Folder),
+//     Character(&'a Character),
+//     Place(&'a Place),
+// }
 
-impl From<FileObjectTypeInterface<'_>> for FileType {
-    fn from(value: FileObjectTypeInterface) -> Self {
-        match value {
-            FileObjectTypeInterface::Scene(_) => FileType::Scene,
-            FileObjectTypeInterface::Folder(_) => FileType::Folder,
-            FileObjectTypeInterface::Character(_) => FileType::Character,
-            FileObjectTypeInterface::Place(_) => FileType::Place,
-        }
-    }
-}
+// impl From<FileObjectTypeInterface<'_>> for FileType {
+//     fn from(value: FileObjectTypeInterface) -> Self {
+//         match value {
+//             FileObjectTypeInterface::Scene(_) => FileType::Scene,
+//             FileObjectTypeInterface::Folder(_) => FileType::Folder,
+//             FileObjectTypeInterface::Character(_) => FileType::Character,
+//             FileObjectTypeInterface::Place(_) => FileType::Place,
+//         }
+//     }
+// }
 
-pub enum MutFileObjectTypeInterface<'a> {
-    Scene(&'a mut Scene),
-    Folder(&'a mut Folder),
-    Character(&'a mut Character),
-    Place(&'a mut Place),
-}
-
-#[derive(Debug)]
-pub struct BaseFileObject {
-    pub metadata: FileObjectMetadata,
-    /// Index (ordering within parent)
-    pub index: Option<usize>,
-    pub file: FileInfo,
-    pub toml_header: DocumentMut,
-    pub children: Vec<FileID>,
-}
+// pub enum MutFileObjectTypeInterface<'a> {
+//     Scene(&'a mut Scene),
+//     Folder(&'a mut Folder),
+//     Character(&'a mut Character),
+//     Place(&'a mut Place),
+// }
 
 impl Default for FileObjectMetadata {
     fn default() -> Self {
@@ -104,43 +78,43 @@ impl Default for FileObjectMetadata {
     }
 }
 
-impl From<FileType> for &str {
-    fn from(val: FileType) -> Self {
-        match val {
-            FileType::Scene => "scene",
-            FileType::Folder => "folder",
-            FileType::Character => "character",
-            FileType::Place => "worldbuilding",
-        }
-    }
-}
+// impl From<FileType> for &str {
+//     fn from(val: FileType) -> Self {
+//         match val {
+//             FileType::Scene => "scene",
+//             FileType::Folder => "folder",
+//             FileType::Character => "character",
+//             FileType::Place => "worldbuilding",
+//         }
+//     }
+// }
 
-impl TryFrom<&str> for FileType {
-    type Error = CheeseError;
+// impl TryFrom<&str> for FileType {
+//     type Error = CheeseError;
 
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        match value {
-            "scene" => Ok(FileType::Scene),
-            "folder" => Ok(FileType::Folder),
-            "character" => Ok(FileType::Character),
-            "worldbuilding" => Ok(FileType::Place),
-            // "worldbuilding" is the proper string, but also accept "place"
-            "place" => Ok(FileType::Place),
-            _ => Err(cheese_error!("Unknown file type: {value}")),
-        }
-    }
-}
+//     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
+//         match value {
+//             "scene" => Ok(FileType::Scene),
+//             "folder" => Ok(FileType::Folder),
+//             "character" => Ok(FileType::Character),
+//             "worldbuilding" => Ok(FileType::Place),
+//             // "worldbuilding" is the proper string, but also accept "place"
+//             "place" => Ok(FileType::Place),
+//             _ => Err(cheese_error!("Unknown file type: {value}")),
+//         }
+//     }
+// }
 
-impl FileType {
-    fn is_folder(self) -> bool {
-        match self {
-            FileType::Scene => false,
-            FileType::Folder => true,
-            FileType::Character => false,
-            FileType::Place => true,
-        }
-    }
-}
+// impl FileType {
+//     fn is_folder(self) -> bool {
+//         match self {
+//             FileType::Scene => false,
+//             FileType::Folder => true,
+//             FileType::Character => false,
+//             FileType::Place => true,
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct FileInfo {
@@ -295,7 +269,7 @@ pub fn metadata_extract_bool(
 }
 
 /// Reads the contents of a file from disk
-pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String), CheeseError> {
+pub fn read_file_contents(file_to_read: &Path) -> Result<(String, Option<String>), CheeseError> {
     let extension = match file_to_read.extension() {
         Some(val) => val,
         None => return Err(cheese_error!("value was not string")),
@@ -303,15 +277,19 @@ pub fn read_file_contents(file_to_read: &Path) -> Result<(String, String), Chees
 
     let file_data = std::fs::read_to_string(file_to_read)?;
 
-    let (metadata_str, file_content): (&str, &str) = match extension == "md" {
-        false => (&file_data, ""),
-        true => match file_data.split_once(HEADER_SPLIT) {
-            None => ("", &file_data),
-            Some((start, end)) => (start, end),
-        },
+    let (metadata_str, file_content): (&str, Option<&str>) = if extension == "md" {
+        match file_data.split_once(HEADER_SPLIT) {
+            None => ("", Some(&file_data)),
+            Some((start, end)) => (start, Some(end)),
+        }
+    } else {
+        (&file_data, None)
     };
 
-    Ok((metadata_str.to_owned(), file_content.trim().to_owned()))
+    Ok((
+        metadata_str.to_owned(),
+        file_content.map(|s| s.trim().to_owned()),
+    ))
 }
 
 /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
@@ -420,6 +398,32 @@ pub fn move_child(
     Ok(())
 }
 
+/// Calculates the filename for a particular object
+fn calculate_filename(file_type: FileType, base_info: &BaseFileObject) -> OsString {
+    let base_name: &str = match base_info.metadata.name.is_empty() {
+        false => &base_info.metadata.name,
+        true => file_type.empty_string_name(),
+    };
+
+    let mut basename = match base_info.index {
+        Some(index) => {
+            let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
+            let file_safe_name = process_name_for_filename(truncated_name);
+            let final_name = add_index_to_name(&file_safe_name, index);
+
+            OsString::from(final_name)
+        }
+        None => OsString::from(process_name_for_filename(base_name)),
+    };
+
+    if !file_type.is_folder() {
+        basename.push(".");
+        basename.push(file_type.extension());
+    }
+
+    basename
+}
+
 /// Helper function called by move_child for the parts that are not safe to return early (including
 /// errors). If something goes wrong, it will panic
 fn create_index_and_move_on_disk(
@@ -492,7 +496,11 @@ fn create_index_and_move_on_disk(
 }
 
 /// Load an arbitrary file object from a file on disk into objects
-pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileID, CheeseError> {
+pub fn load_file(
+    schema: &dyn Schema,
+    filename: &Path,
+    objects: &mut FileObjectStore,
+) -> Result<FileID, CheeseError> {
     if !filename.exists() {
         return Err(cheese_error!(
             "from_file cannot load file that does not exist: {filename:?}"
@@ -535,7 +543,7 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
 
     let (metadata_str, file_body) = read_file_contents(&underlying_file).or_else(|err| {
         if filename.is_dir() {
-            Ok(("".to_string(), "".to_string()))
+            Ok(("".to_string(), None))
         } else {
             Err(cheese_error!(
                 "Failed to read file {underlying_file:?}: {err}"
@@ -570,29 +578,19 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
         }
     }
 
-    let file_type: FileType = match toml_header.get("file_type") {
+    let file_type_identifier = match toml_header.get("file_type") {
         Some(file_type_toml_item) => match file_type_toml_item.as_str() {
-            Some(file_type_str) => file_type_str.try_into().map_err(|err| {
-                cheese_error!("could not get file_type for file {filename:?}: {err}")
-            })?,
+            Some(file_type_str) => Some(file_type_str),
             None => {
                 return Err(cheese_error!(
                     "file header contained non-string value for file_type: {filename:?}"
                 ));
             }
         },
-        None => match filename.is_dir() {
-            true => FileType::Folder,
-            false => match filename.extension().and_then(|ext| ext.to_str()) {
-                Some("md") => FileType::Scene,
-                _ => {
-                    return Err(cheese_error!(
-                        "Unspecified file type file type while attempting to read {filename:?}"
-                    ));
-                }
-            },
-        },
+        None => None,
     };
+
+    let file_type: FileType = schema.resolve_type(filename, file_type_identifier)?;
 
     let mut children = Vec::new();
 
@@ -620,7 +618,7 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
                     let file_path = file.path();
 
                     // Just read the children in any order, we'll clean it up later
-                    match load_file(&file_path, objects) {
+                    match load_file(schema, &file_path, objects) {
                         Ok(child_id) => children.push(child_id.clone()),
                         Err(err) => log::debug!("Could not load child {file:?}: {err}"),
                     }
@@ -674,18 +672,7 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
 
         let file_id = base.metadata.id.clone();
 
-        // load the object into a box
-        let boxed_object: Box<RefCell<dyn FileObject>> = match file_type {
-            FileType::Scene => {
-                let mut scene = Scene::from_file_object(base)?;
-                scene.load_body(file_body);
-
-                Box::new(RefCell::new(scene))
-            }
-            FileType::Character => Box::new(RefCell::new(Character::from_base(base)?)),
-            FileType::Folder => Box::new(RefCell::new(Folder::from_base(base)?)),
-            FileType::Place => Box::new(RefCell::new(Place::from_base(base)?)),
-        };
+        let boxed_object = schema.load_file_object(file_type, base, file_body)?;
 
         boxed_object.borrow_mut().rescan_indexing(objects);
 
@@ -693,6 +680,62 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
 
         Ok(file_id)
     }
+}
+
+pub fn create_file(
+    file_type: FileType,
+    schema: &dyn Schema,
+    dirname: PathBuf,
+    index: usize,
+) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    let base = BaseFileObject::new(dirname, Some(index));
+
+    let file_object = schema.init_file_object(file_type, base)?;
+
+    let mut fo_mut = file_object.borrow_mut();
+
+    if file_type.is_folder() {
+        create_dir(fo_mut.get_path())?;
+    }
+
+    fo_mut.save(&HashMap::new()).unwrap();
+
+    drop(fo_mut);
+
+    Ok(file_object)
+}
+
+/// Creates a top level folder (one that doesn't have an index) based on the name. The name will
+/// be used directly in the metadata, but convereted to lowercase for the version on disk
+pub fn create_top_level_folder(
+    schema: &dyn Schema,
+    dirname: PathBuf,
+    name: &str,
+) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    let file_type = schema.get_top_level_folder_type();
+    assert!(file_type.is_folder());
+
+    let mut base = BaseFileObject::new(dirname, None);
+
+    base.metadata.name = name.to_string();
+
+    let file_object = schema.init_file_object(file_type, base)?;
+
+    let mut fo_mut = file_object.borrow_mut();
+
+    create_dir(fo_mut.get_path())
+        .map_err(|err| cheese_error!("Failed to create top-level directory: {}: {err}", name))?;
+
+    fo_mut.save(&HashMap::new()).map_err(|err| {
+        cheese_error!(
+            "Failed to save newly created top level directory: {}: {err}",
+            name
+        )
+    })?;
+
+    drop(fo_mut);
+
+    Ok(file_object)
 }
 
 impl BaseFileObject {
@@ -718,172 +761,6 @@ impl BaseFileObject {
         self.toml_header["id"] = toml_edit::value(&*self.metadata.id);
     }
 }
-
-pub trait FileObject: Debug {
-    fn get_base(&self) -> &BaseFileObject;
-    fn get_base_mut(&mut self) -> &mut BaseFileObject;
-
-    /// If this has a body, currently only true for `Scene`
-    fn has_body(&self) -> bool;
-    /// Load the body when loading this file object
-    fn load_body(&mut self, body: String);
-    /// Gets the contents of the body to be written when saving
-    fn get_body(&self) -> String;
-
-    fn empty_string_name(&self) -> &'static str;
-    fn is_folder(&self) -> bool;
-    fn extension(&self) -> &'static str;
-
-    /// Allow for downcasting this as a reference, useful for some UI components
-    fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
-    /// Allow for downcasting this as a mutable reference, useful for some UI components
-    fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
-
-    /// Display the outline, writing all relevant non-prose information we have to a single
-    /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
-    /// on export, everything gets included
-    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore);
-
-    /// Generate an export of story text, will be overridden by objects that actually generate
-    /// (folder and scene)
-    ///
-    /// `include_break` adds a break at the beginning if appropriate, and this function returns
-    /// `true` if the next function should include a break
-    fn generate_export(
-        &self,
-        _current_depth: u64,
-        _export_string: &mut String,
-        _objects: &FileObjectStore,
-        _export_options: &ExportOptions,
-        include_break: bool,
-    ) -> bool {
-        // we don't do anything by default, but we want to pass on the include
-        include_break
-    }
-
-    fn id(&self) -> &Rc<String> {
-        &self.get_base().metadata.id
-    }
-
-    fn resolve_references(&mut self, _objects: &FileObjectStore) {}
-
-    /// Loads the file-specific metadata from the toml document
-    ///
-    /// pulls from the file object instead of an argument (otherwise it's slightly tricky to do ownership)
-    fn load_metadata(&mut self) -> Result<bool, CheeseError>;
-
-    /// Writes the current type-specific metadata to the BaseFileObjects toml_header
-    fn write_metadata(&mut self, objects: &FileObjectStore);
-
-    fn as_editor(&self) -> &dyn FileObjectEditor;
-
-    fn as_editor_mut(&mut self) -> &mut dyn FileObjectEditor;
-
-    /// Calculates the filename for a particular object
-    fn calculate_filename(&self) -> OsString {
-        let base_name: &str = match self.get_base().metadata.name.is_empty() {
-            false => &self.get_base().metadata.name,
-            true => self.empty_string_name(),
-        };
-
-        let mut basename = match self.get_base().index {
-            Some(index) => {
-                let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
-                let file_safe_name = process_name_for_filename(truncated_name);
-                let final_name = add_index_to_name(&file_safe_name, index);
-
-                OsString::from(final_name)
-            }
-            None => OsString::from(process_name_for_filename(base_name)),
-        };
-
-        if !self.is_folder() {
-            basename.push(".");
-            basename.push(self.extension());
-        }
-
-        basename
-    }
-
-    /// Calculates the object's current path. For objects in a single file, this is their path
-    /// (including the extension), for folder-based objects (i.e., Folder, Place), this is the
-    /// path to the folder.
-    ///
-    /// Also see `get_file`
-    fn get_path(&self) -> PathBuf {
-        Path::join(
-            &self.get_base().file.dirname,
-            &self.get_base().file.basename,
-        )
-    }
-
-    /// The path to an object's underlying file, the equivalent of `get_path` when doing file
-    /// operations on this object
-    fn get_file(&self) -> PathBuf {
-        let base_path = self.get_path();
-        if self.is_folder() {
-            Path::join(&base_path, FOLDER_METADATA_FILE_NAME)
-        } else {
-            base_path
-        }
-    }
-
-    /// Determine if the file should be loaded
-    fn should_load(&mut self, file_to_read: &Path) -> Result<bool, CheeseError> {
-        let current_modtime = match std::fs::metadata(file_to_read) {
-            Ok(file_metadata) => file_metadata.modified()?,
-            Err(err) => {
-                log::warn!(
-                    "attempted to load file that does not exist: {:?}",
-                    file_to_read
-                );
-                return Err(err.into());
-            }
-        };
-
-        if let Some(old_modtime) = self.get_base().file.modtime
-            && old_modtime == current_modtime
-        {
-            // We've already loaded the latest revision, nothing to do
-            return Ok(false);
-        }
-
-        Ok(true)
-    }
-
-    /// Reloads the contents of this file object from disk. Assumes that the file has been properly
-    /// initialized already
-    fn reload_file(&mut self) -> Result<(), CheeseError> {
-        let file_to_read = self.get_file();
-
-        if !self.should_load(&file_to_read)? {
-            return Ok(());
-        }
-
-        let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
-
-        let new_toml_header = metadata_str
-            .parse::<DocumentMut>()
-            .expect("invalid file metadata header");
-
-        let base_file_object = self.get_base_mut();
-
-        load_base_metadata(
-            new_toml_header.as_table(),
-            &mut base_file_object.metadata,
-            &mut base_file_object.file,
-        )?;
-
-        base_file_object.toml_header = new_toml_header;
-
-        self.load_metadata()?;
-
-        self.load_body(file_body);
-
-        Ok(())
-    }
-}
-
 impl std::fmt::Display for dyn FileObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

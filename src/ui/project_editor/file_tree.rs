@@ -53,38 +53,17 @@ impl dyn FileObject {
             .height(node_height)
             .label(node_name)
             .context_menu(|ui| {
-                // We can safely call unwrap on parent here because children can't be root nodes
-                if ui.button("New Scene").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Scene,
-                    });
-                    ui.close();
-                }
-                if ui.button("New Character").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Character,
-                    });
-                    ui.close();
-                }
-                if ui.button("New Folder").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Folder,
-                    });
-                    ui.close();
-                }
-                if ui.button("New Place").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Place,
-                    });
-                    ui.close();
+                for file_type in self.get_schema().get_all_file_types() {
+                    let label = format!("New {}", file_type.type_name());
+                    if ui.button(label).clicked() {
+                        // We can safely call unwrap on parent here because children can't be root nodes
+                        actions.push(ContextMenuActions::Add {
+                            parent: add_parent.as_ref().unwrap().clone(),
+                            position: position.clone(),
+                            file_type,
+                        });
+                        ui.close();
+                    }
                 }
 
                 ui.separator();

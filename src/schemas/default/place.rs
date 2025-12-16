@@ -1,0 +1,295 @@
+use regex::Regex;
+
+use crate::components::file_objects::FileObjectStore;
+use crate::components::file_objects::base::{
+    CompileStatus, IncludeOptions, metadata_extract_string, metadata_extract_u64,
+};
+use crate::components::file_objects::reference::ObjectReference;
+use crate::components::file_objects::utils::write_outline_property;
+use crate::components::file_objects::{BaseFileObject, FileObject};
+use crate::components::project::ExportOptions;
+use crate::components::text::Text;
+use crate::schemas::FileType;
+use crate::util::CheeseError;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::{collections::HashMap, path::PathBuf};
+
+use crate::ui::FileObjectEditor;
+use crate::ui::prelude::*;
+
+use crate::schemas::FileTypeInfo;
+
+use egui::Id;
+use egui::ScrollArea;
+
+#[derive(Debug, Default)]
+pub struct PlaceMetadata {
+    pub connection: Text,
+    pub description: Text,
+    pub appearance: Text,
+    pub other_senses: Text,
+    pub notes: Text,
+}
+
+#[derive(Debug)]
+pub struct Place {
+    pub base: BaseFileObject,
+    pub metadata: PlaceMetadata,
+}
+
+impl Place {
+    pub const IDENTIFIER: usize = 3;
+
+    pub const TYPE_INFO: FileTypeInfo = FileTypeInfo {
+        identifier: Self::IDENTIFIER,
+        is_folder: true,
+        has_body: false,
+        type_name: "Place",
+        empty_string_name: "New Place",
+        extension: "toml",
+    };
+
+    //     pub fn new(dirname: PathBuf, index: usize) -> Result<Self, CheeseError> {
+    //         let mut place = Self {
+    //             base: BaseFileObject::new(dirname, Some(index)),
+    //             metadata: PlaceMetadata::default(),
+    //         };
+
+    //         place.base.file.basename = place.calculate_filename();
+
+    //         create_dir(place.get_path())?;
+    //         <dyn FileObject>::save(&mut place, &HashMap::new()).unwrap();
+
+    //         Ok(place)
+    //     }
+
+    pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {
+        let mut place = Self {
+            base,
+            metadata: Default::default(),
+        };
+
+        match place.load_metadata() {
+            Ok(modified) => {
+                if modified {
+                    place.base.file.modified = true;
+                }
+            }
+            Err(err) => {
+                log::error!(
+                    "Error while loading object-specific metadata for {:?}: {}",
+                    place.base.file,
+                    &err
+                );
+                return Err(err);
+            }
+        }
+
+        Ok(place)
+    }
+}
+
+impl FileObject for Place {
+    fn get_type(&self) -> FileType {
+        &Self::TYPE_INFO
+    }
+
+    fn get_schema(&self) -> &'static dyn crate::components::Schema {
+        &super::DEFAULT_SCHEMA
+    }
+
+    fn load_metadata(&mut self) -> Result<bool, CheeseError> {
+        let mut modified = false;
+
+        match metadata_extract_string(self.base.toml_header.as_table(), "connection")? {
+            Some(connection) => self.metadata.connection = connection.into(),
+            None => modified = true,
+        }
+
+        match metadata_extract_string(self.base.toml_header.as_table(), "description")? {
+            Some(description) => self.metadata.description = description.into(),
+            None => modified = true,
+        }
+
+        match metadata_extract_string(self.base.toml_header.as_table(), "appearance")? {
+            Some(appearance) => self.metadata.appearance = appearance.into(),
+            None => modified = true,
+        }
+
+        match metadata_extract_string(self.base.toml_header.as_table(), "other_senses")? {
+            Some(other_senses) => self.metadata.other_senses = other_senses.into(),
+            None => modified = true,
+        }
+
+        match metadata_extract_string(self.base.toml_header.as_table(), "notes")? {
+            Some(notes) => self.metadata.notes = notes.into(),
+            None => modified = true,
+        }
+
+        Ok(modified)
+    }
+
+    fn load_body(&mut self, _data: String) {}
+    fn get_body(&self) -> String {
+        String::new()
+    }
+
+    fn get_base(&self) -> &BaseFileObject {
+        &self.base
+    }
+
+    fn get_base_mut(&mut self) -> &mut BaseFileObject {
+        &mut self.base
+    }
+
+    // fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
+    //     super::FileObjectTypeInterface::Place(self)
+    // }
+
+    // fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
+    //     super::MutFileObjectTypeInterface::Place(self)
+    // }
+
+    fn write_metadata(&mut self, _objects: &FileObjectStore) {
+        self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
+        self.base.toml_header["connection"] = toml_edit::value(&*self.metadata.connection);
+        self.base.toml_header["description"] = toml_edit::value(&*self.metadata.description);
+        self.base.toml_header["appearance"] = toml_edit::value(&*self.metadata.appearance);
+        self.base.toml_header["other_senses"] = toml_edit::value(&*self.metadata.other_senses);
+        self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
+    }
+
+    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore) {
+        (self as &dyn FileObject).write_title(depth, export_string);
+
+        write_outline_property("connection", &self.metadata.connection, export_string);
+        write_outline_property("description", &self.metadata.description, export_string);
+        write_outline_property("appearance", &self.metadata.appearance, export_string);
+        write_outline_property("other_senses", &self.metadata.other_senses, export_string);
+        write_outline_property("notes", &self.metadata.notes, export_string);
+
+        for child_id in self.get_base().children.iter() {
+            objects.get(child_id).unwrap().borrow().generate_outline(
+                depth + 1,
+                export_string,
+                objects,
+            );
+        }
+    }
+
+    fn as_editor(&self) -> &dyn crate::ui::FileObjectEditor {
+        self
+    }
+
+    fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
+        self
+    }
+}
+
+// shortcuts for not having to cast every time
+#[cfg(test)]
+impl Place {
+    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
+        (self as &mut dyn FileObject).save(objects)
+    }
+}
+
+impl FileObjectEditor for Place {
+    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let sidebar_ids = egui::SidePanel::right("metadata sidebar")
+            .resizable(true)
+            .default_width(200.0)
+            .width_range(50.0..)
+            .show_inside(ui, |ui| self.show_sidebar(ui, ctx))
+            .inner;
+
+        let mut ids = egui::CentralPanel::default()
+            .show_inside(ui, |ui| self.show_editor(ui, ctx))
+            .inner;
+
+        ids.extend(sidebar_ids);
+        ids
+    }
+
+    fn for_each_textbox<'a>(&'a self, f: &mut dyn FnMut(&Text, &'static str)) {
+        f(&self.metadata.connection, "Connection");
+        f(&self.metadata.description, "Description");
+        f(&self.metadata.appearance, "Appearance");
+        f(&self.metadata.other_senses, "Other Senses");
+        f(&self.metadata.notes, "notes");
+    }
+
+    fn for_each_textbox_mut<'a>(&'a mut self, f: &mut dyn FnMut(&mut Text, &'static str)) {
+        f(&mut self.metadata.connection, "Connection");
+        f(&mut self.metadata.description, "Description");
+        f(&mut self.metadata.appearance, "Appearance");
+        f(&mut self.metadata.other_senses, "Other Senses");
+        f(&mut self.metadata.notes, "Notes");
+    }
+
+    fn provide_spellcheck_additions(&self) -> Vec<&str> {
+        if !self.base.metadata.name.is_empty() {
+            vec![&self.base.metadata.name]
+        } else {
+            vec![]
+        }
+    }
+}
+
+impl Place {
+    fn show_sidebar(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let mut ids = Vec::new();
+
+        ScrollArea::vertical()
+            .id_salt("main metadata")
+            .show(ui, |ui| {
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut self.get_base_mut().metadata.name)
+                        .id_salt("name")
+                        .hint_text("Place Name")
+                        .lock_focus(true)
+                        .desired_width(f32::INFINITY),
+                );
+                self.process_response(&response);
+                ids.push(response.id);
+
+                ui.label("Notes");
+                let response = ui.add_sized(ui.available_size(), |ui: &'_ mut Ui| {
+                    self.metadata.notes.ui(ui, ctx)
+                });
+                self.process_response(&response);
+                ids.push(response.id);
+            });
+        ids
+    }
+
+    fn show_editor(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {
+        let mut ids = Vec::new();
+
+        ScrollArea::vertical()
+            .id_salt("main metadata")
+            .show(ui, |ui| {
+                ui.label("Connection To Story");
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.connection.ui(ui, ctx));
+                self.process_response(&response);
+                ids.push(response.id);
+
+                ui.label("Description");
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.description.ui(ui, ctx));
+                self.process_response(&response);
+                ids.push(response.id);
+
+                ui.label("Appearance");
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.appearance.ui(ui, ctx));
+                self.process_response(&response);
+                ids.push(response.id);
+
+                ui.label("Other Senses");
+                let response = ui.add(|ui: &'_ mut Ui| self.metadata.other_senses.ui(ui, ctx));
+                self.process_response(&response);
+                ids.push(response.id);
+            });
+        ids
+    }
+}

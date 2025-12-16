@@ -1,9 +1,11 @@
 use crate::cheese_error;
 use crate::components::file_objects::{
-    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, Folder, load_file,
-    write_with_temp_file,
+    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, base::create_top_level_folder,
+    load_file, write_with_temp_file,
 };
+use crate::components::schema::{FileType, Schema};
 use crate::components::text::Text;
+use crate::schemas::DEFAULT_SCHEMA;
 use crate::util::CheeseError;
 use notify::event::RenameMode;
 use notify::{EventKind, event::ModifyKind};
@@ -29,10 +31,15 @@ use crate::components::file_objects::base::{
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 type WatcherReceiver = std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>;
 
+/// Temporary solution. Point to the schema statically here.
+/// Eventually, a solution for loading the schema when opening the project will be needed
+const SCHEMA: &'static dyn Schema = &crate::schemas::DEFAULT_SCHEMA;
+
 /// An entire project. This is somewhat file_object like, but we don't implement everything,
 /// so it's separate (for now)
 #[derive(Debug)]
 pub struct Project {
+    pub schema: &'static dyn Schema,
     pub metadata: ProjectMetadata,
     pub base_metadata: FileObjectMetadata,
     pub file: FileInfo,
@@ -114,7 +121,7 @@ fn load_top_level_folder(
 
     let folder_path = &Path::join(project_path, name.to_lowercase());
     if folder_path.exists() {
-        let created_object = load_file(folder_path, objects)
+        let created_object = load_file(SCHEMA, folder_path, objects)
             .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
 
         let created_object_box = objects.get(&created_object).unwrap();
@@ -145,15 +152,15 @@ fn load_top_level_folder(
         }
     } else {
         log::debug!("top level folder {name} does not exist, creating...");
-        let top_level_folder =
-            Folder::new_top_level(project_path.to_owned(), name).map_err(|err| {
+        let top_level_folder = create_top_level_folder(SCHEMA, project_path.to_owned(), name)
+            .map_err(|err| {
                 cheese_error!(
                     "An error occured while creating the top level folder\n{}",
                     err
                 )
             })?;
-        let folder_id = top_level_folder.base.metadata.id.clone();
-        objects.insert(folder_id.clone(), Box::new(RefCell::new(top_level_folder)));
+        let folder_id = top_level_folder.borrow().id().clone();
+        objects.insert(folder_id.clone(), top_level_folder);
         Ok(folder_id)
     }
 }
@@ -192,9 +199,9 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
-        let text = Folder::new_top_level(project_path.clone(), "Text")?;
-        let characters = Folder::new_top_level(project_path.clone(), "Characters")?;
-        let worldbuilding = Folder::new_top_level(project_path.clone(), "Worldbuilding")?;
+        let text = create_top_level_folder(SCHEMA, project_path.clone(), "Text")?;
+        let characters = create_top_level_folder(SCHEMA, project_path.clone(), "Characters")?;
+        let worldbuilding = create_top_level_folder(SCHEMA, project_path.clone(), "Worldbuilding")?;
 
         let file = FileInfo {
             dirname: canonical_dirname,
@@ -215,14 +222,15 @@ impl Project {
             .unwrap();
 
         let mut project = Self {
+            schema: &DEFAULT_SCHEMA,
             base_metadata: FileObjectMetadata {
                 name: project_name,
                 ..Default::default()
             },
             metadata: ProjectMetadata::default(),
-            text_id: text.get_base().metadata.id.clone(),
-            characters_id: characters.get_base().metadata.id.clone(),
-            worldbuilding_id: worldbuilding.get_base().metadata.id.clone(),
+            text_id: text.borrow().id().clone(),
+            characters_id: characters.borrow().id().clone(),
+            worldbuilding_id: worldbuilding.borrow().id().clone(),
             file,
             toml_header: DocumentMut::new(),
             objects: HashMap::new(),
@@ -232,9 +240,9 @@ impl Project {
             _watcher: watcher,
         };
 
-        project.add_object(Box::new(RefCell::new(text)));
-        project.add_object(Box::new(RefCell::new(characters)));
-        project.add_object(Box::new(RefCell::new(worldbuilding)));
+        project.add_object(text);
+        project.add_object(characters);
+        project.add_object(worldbuilding);
 
         project.save()?;
 
@@ -325,6 +333,7 @@ impl Project {
             .unwrap();
 
         let mut project = Self {
+            schema: &DEFAULT_SCHEMA,
             metadata,
             base_metadata,
             file: file_info,
@@ -906,7 +915,7 @@ impl Project {
                     continue;
                 }
 
-                match load_file(&event_path, &mut self.objects) {
+                match load_file(SCHEMA, &event_path, &mut self.objects) {
                     Ok(file_id) => {
                         let parent_path = get_parent_path(&event_path);
                         let parent_id_option = self.find_object_by_path(parent_path);

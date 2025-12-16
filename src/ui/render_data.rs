@@ -28,3 +28,35 @@ where
         new_val
     }
 }
+
+impl Default for FileObjectRDStore {
+    fn default() -> Self {
+        Self(HashMap::new())
+    }
+}
+
+#[derive(Debug)]
+pub struct FileObjectRDStore(HashMap<FileID, Rc<RefCell<dyn Any>>>);
+
+impl FileObjectRDStore {
+    pub fn get<V: Default + 'static>(&mut self, id: &FileID) -> Rc<RefCell<dyn Any>> {
+        let v = self.0.get(id);
+        if let Some(val) = v {
+            return val.clone();
+        }
+        let new_val = Rc::new(RefCell::new(V::default()));
+        let new_key = id.clone();
+
+        self.0.insert(new_key, new_val.clone());
+        new_val
+    }
+}
+
+#[macro_export]
+macro_rules! ford_get {
+    ($v:ty, $var:ident, $store:expr, $id:expr) => {
+        let ford_get_data = $store.get::<$v>($id);
+        let mut ford_get_data_borrowed = ford_get_data.borrow_mut();
+        let $var: &mut $v = ford_get_data_borrowed.downcast_mut::<$v>().unwrap();
+    };
+}

@@ -1,0 +1,61 @@
+mod default;
+
+#[cfg(test)]
+mod test;
+
+pub use default::DEFAULT_SCHEMA;
+
+/// A struct which can be used by any schema to represent any of it's available file types
+#[derive(Hash)]
+pub struct FileTypeInfo {
+    /// identifier used by the schema to indicate a file type
+    identifier: usize,
+
+    is_folder: bool,
+
+    has_body: bool,
+
+    type_name: &'static str,
+
+    empty_string_name: &'static str,
+
+    extension: &'static str,
+}
+
+pub type FileType = &'static FileTypeInfo;
+
+impl PartialEq for FileTypeInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.identifier == other.identifier
+    }
+}
+
+impl Eq for FileTypeInfo {}
+
+impl std::fmt::Debug for FileTypeInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[FileType: {}]", self.type_name)
+    }
+}
+
+impl FileTypeInfo {
+    pub fn is_folder(&self) -> bool {
+        self.is_folder
+    }
+
+    pub fn has_body(&self) -> bool {
+        self.has_body
+    }
+
+    pub fn type_name(&self) -> &'static str {
+        self.type_name
+    }
+
+    pub fn empty_string_name(&self) -> &'static str {
+        self.empty_string_name
+    }
+
+    pub fn extension(&self) -> &'static str {
+        self.extension
+    }
+}

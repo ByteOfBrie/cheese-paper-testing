@@ -97,13 +97,16 @@ enum FocusShiftDirection {
     Previous,
 }
 
+const MAX_TITLE_LENGTH: usize = 20;
+
 impl OpenPage {
     pub fn title(&self, project: &mut Project) -> egui::WidgetText {
         let text: egui::RichText = match &self.page {
             Page::ProjectMetadata => "Project Metadata".into(),
             Page::FileObject(file_id) => {
                 if let Some(object) = project.objects.get(file_id) {
-                    object.borrow().get_title().into()
+                    let text = object.borrow().get_title();
+                    text[0..text.floor_char_boundary(MAX_TITLE_LENGTH)].into()
                 } else {
                     // any deleted scenes should be cleaned up before we get here, but we have this
                     // logic instead of panicking anyway

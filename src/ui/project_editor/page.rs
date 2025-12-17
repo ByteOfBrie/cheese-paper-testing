@@ -106,7 +106,10 @@ impl OpenPage {
             Page::FileObject(file_id) => {
                 if let Some(object) = project.objects.get(file_id) {
                     let text = object.borrow().get_title();
-                    text[0..text.floor_char_boundary(MAX_TITLE_LENGTH)].into()
+                    text.chars()
+                        .take(MAX_TITLE_LENGTH)
+                        .collect::<String>()
+                        .into()
                 } else {
                     // any deleted scenes should be cleaned up before we get here, but we have this
                     // logic instead of panicking anyway

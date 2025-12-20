@@ -3,6 +3,9 @@ mod default;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+pub use default::export_file_types;
+
 pub use default::DEFAULT_SCHEMA;
 
 use std::hash::{Hash, Hasher};
@@ -34,7 +37,7 @@ impl PartialEq for FileTypeInfo {
 impl Eq for FileTypeInfo {}
 
 impl Hash for FileTypeInfo {
-    fn hash<H : Hasher>(&self, state: &mut H) {
+    fn hash<H: Hasher>(&self, state: &mut H) {
         self.identifier.hash(state)
     }
 }

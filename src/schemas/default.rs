@@ -1,3 +1,8 @@
+mod character;
+mod folder;
+mod place;
+mod scene;
+
 use crate::cheese_error;
 use crate::components::schema::Schema;
 use crate::{
@@ -9,11 +14,6 @@ use super::FileType;
 use std::path::Path;
 
 use std::cell::RefCell;
-
-mod character;
-mod folder;
-mod place;
-mod scene;
 
 use character::Character;
 use folder::Folder;
@@ -55,11 +55,9 @@ impl Schema for DefaultSchema {
                 true => Ok(&Folder::TYPE_INFO),
                 false => match filename.extension().and_then(|ext| ext.to_str()) {
                     Some("md") => Ok(&Scene::TYPE_INFO),
-                    _ => {
-                        Err(cheese_error!(
-                            "Unspecified file type file type while attempting to read {filename:?}"
-                        ))
-                    }
+                    _ => Err(cheese_error!(
+                        "Unspecified file type file type while attempting to read {filename:?}"
+                    )),
                 },
             },
         }
@@ -110,3 +108,13 @@ impl Schema for DefaultSchema {
 }
 
 pub const DEFAULT_SCHEMA: DefaultSchema = DefaultSchema {};
+
+#[cfg(test)]
+pub mod export_file_types {
+    use crate::schemas::{FileType, default};
+
+    pub const CHARACTER: FileType = &default::character::Character::TYPE_INFO;
+    pub const FOLDER: FileType = &default::folder::Folder::TYPE_INFO;
+    pub const PLACE: FileType = &default::place::Place::TYPE_INFO;
+    pub const SCENE: FileType = &default::scene::Scene::TYPE_INFO;
+}

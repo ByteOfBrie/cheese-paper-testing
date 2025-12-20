@@ -1,19 +1,10 @@
-use regex::Regex;
-
 use crate::components::file_objects::FileObjectStore;
-use crate::components::file_objects::base::{
-    CompileStatus, IncludeOptions, metadata_extract_string, metadata_extract_u64,
-};
-use crate::components::file_objects::reference::ObjectReference;
+use crate::components::file_objects::base::metadata_extract_string;
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::file_objects::{BaseFileObject, FileObject};
-use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::schemas::FileType;
 use crate::util::CheeseError;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::{collections::HashMap, path::PathBuf};
 
 use crate::ui::FileObjectEditor;
 use crate::ui::prelude::*;
@@ -49,20 +40,6 @@ impl Place {
         empty_string_name: "New Place",
         extension: "toml",
     };
-
-    //     pub fn new(dirname: PathBuf, index: usize) -> Result<Self, CheeseError> {
-    //         let mut place = Self {
-    //             base: BaseFileObject::new(dirname, Some(index)),
-    //             metadata: PlaceMetadata::default(),
-    //         };
-
-    //         place.base.file.basename = place.calculate_filename();
-
-    //         create_dir(place.get_path())?;
-    //         <dyn FileObject>::save(&mut place, &HashMap::new()).unwrap();
-
-    //         Ok(place)
-    //     }
 
     pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {
         let mut place = Self {
@@ -143,14 +120,6 @@ impl FileObject for Place {
         &mut self.base
     }
 
-    // fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-    //     super::FileObjectTypeInterface::Place(self)
-    // }
-
-    // fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-    //     super::MutFileObjectTypeInterface::Place(self)
-    // }
-
     fn write_metadata(&mut self, _objects: &FileObjectStore) {
         self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
         self.base.toml_header["connection"] = toml_edit::value(&*self.metadata.connection);
@@ -184,14 +153,6 @@ impl FileObject for Place {
 
     fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
-    }
-}
-
-// shortcuts for not having to cast every time
-#[cfg(test)]
-impl Place {
-    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
-        (self as &mut dyn FileObject).save(objects)
     }
 }
 

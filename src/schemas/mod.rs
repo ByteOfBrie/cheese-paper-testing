@@ -5,8 +5,9 @@ mod test;
 
 pub use default::DEFAULT_SCHEMA;
 
+use std::hash::{Hash, Hasher};
+
 /// A struct which can be used by any schema to represent any of it's available file types
-#[derive(Hash)]
 pub struct FileTypeInfo {
     /// identifier used by the schema to indicate a file type
     identifier: usize,
@@ -31,6 +32,12 @@ impl PartialEq for FileTypeInfo {
 }
 
 impl Eq for FileTypeInfo {}
+
+impl Hash for FileTypeInfo {
+    fn hash<H : Hasher>(&self, state: &mut H) {
+        self.identifier.hash(state)
+    }
+}
 
 impl std::fmt::Debug for FileTypeInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -31,43 +31,6 @@ pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 /// Value that splits the header of any file that contains non-metadata content
 const HEADER_SPLIT: &str = "++++++++";
 
-/// List of known file types in this version of the editor. File types that aren't known will not
-/// be read in
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// pub enum FileType {
-//     Scene,
-//     Folder,
-//     Character,
-//     Place,
-// }
-
-// #[derive(Debug)]
-// #[allow(dead_code)]
-// pub enum FileObjectTypeInterface<'a> {
-//     Scene(&'a Scene),
-//     Folder(&'a Folder),
-//     Character(&'a Character),
-//     Place(&'a Place),
-// }
-
-// impl From<FileObjectTypeInterface<'_>> for FileType {
-//     fn from(value: FileObjectTypeInterface) -> Self {
-//         match value {
-//             FileObjectTypeInterface::Scene(_) => FileType::Scene,
-//             FileObjectTypeInterface::Folder(_) => FileType::Folder,
-//             FileObjectTypeInterface::Character(_) => FileType::Character,
-//             FileObjectTypeInterface::Place(_) => FileType::Place,
-//         }
-//     }
-// }
-
-// pub enum MutFileObjectTypeInterface<'a> {
-//     Scene(&'a mut Scene),
-//     Folder(&'a mut Folder),
-//     Character(&'a mut Character),
-//     Place(&'a mut Place),
-// }
-
 impl Default for FileObjectMetadata {
     fn default() -> Self {
         Self {
@@ -77,44 +40,6 @@ impl Default for FileObjectMetadata {
         }
     }
 }
-
-// impl From<FileType> for &str {
-//     fn from(val: FileType) -> Self {
-//         match val {
-//             FileType::Scene => "scene",
-//             FileType::Folder => "folder",
-//             FileType::Character => "character",
-//             FileType::Place => "worldbuilding",
-//         }
-//     }
-// }
-
-// impl TryFrom<&str> for FileType {
-//     type Error = CheeseError;
-
-//     fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-//         match value {
-//             "scene" => Ok(FileType::Scene),
-//             "folder" => Ok(FileType::Folder),
-//             "character" => Ok(FileType::Character),
-//             "worldbuilding" => Ok(FileType::Place),
-//             // "worldbuilding" is the proper string, but also accept "place"
-//             "place" => Ok(FileType::Place),
-//             _ => Err(cheese_error!("Unknown file type: {value}")),
-//         }
-//     }
-// }
-
-// impl FileType {
-//     fn is_folder(self) -> bool {
-//         match self {
-//             FileType::Scene => false,
-//             FileType::Folder => true,
-//             FileType::Character => false,
-//             FileType::Place => true,
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone)]
 pub struct FileInfo {
@@ -694,11 +619,13 @@ pub fn create_file(
 
     let mut fo_mut = file_object.borrow_mut();
 
+    fo_mut.get_base_mut().file.basename = fo_mut.calculate_filename();
+
     if file_type.is_folder() {
         create_dir(fo_mut.get_path())?;
     }
 
-    fo_mut.save(&HashMap::new()).unwrap();
+    fo_mut.save(&HashMap::new())?;
 
     drop(fo_mut);
 
@@ -718,6 +645,7 @@ pub fn create_top_level_folder(
     let mut base = BaseFileObject::new(dirname, None);
 
     base.metadata.name = name.to_string();
+    base.file.basename = OsString::from(name.to_lowercase());
 
     let file_object = schema.init_file_object(file_type, base)?;
 

@@ -1,19 +1,13 @@
-use regex::Regex;
-
 use crate::components::file_objects::FileObjectStore;
 use crate::components::file_objects::base::{
     CompileStatus, IncludeOptions, metadata_extract_string, metadata_extract_u64,
 };
-use crate::components::file_objects::reference::ObjectReference;
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::file_objects::{BaseFileObject, FileObject};
 use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::schemas::FileType;
 use crate::util::CheeseError;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::{collections::HashMap, path::PathBuf};
 
 use crate::ui::FileObjectEditor;
 use crate::ui::prelude::*;
@@ -215,15 +209,6 @@ impl FileObject for Folder {
     }
 }
 
-// shortcuts for not having to cast every time
-
-#[cfg(test)]
-impl Folder {
-    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
-        (self as &mut dyn FileObject).save(objects)
-    }
-}
-
 #[derive(Debug, Default, PartialEq)]
 pub enum Tab {
     #[default]
@@ -235,8 +220,6 @@ pub enum Tab {
 pub struct Data {
     tab: Tab,
 }
-
-pub type Store = RenderDataStore<FileID, Data>;
 
 impl FileObjectEditor for Folder {
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {

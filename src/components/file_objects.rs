@@ -11,13 +11,9 @@ use crate::ui::FileObjectEditor;
 pub use base::{FileID, FileInfo, FileObjectStore, load_file, move_child};
 
 use crate::util::CheeseError;
-use std::cell::RefCell;
-use std::ffi::OsString;
 use std::fmt::Debug;
-use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::time::SystemTime;
-use toml_edit::{DocumentMut, TableLike};
+use toml_edit::DocumentMut;
 
 pub use utils::{create_dir_if_missing, write_with_temp_file};
 

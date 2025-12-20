@@ -3,7 +3,7 @@ use crate::components::file_objects::{
     FileInfo, FileObject, FileObjectMetadata, FileObjectStore, base::create_top_level_folder,
     load_file, write_with_temp_file,
 };
-use crate::components::schema::{FileType, Schema};
+use crate::components::schema::Schema;
 use crate::components::text::Text;
 use crate::schemas::DEFAULT_SCHEMA;
 use crate::util::CheeseError;

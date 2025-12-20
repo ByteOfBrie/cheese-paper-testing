@@ -10,7 +10,7 @@ use crate::util::CheeseError;
 use egui_ltreeview::DirPosition;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use toml_edit::{DocumentMut, TableLike};
+use toml_edit::DocumentMut;
 
 use super::{FOLDER_METADATA_FILE_NAME, FileType, HEADER_SPLIT};
 use crate::components::file_objects::FileObject;

@@ -1,19 +1,10 @@
-use regex::Regex;
-
 use crate::components::file_objects::FileObjectStore;
-use crate::components::file_objects::base::{
-    CompileStatus, IncludeOptions, metadata_extract_string, metadata_extract_u64,
-};
-use crate::components::file_objects::reference::ObjectReference;
+use crate::components::file_objects::base::metadata_extract_string;
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::file_objects::{BaseFileObject, FileObject};
-use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::schemas::FileType;
 use crate::util::CheeseError;
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::{collections::HashMap, path::PathBuf};
 
 use crate::ui::FileObjectEditor;
 use crate::ui::prelude::*;
@@ -51,19 +42,6 @@ impl Character {
         empty_string_name: "New Character",
         extension: "toml",
     };
-
-    // pub fn new(dirname: PathBuf, index: usize) -> Result<Self, CheeseError> {
-    //     let mut character = Self {
-    //         base: BaseFileObject::new(dirname, Some(index)),
-    //         metadata: CharacterMetadata::default(),
-    //     };
-
-    //     character.base.file.basename = character.calculate_filename();
-
-    //     <dyn FileObject>::save(&mut character, &HashMap::new()).unwrap();
-
-    //     Ok(character)
-    // }
 
     pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {
         let mut character = Self {
@@ -154,14 +132,6 @@ impl FileObject for Character {
         &mut self.base
     }
 
-    // fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-    //     super::FileObjectTypeInterface::Character(self)
-    // }
-
-    // fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-    //     super::MutFileObjectTypeInterface::Character(self)
-    // }
-
     fn write_metadata(&mut self, _objects: &FileObjectStore) {
         self.base.toml_header["file_type"] = toml_edit::value("character");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
@@ -195,13 +165,6 @@ impl FileObject for Character {
 }
 
 // shortcuts for not having to cast every time
-
-#[cfg(test)]
-impl Character {
-    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
-        (self as &mut dyn FileObject).save(objects)
-    }
-}
 
 impl FileObjectEditor for Character {
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<Id> {

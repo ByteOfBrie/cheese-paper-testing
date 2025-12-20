@@ -4,7 +4,6 @@ pub mod page;
 pub mod search;
 mod util;
 
-use crate::components::file_objects::reference;
 use crate::ui::{prelude::*, render_data};
 
 use crate::components::file_objects::utils::process_name_for_filename;
@@ -211,10 +210,7 @@ impl References {
         };
 
         for file_type in references.file_types {
-            references
-                .r
-                .insert(file_type, BTreeMap::new())
-                .expect("hash map insertion should succeed");
+            references.r.insert(file_type, BTreeMap::new());
         }
 
         references.update(&project.objects);
@@ -233,9 +229,7 @@ impl References {
 
         let mut old_refs = std::mem::take(&mut self.r);
         for file_type in self.file_types {
-            self.r
-                .insert(file_type, BTreeMap::new())
-                .expect("hash map insertion should succeed");
+            self.r.insert(file_type, BTreeMap::new());
         }
 
         for file_object in objects.values() {

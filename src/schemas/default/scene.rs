@@ -10,11 +10,9 @@ use crate::components::file_objects::{BaseFileObject, FileObject};
 use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::schemas::FileType;
-use crate::schemas::default::scene;
 use crate::util::CheeseError;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{collections::HashMap, path::PathBuf};
 
 use crate::ui::FileObjectEditor;
 use crate::ui::prelude::*;
@@ -51,20 +49,6 @@ impl Scene {
         empty_string_name: "New Scene",
         extension: "md",
     };
-
-    // pub fn new(dirname: PathBuf, index: usize) -> Result<Self, CheeseError> {
-    //     let mut scene = Self {
-    //         base: BaseFileObject::new(dirname, Some(index)),
-    //         metadata: SceneMetadata::default(),
-    //         text: Text::default(),
-    //     };
-
-    //     scene.base.file.basename = scene.calculate_filename();
-
-    //     <dyn FileObject>::save(&mut scene, &HashMap::new()).unwrap();
-
-    //     Ok(scene)
-    // }
 
     pub fn from_base(base: BaseFileObject, body: Option<String>) -> Result<Self, CheeseError> {
         let mut scene = Self {
@@ -146,14 +130,6 @@ impl FileObject for Scene {
     fn get_base_mut(&mut self) -> &mut BaseFileObject {
         &mut self.base
     }
-
-    // fn get_file_type(&self) -> super::FileObjectTypeInterface<'_> {
-    //     super::FileObjectTypeInterface::Scene(self)
-    // }
-
-    // fn get_file_type_mut(&mut self) -> super::MutFileObjectTypeInterface<'_> {
-    //     super::MutFileObjectTypeInterface::Scene(self)
-    // }
 
     fn resolve_references(&mut self, objects: &FileObjectStore) {
         let mut pov = self.metadata.pov.borrow_mut();
@@ -271,15 +247,6 @@ impl FileObject for Scene {
 
     fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
-    }
-}
-
-// shortcuts for not having to cast every time
-
-#[cfg(test)]
-impl Scene {
-    pub fn save(&mut self, objects: &FileObjectStore) -> Result<(), CheeseError> {
-        (self as &mut dyn FileObject).save(objects)
     }
 }
 

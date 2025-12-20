@@ -5,7 +5,7 @@ use crate::{
     util::CheeseError,
 };
 
-use super::{FileType, FileTypeInfo};
+use super::FileType;
 use std::path::Path;
 
 use std::cell::RefCell;
@@ -56,9 +56,9 @@ impl Schema for DefaultSchema {
                 false => match filename.extension().and_then(|ext| ext.to_str()) {
                     Some("md") => Ok(&Scene::TYPE_INFO),
                     _ => {
-                        return Err(cheese_error!(
+                        Err(cheese_error!(
                             "Unspecified file type file type while attempting to read {filename:?}"
-                        ));
+                        ))
                     }
                 },
             },

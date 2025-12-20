@@ -29,13 +29,7 @@ where
     }
 }
 
-impl Default for FileObjectRDStore {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FileObjectRDStore(HashMap<FileID, Rc<RefCell<dyn Any>>>);
 
 impl FileObjectRDStore {

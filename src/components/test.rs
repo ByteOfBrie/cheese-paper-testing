@@ -35,7 +35,7 @@ fn file_id(s: &str) -> Rc<String> {
 fn get_id_from_file(filename: &Path) -> Option<FileID> {
     use toml_edit::DocumentMut;
 
-    use crate::components::file_objects::base::FOLDER_METADATA_FILE_NAME;
+    use crate::components::file_objects::FOLDER_METADATA_FILE_NAME;
     use crate::components::file_objects::utils::read_file_contents;
 
     if !filename.exists() {

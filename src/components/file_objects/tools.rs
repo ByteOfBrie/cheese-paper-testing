@@ -11,9 +11,12 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
-use super::{FOLDER_METADATA_FILE_NAME, FileType};
+use super::{FileType};
 use crate::components::file_objects::FileObject;
 use crate::components::file_objects::utils::{HEADER_SPLIT, read_file_contents};
+
+/// filename of the object within a folder containing its metadata (without extension)
+pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
 pub type FileID = Rc<String>;
 

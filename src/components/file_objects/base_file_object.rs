@@ -1,10 +1,7 @@
-mod implementation;
-pub use implementation::*;
-
 use bitflags::bitflags;
 use uuid::Uuid;
 
-use super::FileObject;
+use super::{FileObject, FileID};
 use crate::cheese_error;
 use crate::components::file_objects::utils::{
     add_index_to_name, process_name_for_filename, truncate_name,
@@ -21,9 +18,6 @@ use toml_edit::{DocumentMut, TableLike};
 
 /// the maximum length of a name before we start trying to truncate it
 pub const FILENAME_MAX_LENGTH: usize = 30;
-
-/// filename of the object within a folder containing its metadata (without extension)
-pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
 /// Loading a file:
 /// 1. Parse filename as a name -> metadata.name
@@ -244,7 +238,7 @@ impl FileObjectMetadata {
 
 impl BaseFileObject {
     /// Calculates the filename for a particular object
-    fn calculate_filename(&self, file_type: FileType) -> OsString {
+    pub fn calculate_filename(&self, file_type: FileType) -> OsString {
         let base_name: &str = match self.metadata.name.is_empty() {
             false => &self.metadata.name,
             true => file_type.empty_string_name(),
@@ -285,7 +279,7 @@ impl BaseFileObject {
         }
     }
 
-    fn write_metadata(&mut self) {
+    pub fn write_metadata(&mut self) {
         self.toml_header["file_format_version"] = toml_edit::value(self.metadata.version as i64);
         self.toml_header["name"] = toml_edit::value(&self.metadata.name);
         self.toml_header["id"] = toml_edit::value(&*self.metadata.id);

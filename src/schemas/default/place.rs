@@ -1,5 +1,5 @@
 use crate::components::file_objects::FileObjectStore;
-use crate::components::file_objects::base::metadata_extract_string;
+use crate::components::file_objects::base_file_object::metadata_extract_string;
 use crate::components::file_objects::utils::write_outline_property;
 use crate::components::file_objects::{BaseFileObject, FileObject};
 use crate::components::text::Text;

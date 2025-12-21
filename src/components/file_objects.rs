@@ -1,6 +1,7 @@
-pub mod base;
+pub mod base_file_object;
 pub mod reference;
 pub mod utils;
+mod tools;
 
 use crate::components::Schema;
 use crate::components::schema::FileType;
@@ -8,7 +9,7 @@ use crate::components::schema::FileType;
 use crate::components::project::ExportOptions;
 use crate::ui::FileObjectEditor;
 
-pub use base::{FileID, FileInfo, FileObjectStore};
+pub use tools::{FileID, FileObjectStore};
 
 use crate::util::CheeseError;
 use std::fmt::Debug;
@@ -16,7 +17,9 @@ use std::rc::Rc;
 
 pub use utils::{create_dir_if_missing, write_with_temp_file};
 
-pub use base::{BaseFileObject, FileObjectMetadata};
+pub use base_file_object::{BaseFileObject, FileObjectMetadata, FileInfo};
+
+pub use tools::FOLDER_METADATA_FILE_NAME;
 
 pub trait FileObject: Debug {
     fn get_type(&self) -> FileType;

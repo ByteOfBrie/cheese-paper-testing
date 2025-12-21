@@ -1,4 +1,4 @@
-use crate::components::file_objects::base::*;
+use crate::components::file_objects::base_file_object::*;
 use crate::components::file_objects::utils::{get_index_from_name, read_file_contents};
 use crate::components::schema::{FileType, Schema};
 
@@ -12,7 +12,7 @@ use toml_edit::DocumentMut;
 
 use crate::cheese_error;
 
-use crate::components::file_objects::{BaseFileObject, FileObject};
+use crate::components::file_objects::{BaseFileObject, FileObject, FileID, FileObjectStore, FOLDER_METADATA_FILE_NAME};
 use crate::util::CheeseError;
 
 impl dyn Schema {

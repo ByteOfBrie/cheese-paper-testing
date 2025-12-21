@@ -1,5 +1,5 @@
 use crate::components::file_objects::FileObjectStore;
-use crate::components::file_objects::base::{
+use crate::components::file_objects::base_file_object::{
     CompileStatus, IncludeOptions, metadata_extract_string, metadata_extract_u64,
 };
 use crate::components::file_objects::utils::write_outline_property;

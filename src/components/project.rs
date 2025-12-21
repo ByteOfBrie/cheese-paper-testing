@@ -20,10 +20,12 @@ use std::rc::Rc;
 use std::time::Instant;
 use toml_edit::DocumentMut;
 
+use crate::components::file_objects::{FOLDER_METADATA_FILE_NAME, FileID};
+
 use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
 
-use crate::components::file_objects::base::{
-    FOLDER_METADATA_FILE_NAME, FileID, metadata_extract_bool, metadata_extract_string,
+use crate::components::file_objects::base_file_object::{
+    metadata_extract_bool, metadata_extract_string,
     metadata_extract_u64,
 };
 

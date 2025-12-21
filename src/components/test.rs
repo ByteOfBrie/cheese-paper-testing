@@ -15,6 +15,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::{fmt::Display, thread, time};
 
+use crate::schemas::FileType;
+use crate::schemas::SCHEMA_LIST;
+
 /// These tests were not written to be agnostic to the kind of file types that exist.
 /// Rather than re-write them immediately, it is best to make an iteration of the tests which
 /// are not changed in functionality, and test if the post-refactor code still behaves the same way
@@ -5328,6 +5331,81 @@ fn test_tracker_metadata_population() {
 
     let folder1_name_regex = regex::Regex::new(r#"name\s*=\s*"folder1""#).unwrap();
     assert!(folder1_name_regex.is_match(&folder1_raw));
+}
+
+#[test]
+fn test_multiple_schemas_reload() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    fn project_name(i: usize) -> String {
+        format!("project_number_{i}_{}", SCHEMA_LIST[i])
+    }
+
+    fn file_body_content(i: usize, file_type: FileType) -> String {
+        format!(
+            "This is the file content of the {file_type} file in project : {i} ({})",
+            SCHEMA_LIST[i]
+        )
+    }
+
+    fn file_metadata_content(i: usize, file_type: FileType) -> String {
+        format!(
+            "This is the metadata of the {file_type} file in project : {i} ({})",
+            SCHEMA_LIST[i]
+        )
+    }
+
+    let mut project_infos = Vec::new();
+
+    for (i, &schema) in SCHEMA_LIST.iter().enumerate() {
+        let project = Project::new(schema, base_dir.path().to_path_buf(), project_name(i)).unwrap();
+
+        let mut project_file_ids = Vec::new();
+
+        let mut root_folder = project.objects.get(&project.text_id).unwrap().borrow_mut();
+
+        for &file_type in schema.get_all_file_types() {
+            let mut file = root_folder.create_child_at_end(file_type).unwrap();
+
+            if file_type.has_body() {
+                file.load_body(file_body_content(i, file_type));
+            }
+            *file.get_test_field() = file_metadata_content(i, file_type);
+            file.get_base_mut().file.modified = true;
+
+            file.save(&project.objects).unwrap();
+
+            project_file_ids.push(file.get_base().metadata.id.clone());
+        }
+
+        project_infos.push((i, schema, project.get_path(), project_file_ids));
+    }
+
+    for (i, schema, path, project_file_ids) in project_infos {
+        let project = Project::load(path).unwrap();
+
+        assert_eq!(project.base_metadata.name, project_name(i));
+
+        for (j, &file_type) in schema.get_all_file_types().iter().enumerate() {
+            let mut file_object = project
+                .objects
+                .get(&project_file_ids[j])
+                .unwrap()
+                .borrow_mut();
+
+            assert_eq!(file_object.get_type(), file_type);
+            if file_type.has_body() {
+                assert_eq!(
+                    file_object.get_body().trim(),
+                    file_body_content(i, file_type)
+                );
+            }
+            assert_eq!(
+                *file_object.get_test_field(),
+                file_metadata_content(i, file_type)
+            );
+        }
+    }
 }
 
 // PanicPrint from https://internals.rust-lang.org/t/print-this-variable-on-panic-annotations/6150/3

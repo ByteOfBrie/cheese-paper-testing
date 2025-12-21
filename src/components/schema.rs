@@ -45,3 +45,9 @@ impl std::fmt::Debug for dyn Schema {
         write!(f, "[FileType: {}]", self.get_schema_name())
     }
 }
+
+impl std::fmt::Display for dyn Schema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_schema_name())
+    }
+}

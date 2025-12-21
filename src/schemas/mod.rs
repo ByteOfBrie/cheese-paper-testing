@@ -64,7 +64,12 @@ impl Hash for FileTypeInfo {
 
 impl std::fmt::Debug for FileTypeInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[FileType: {}]", self.type_name)
+        write!(f, "[FileType: {}]", self.identifier)
+    }
+}
+impl std::fmt::Display for FileTypeInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.type_name)
     }
 }
 

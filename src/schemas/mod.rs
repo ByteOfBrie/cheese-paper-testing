@@ -1,4 +1,5 @@
 mod default;
+mod overthinker;
 
 #[cfg(test)]
 mod test;
@@ -12,7 +13,8 @@ use std::hash::{Hash, Hasher};
 
 use crate::{cheese_error, components::Schema, util::CheeseError};
 
-pub const SCHEMA_LIST: [&'static dyn Schema; 1] = [&DEFAULT_SCHEMA];
+pub const SCHEMA_LIST: [&'static dyn Schema; 2] =
+    [&DEFAULT_SCHEMA, &overthinker::OVERTHINKER_SCHEMA];
 
 pub fn resolve_schema(identifier: &str) -> Result<&'static dyn Schema, CheeseError> {
     for schema in SCHEMA_LIST {

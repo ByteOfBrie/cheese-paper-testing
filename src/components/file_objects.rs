@@ -39,7 +39,12 @@ pub trait FileObject: Debug {
     /// Display the outline, writing all relevant non-prose information we have to a single
     /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
     /// on export, everything gets included
-    fn generate_outline(&self, _depth: u64, _export_string: &mut String, _objects: &FileObjectStore) {
+    fn generate_outline(
+        &self,
+        _depth: u64,
+        _export_string: &mut String,
+        _objects: &FileObjectStore,
+    ) {
         // we don't do anything by default
     }
 

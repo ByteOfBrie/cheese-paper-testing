@@ -1,8 +1,3 @@
-// mod character_editor;
-// pub mod folder_editor;
-// mod place_editor;
-// pub mod scene_editor;
-
 use crate::ui::prelude::*;
 
 pub trait FileObjectEditor: FileObject {

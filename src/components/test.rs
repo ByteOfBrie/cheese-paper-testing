@@ -159,8 +159,6 @@ fn test_basic_create_file_object() -> Result<(), CheeseError> {
 fn test_create_top_level_folder() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    // let text = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")?;
-
     let text = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")?;
     let text = text.borrow();
 
@@ -387,7 +385,6 @@ fn test_avoid_pointless_save() {
     let folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
     let mut folder = folder.borrow_mut();
 
-    // let mut folder = Folder::new(base_dir.path().to_path_buf(), 1).unwrap();
     let folder_old_modtime = folder.get_base().file.modtime;
     folder.save(&HashMap::new()).unwrap();
     assert_eq!(folder.get_base().file.modtime, folder_old_modtime);
@@ -3943,12 +3940,6 @@ fn test_tracker_modification() {
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
         assert_eq!(scene1_file_object.get_type(), SCENE);
-        // let scene1 = match scene1_file_object.get_file_type() {
-        //     FileObjectTypeInterface::Scene(scene) => scene,
-        //     _ => {
-        //         panic!("Got a non-scene object");
-        //     }
-        // };
         assert_eq!(scene1_file_object.get_body().trim(), "123456");
     }
 
@@ -3971,12 +3962,6 @@ asdfjkl123"#;
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
         assert_eq!(scene1_file_object.get_type(), SCENE);
-        // let scene1 = match scene1_file_object.get_file_type() {
-        //     FileObjectTypeInterface::Scene(scene) => scene,
-        //     _ => {
-        //         panic!("Got a non-scene object");
-        //     }
-        // };
         assert_eq!(scene1_file_object.get_body().trim(), "asdfjkl123");
     }
 }

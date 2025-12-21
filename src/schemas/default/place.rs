@@ -38,6 +38,7 @@ impl Place {
         type_name: "Place",
         empty_string_name: "New Place",
         extension: "toml",
+        description: "A folder corresponding to a specific place",
     };
 
     pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {

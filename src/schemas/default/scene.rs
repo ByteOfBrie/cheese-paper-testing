@@ -47,6 +47,7 @@ impl Scene {
         type_name: "Scene",
         empty_string_name: "New Scene",
         extension: "md",
+        description: "The text of the story",
     };
 
     pub fn from_base(base: BaseFileObject, body: Option<String>) -> Result<Self, CheeseError> {

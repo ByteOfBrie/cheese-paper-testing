@@ -41,6 +41,7 @@ impl Folder {
         type_name: "Folder",
         empty_string_name: "New Folder",
         extension: "toml",
+        description: "A generic folder",
     };
 
     pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {

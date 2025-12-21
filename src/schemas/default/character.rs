@@ -40,6 +40,7 @@ impl Character {
         type_name: "Character",
         empty_string_name: "New Character",
         extension: "toml",
+        description: "An info sheet for characters",
     };
 
     pub fn from_base(base: BaseFileObject) -> Result<Self, CheeseError> {

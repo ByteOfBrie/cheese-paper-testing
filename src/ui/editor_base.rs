@@ -571,6 +571,16 @@ impl CheesePaperApp {
 
                 ui.separator();
 
+                ui.heading("Schema Preview:");
+                egui::Grid::new("schema preview grid").show(ui, |ui| {
+                    for file_type in self.state.new_project_schema.get_all_file_types() {
+                        ui.label(file_type.type_name());
+                        ui.label(" : ");
+                        ui.label(file_type.description());
+                        ui.end_row();
+                    }
+                });
+
                 egui::Sides::new().show(
                     ui,
                     |_ui| {},

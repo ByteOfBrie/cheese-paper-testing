@@ -40,6 +40,8 @@ pub struct FileTypeInfo {
     empty_string_name: &'static str,
 
     extension: &'static str,
+
+    description: &'static str,
 }
 
 pub type FileType = &'static FileTypeInfo;
@@ -83,5 +85,9 @@ impl FileTypeInfo {
 
     pub fn extension(&self) -> &'static str {
         self.extension
+    }
+
+    pub fn description(&self) -> &'static str {
+        self.description
     }
 }

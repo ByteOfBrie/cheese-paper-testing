@@ -36,15 +36,12 @@ pub trait FileObject: Debug {
     /// Gets the contents of the body to be written when saving
     fn get_body(&self) -> String;
 
-    // /// Allow for downcasting this as a reference, useful for some UI components
-    // fn get_file_type<'a>(&'a self) -> FileObjectTypeInterface<'a>;
-    // /// Allow for downcasting this as a mutable reference, useful for some UI components
-    // fn get_file_type_mut<'a>(&'a mut self) -> MutFileObjectTypeInterface<'a>;
-
     /// Display the outline, writing all relevant non-prose information we have to a single
     /// markdown file that can be scanned/shared easily. We don't (currently) have any selections
     /// on export, everything gets included
-    fn generate_outline(&self, depth: u64, export_string: &mut String, objects: &FileObjectStore);
+    fn generate_outline(&self, _depth: u64, _export_string: &mut String, _objects: &FileObjectStore) {
+        // we don't do anything by default
+    }
 
     /// Generate an export of story text, will be overridden by objects that actually generate
     /// (folder and scene)

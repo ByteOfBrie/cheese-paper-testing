@@ -499,6 +499,20 @@ pub fn load_file(filename: &Path, objects: &mut FileObjectStore) -> Result<FileI
         ));
     }
 
+    if filename
+        .extension()
+        .is_some_and(|extension| extension == "tmp")
+    {
+        return Err(cheese_error!(
+            "We should not load file {filename:?} which is temporary"
+        ));
+    }
+
+    if filename.starts_with(".") {
+        return Err(cheese_error!(
+            "We should not load temporary file {filename:?}"
+        ));
+    }
     // We process every dir, but only `.toml` or `.md` files
     if !filename.is_dir()
         && filename

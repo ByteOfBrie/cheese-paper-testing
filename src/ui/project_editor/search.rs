@@ -70,7 +70,7 @@ impl Search {
 }
 
 pub enum Searchable<'a> {
-    FileObject(&'a RefCell<dyn FileObject>),
+    FileObject(&'a RefCell<Box<dyn FileObject>>),
     ProjectMetadata(&'a ProjectMetadata),
 }
 

@@ -13,8 +13,6 @@ use crate::{
 use super::FileType;
 use std::path::Path;
 
-use std::cell::RefCell;
-
 use character::Character;
 use folder::Folder;
 use place::Place;
@@ -75,14 +73,12 @@ impl Schema for DefaultSchema {
         &self,
         file_type: FileType,
         base: BaseFileObject,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    ) -> Result<Box<dyn FileObject>, CheeseError> {
         match file_type.identifier {
-            Character::IDENTIFIER => Ok(Box::new(RefCell::new(character::Character::from_base(
-                base,
-            )?))),
-            Folder::IDENTIFIER => Ok(Box::new(RefCell::new(folder::Folder::from_base(base)?))),
-            Place::IDENTIFIER => Ok(Box::new(RefCell::new(place::Place::from_base(base)?))),
-            Scene::IDENTIFIER => Ok(Box::new(RefCell::new(scene::Scene::from_base(base, None)?))),
+            Character::IDENTIFIER => Ok(Box::new(character::Character::from_base(base)?)),
+            Folder::IDENTIFIER => Ok(Box::new(folder::Folder::from_base(base)?)),
+            Place::IDENTIFIER => Ok(Box::new(place::Place::from_base(base)?)),
+            Scene::IDENTIFIER => Ok(Box::new(scene::Scene::from_base(base, None)?)),
             _ => unreachable!(),
         }
     }
@@ -92,16 +88,14 @@ impl Schema for DefaultSchema {
         file_type: FileType,
         base: BaseFileObject,
         body: Option<String>,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    ) -> Result<Box<dyn FileObject>, CheeseError> {
         assert!(body.is_some() == file_type.has_body());
 
         match file_type.identifier {
-            Character::IDENTIFIER => Ok(Box::new(RefCell::new(character::Character::from_base(
-                base,
-            )?))),
-            Folder::IDENTIFIER => Ok(Box::new(RefCell::new(folder::Folder::from_base(base)?))),
-            Place::IDENTIFIER => Ok(Box::new(RefCell::new(place::Place::from_base(base)?))),
-            Scene::IDENTIFIER => Ok(Box::new(RefCell::new(scene::Scene::from_base(base, body)?))),
+            Character::IDENTIFIER => Ok(Box::new(character::Character::from_base(base)?)),
+            Folder::IDENTIFIER => Ok(Box::new(folder::Folder::from_base(base)?)),
+            Place::IDENTIFIER => Ok(Box::new(place::Place::from_base(base)?)),
+            Scene::IDENTIFIER => Ok(Box::new(scene::Scene::from_base(base, body)?)),
             _ => unreachable!(),
         }
     }

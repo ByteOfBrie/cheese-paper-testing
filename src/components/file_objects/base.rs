@@ -597,11 +597,11 @@ pub fn load_file(
 
         let file_id = base.metadata.id.clone();
 
-        let boxed_object = schema.load_file_object(file_type, base, file_body)?;
+        let mut file_object = schema.load_file_object(file_type, base, file_body)?;
 
-        boxed_object.borrow_mut().rescan_indexing(objects);
+        file_object.rescan_indexing(objects);
 
-        objects.insert(file_id.clone(), boxed_object);
+        objects.insert(file_id.clone(), RefCell::new(file_object));
 
         Ok(file_id)
     }
@@ -612,22 +612,18 @@ pub fn create_file(
     schema: &dyn Schema,
     dirname: PathBuf,
     index: usize,
-) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+) -> Result<Box<dyn FileObject>, CheeseError> {
     let base = BaseFileObject::new(dirname, Some(index));
 
-    let file_object = schema.init_file_object(file_type, base)?;
+    let mut file_object = schema.init_file_object(file_type, base)?;
 
-    let mut fo_mut = file_object.borrow_mut();
-
-    fo_mut.get_base_mut().file.basename = fo_mut.calculate_filename();
+    file_object.get_base_mut().file.basename = file_object.calculate_filename();
 
     if file_type.is_folder() {
-        create_dir(fo_mut.get_path())?;
+        create_dir(file_object.get_path())?;
     }
 
-    fo_mut.save(&HashMap::new())?;
-
-    drop(fo_mut);
+    file_object.save(&HashMap::new())?;
 
     Ok(file_object)
 }
@@ -638,7 +634,7 @@ pub fn create_top_level_folder(
     schema: &dyn Schema,
     dirname: PathBuf,
     name: &str,
-) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+) -> Result<Box<dyn FileObject>, CheeseError> {
     let file_type = schema.get_top_level_folder_type();
     assert!(file_type.is_folder());
 
@@ -647,21 +643,17 @@ pub fn create_top_level_folder(
     base.metadata.name = name.to_string();
     base.file.basename = OsString::from(name.to_lowercase());
 
-    let file_object = schema.init_file_object(file_type, base)?;
+    let mut file_object = schema.init_file_object(file_type, base)?;
 
-    let mut fo_mut = file_object.borrow_mut();
-
-    create_dir(fo_mut.get_path())
+    create_dir(file_object.get_path())
         .map_err(|err| cheese_error!("Failed to create top-level directory: {}: {err}", name))?;
 
-    fo_mut.save(&HashMap::new()).map_err(|err| {
+    file_object.save(&HashMap::new()).map_err(|err| {
         cheese_error!(
             "Failed to save newly created top level directory: {}: {err}",
             name
         )
     })?;
-
-    drop(fo_mut);
 
     Ok(file_object)
 }

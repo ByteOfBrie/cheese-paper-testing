@@ -117,11 +117,6 @@ fn test_basic_create_file_object() -> Result<(), CheeseError> {
     let folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
     let place = create_file(PLACE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
 
-    let scene = scene.borrow();
-    let character = character.borrow();
-    let folder = folder.borrow();
-    let place = place.borrow();
-
     // Ensure that all four of the files exist in the proper place
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 4);
     assert_eq!(
@@ -160,7 +155,6 @@ fn test_create_top_level_folder() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
     let text = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")?;
-    let text = text.borrow();
 
     assert_eq!(read_dir(base_dir.path())?.count(), 1);
     assert_eq!(read_dir(text.get_path())?.count(), 1);
@@ -178,11 +172,9 @@ fn test_create_top_level_folder() -> Result<(), CheeseError> {
 fn test_complicated_file_object_names() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let mut scene = scene.borrow_mut();
+    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
 
     let scene1 = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
-    let scene1 = scene1.borrow_mut();
 
     scene.get_base_mut().metadata.name =
         "This is a really long scene name that will have to be shortened".to_string();
@@ -227,11 +219,9 @@ fn test_complicated_file_object_names() {
 fn test_change_index_scene() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let mut scene = scene.borrow_mut();
+    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
 
     let scene1 = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
-    let scene1 = scene1.borrow_mut();
 
     scene.load_body("sample scene text".to_string());
     scene.get_base_mut().file.modified = true;
@@ -307,14 +297,14 @@ fn test_create_child() {
         .borrow()
         .get_path();
     assert_eq!(read_dir(path).unwrap().count(), 5);
-    assert!(scene.borrow().get_file().exists());
-    assert_eq!(scene.borrow().get_base().index, Some(0));
-    assert!(character.borrow().get_file().exists());
-    assert_eq!(character.borrow().get_base().index, Some(1));
-    assert!(folder.borrow().get_file().exists());
-    assert_eq!(folder.borrow().get_base().index, Some(2));
-    assert!(place.borrow().get_file().exists());
-    assert_eq!(place.borrow().get_base().index, Some(3));
+    assert!(scene.get_file().exists());
+    assert_eq!(scene.get_base().index, Some(0));
+    assert!(character.get_file().exists());
+    assert_eq!(character.get_base().index, Some(1));
+    assert!(folder.get_file().exists());
+    assert_eq!(folder.get_base().index, Some(2));
+    assert!(place.get_file().exists());
+    assert_eq!(place.get_base().index, Some(3));
 }
 
 #[test]
@@ -324,7 +314,7 @@ fn test_set_index_folders() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let top_level_folder = project
+    let mut top_level_folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
@@ -332,26 +322,17 @@ fn test_set_index_folders() {
         .create_child_at_end(FOLDER)
         .unwrap();
 
-    let mid_level_folder = top_level_folder
-        .borrow_mut()
-        .create_child_at_end(FOLDER)
-        .unwrap();
-    let child_scene = mid_level_folder
-        .borrow_mut()
-        .create_child_at_end(SCENE)
-        .unwrap();
-    let child_scene_id = child_scene.borrow().get_base().metadata.id.clone();
+    let mut mid_level_folder = top_level_folder.create_child_at_end(FOLDER).unwrap();
+    let child_scene = mid_level_folder.create_child_at_end(SCENE).unwrap();
+    let child_scene_id = child_scene.get_base().metadata.id.clone();
 
-    assert!(child_scene.borrow().get_file().exists());
-    assert_eq!(child_scene.borrow().get_base().index, Some(0));
+    assert!(child_scene.get_file().exists());
+    assert_eq!(child_scene.get_base().index, Some(0));
 
     project.add_object(mid_level_folder);
     project.add_object(child_scene);
 
-    top_level_folder
-        .borrow_mut()
-        .set_index(1, &project.objects)
-        .unwrap();
+    top_level_folder.set_index(1, &project.objects).unwrap();
 
     let child = project.objects.remove(&child_scene_id).unwrap();
 
@@ -371,8 +352,7 @@ fn test_set_index_folders() {
 fn test_avoid_pointless_save() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let mut scene = scene.borrow_mut();
+    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
 
     let scene_old_modtime = scene.get_base().file.modtime;
     // Check that we get the correct modtime
@@ -382,8 +362,7 @@ fn test_avoid_pointless_save() {
     scene.save(&HashMap::new()).unwrap();
     assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
 
-    let folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
-    let mut folder = folder.borrow_mut();
+    let mut folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
 
     let folder_old_modtime = folder.get_base().file.modtime;
     folder.save(&HashMap::new()).unwrap();
@@ -396,19 +375,18 @@ fn test_save_in_folder() {
 
     let sample_text = "sample body";
 
-    let folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let mut folder = folder.borrow_mut();
+    let mut folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
 
-    let scene = folder.create_child_at_end(SCENE).unwrap();
+    let mut scene = folder.create_child_at_end(SCENE).unwrap();
 
-    scene.borrow_mut().load_body(sample_text.to_owned());
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.load_body(sample_text.to_owned());
+    scene.get_base_mut().file.modified = true;
 
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     let mut map: FileObjectStore = HashMap::new();
-    let id = scene.borrow().get_base().metadata.id.clone();
-    map.insert(id, scene);
+    let id = scene.get_base().metadata.id.clone();
+    map.insert(id, RefCell::new(scene));
 
     folder.save(&map).unwrap();
 
@@ -431,15 +409,10 @@ fn test_reload_objects() {
     // let folder_notes = "this is a folder";
     // let place_description = "lots and lots of trees!";
 
-    let scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let character = create_file(CHARACTER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
-    let folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 2).unwrap();
-    let place = create_file(PLACE, SCHEMA, base_dir.path().to_path_buf(), 3).unwrap();
-
-    let mut scene = scene.borrow_mut();
-    let mut character = character.borrow_mut();
-    let mut folder = folder.borrow_mut();
-    let mut place = place.borrow_mut();
+    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut character = create_file(CHARACTER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
+    let mut folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 2).unwrap();
+    let mut place = create_file(PLACE, SCHEMA, base_dir.path().to_path_buf(), 3).unwrap();
 
     scene.load_body(sample_body.to_string());
     scene.get_base_mut().file.modified = true;
@@ -533,14 +506,14 @@ fn test_reload_project() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     let character = project
         .objects
@@ -549,7 +522,7 @@ fn test_reload_project() {
         .borrow_mut()
         .create_child_at_end(CHARACTER)
         .unwrap();
-    let character_id = character.borrow().get_base().metadata.id.clone();
+    let character_id = character.get_base().metadata.id.clone();
 
     let folder = project
         .objects
@@ -558,7 +531,7 @@ fn test_reload_project() {
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
 
     let place = project
         .objects
@@ -567,11 +540,11 @@ fn test_reload_project() {
         .borrow_mut()
         .create_child_at_end(PLACE)
         .unwrap();
-    let place_id = place.borrow().get_base().metadata.id.clone();
+    let place_id = place.get_base().metadata.id.clone();
 
     // modify the file objects:
-    scene.borrow_mut().load_body(sample_body.to_string());
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.load_body(sample_body.to_string());
+    scene.get_base_mut().file.modified = true;
 
     project.add_object(scene);
     project.add_object(character);
@@ -768,7 +741,6 @@ fn test_name_from_filename() {
 
     let text_path = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")
         .unwrap()
-        .borrow()
         .get_path();
 
     let mut objects = FileObjectStore::new();
@@ -798,7 +770,6 @@ fn test_fix_indexing_on_load() {
 
     let text_path = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")
         .unwrap()
-        .borrow()
         .get_path();
 
     write_with_temp_file(
@@ -869,27 +840,27 @@ fn test_delete() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -998,32 +969,32 @@ fn test_delete_middle() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = project
+    let mut scene2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene2);
@@ -1059,33 +1030,33 @@ fn test_move_simple() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene_to_move = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene_to_move.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene_to_move.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_to_move = folder1.create_child_at_end(SCENE).unwrap();
+    scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
+    scene_to_move.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_id = scene_to_move.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene_to_move.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1139,34 +1110,33 @@ fn test_move_multiple_times() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene_to_move: Box<RefCell<dyn FileObject>> =
-        folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene_to_move.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene_to_move.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_to_move: Box<dyn FileObject> = folder1.create_child_at_end(SCENE).unwrap();
+    scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
+    scene_to_move.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_id = scene_to_move.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene_to_move.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1254,33 +1224,33 @@ fn test_move_folder_contents() {
 
     let text_id = project.text_id.clone();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene = folder2.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder2.create_child_at_end(SCENE).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1380,28 +1350,28 @@ fn test_move_within_folder_backwards() {
 
     let text_id = project.text_id.clone();
 
-    let folder = project
+    let mut folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder.borrow_mut().get_base_mut().file.modified = true;
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder);
     project.add_object(scene);
@@ -1484,28 +1454,28 @@ fn test_move_within_folder_forwards() {
 
     let text_id = project.text_id.clone();
 
-    let folder = project
+    let mut folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder.borrow_mut().get_base_mut().file.modified = true;
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder);
     project.add_object(scene);
@@ -1606,43 +1576,43 @@ fn test_move_between_folder_contents() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene_a = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene_a.borrow_mut().get_base_mut().metadata.name = "a".to_string();
-    scene_a.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_a = folder1.create_child_at_end(SCENE).unwrap();
+    scene_a.get_base_mut().metadata.name = "a".to_string();
+    scene_a.get_base_mut().file.modified = true;
 
-    let scene_b = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene_b.borrow_mut().get_base_mut().metadata.name = "b".to_string();
-    scene_b.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_b = folder1.create_child_at_end(SCENE).unwrap();
+    scene_b.get_base_mut().metadata.name = "b".to_string();
+    scene_b.get_base_mut().file.modified = true;
 
-    let scene_c = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene_c.borrow_mut().get_base_mut().metadata.name = "c".to_string();
-    scene_c.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_c = folder1.create_child_at_end(SCENE).unwrap();
+    scene_c.get_base_mut().metadata.name = "c".to_string();
+    scene_c.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_a_id = scene_a.borrow().get_base().metadata.id.clone();
-    let scene_b_id = scene_b.borrow().get_base().metadata.id.clone();
-    let scene_c_id = scene_c.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_a_id = scene_a.get_base().metadata.id.clone();
+    let scene_b_id = scene_b.get_base().metadata.id.clone();
+    let scene_c_id = scene_c.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1943,22 +1913,22 @@ fn test_move_to_parent() {
 
     let text_id = project.text_id.clone();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder1.create_child_at_end(SCENE).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene);
@@ -2043,22 +2013,22 @@ fn test_move_to_parent_current_position() {
 
     let text_id = project.text_id.clone();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder1.create_child_at_end(SCENE).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene);
@@ -2143,28 +2113,28 @@ fn test_move_to_self() {
 
     let text_id = project.text_id.clone();
 
-    let folder = project
+    let mut folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder.borrow_mut().get_base_mut().file.modified = true;
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder);
     project.add_object(scene);
@@ -2288,35 +2258,29 @@ fn test_move_to_child() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let top_level_folder = project
+    let mut top_level_folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    let top_level_folder_id = top_level_folder.borrow().get_base().metadata.id.clone();
-    top_level_folder.borrow_mut().get_base_mut().metadata.name = String::from("top");
-    top_level_folder.borrow_mut().get_base_mut().file.modified = true;
+    let top_level_folder_id = top_level_folder.get_base().metadata.id.clone();
+    top_level_folder.get_base_mut().metadata.name = String::from("top");
+    top_level_folder.get_base_mut().file.modified = true;
 
-    let mid_level_folder = top_level_folder
-        .borrow_mut()
-        .create_child_at_end(FOLDER)
-        .unwrap();
-    let mid_level_folder_id = mid_level_folder.borrow().get_base().metadata.id.clone();
-    mid_level_folder.borrow_mut().get_base_mut().metadata.name = String::from("mid");
-    mid_level_folder.borrow_mut().get_base_mut().file.modified = true;
+    let mut mid_level_folder = top_level_folder.create_child_at_end(FOLDER).unwrap();
+    let mid_level_folder_id = mid_level_folder.get_base().metadata.id.clone();
+    mid_level_folder.get_base_mut().metadata.name = String::from("mid");
+    mid_level_folder.get_base_mut().file.modified = true;
 
-    let child_folder = mid_level_folder
-        .borrow_mut()
-        .create_child_at_end(SCENE)
-        .unwrap();
-    let child_folder_id = child_folder.borrow().get_base().metadata.id.clone();
-    child_folder.borrow_mut().get_base_mut().metadata.name = String::from("child");
-    child_folder.borrow_mut().get_base_mut().file.modified = true;
+    let mut child_folder = mid_level_folder.create_child_at_end(SCENE).unwrap();
+    let child_folder_id = child_folder.get_base().metadata.id.clone();
+    child_folder.get_base_mut().metadata.name = String::from("child");
+    child_folder.get_base_mut().file.modified = true;
 
-    assert!(child_folder.borrow().get_file().exists());
-    assert_eq!(child_folder.borrow().get_base().index, Some(0));
+    assert!(child_folder.get_file().exists());
+    assert_eq!(child_folder.get_base().index, Some(0));
 
     project.add_object(top_level_folder);
     project.add_object(mid_level_folder);
@@ -2425,28 +2389,28 @@ fn test_move_no_clobber() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let scene1 = project
+    let mut scene1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "a".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    scene1.get_base_mut().metadata.name = "a".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = project
+    let mut scene2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "a".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    scene2.get_base_mut().metadata.name = "a".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(scene1);
     project.add_object(scene2);
@@ -2538,16 +2502,15 @@ fn test_move_no_clobber() {
 fn test_place_nesting() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text").unwrap();
-    let mut text = text.borrow_mut();
+    let mut text = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text").unwrap();
 
-    let place1 = text.create_child_at_end(PLACE).unwrap();
+    let mut place1 = text.create_child_at_end(PLACE).unwrap();
 
-    let place2 = place1.borrow_mut().create_child_at_end(PLACE).unwrap();
+    let place2 = place1.create_child_at_end(PLACE).unwrap();
 
-    assert!(place2.borrow().get_file().exists());
-    assert_eq!(place1.borrow().get_base().index, Some(0));
-    assert_eq!(place2.borrow().get_base().index, Some(0));
+    assert!(place2.get_file().exists());
+    assert_eq!(place1.get_base().index, Some(0));
+    assert_eq!(place2.get_base().index, Some(0));
 }
 
 #[test]
@@ -2815,27 +2778,27 @@ fn test_tracker_delete_file() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -2905,27 +2868,27 @@ fn test_tracker_delete_folder() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3017,27 +2980,27 @@ fn test_tracker_rename_file() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3162,27 +3125,27 @@ fn test_tracker_rename_folder() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3344,27 +3307,27 @@ fn test_tracker_move_file() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3538,38 +3501,38 @@ fn test_tracker_move_folder() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -3724,27 +3687,27 @@ fn test_tracker_move_file_reindex() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3977,27 +3940,27 @@ fn test_tracker_move_file_copy_delete() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -4247,38 +4210,38 @@ fn test_tracker_move_reindex_folder() {
     let mut project =
         Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1.borrow_mut().create_child_at_end(SCENE).unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let scene3 = project
+    let mut scene3 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
         .create_child_at_end(SCENE)
         .unwrap();
-    scene3.borrow_mut().get_base_mut().metadata.name = "scene3".to_string();
-    scene3.borrow_mut().get_base_mut().file.modified = true;
+    scene3.get_base_mut().metadata.name = "scene3".to_string();
+    scene3.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
-    let scene3_id = scene3.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
+    let scene3_id = scene3.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);

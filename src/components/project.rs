@@ -159,8 +159,8 @@ fn load_top_level_folder(
                     err
                 )
             })?;
-        let folder_id = top_level_folder.borrow().id().clone();
-        objects.insert(folder_id.clone(), top_level_folder);
+        let folder_id = top_level_folder.id().clone();
+        objects.insert(folder_id.clone(), RefCell::new(top_level_folder));
         Ok(folder_id)
     }
 }
@@ -228,9 +228,9 @@ impl Project {
                 ..Default::default()
             },
             metadata: ProjectMetadata::default(),
-            text_id: text.borrow().id().clone(),
-            characters_id: characters.borrow().id().clone(),
-            worldbuilding_id: worldbuilding.borrow().id().clone(),
+            text_id: text.id().clone(),
+            characters_id: characters.id().clone(),
+            worldbuilding_id: worldbuilding.id().clone(),
             file,
             toml_header: DocumentMut::new(),
             objects: HashMap::new(),
@@ -361,9 +361,9 @@ impl Project {
         Ok(project)
     }
 
-    pub fn add_object(&mut self, new_object: Box<RefCell<dyn FileObject>>) {
-        let id = new_object.borrow().id().clone();
-        self.objects.insert(id, new_object);
+    pub fn add_object(&mut self, new_object: Box<dyn FileObject>) {
+        let id = new_object.id().clone();
+        self.objects.insert(id, RefCell::new(new_object));
     }
 
     pub fn save(&mut self) -> Result<(), CheeseError> {

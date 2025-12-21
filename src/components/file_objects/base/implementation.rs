@@ -17,7 +17,7 @@ use crate::components::file_objects::FileObject;
 
 pub type FileID = Rc<String>;
 
-pub type FileObjectStore = HashMap<FileID, Box<RefCell<dyn FileObject>>>;
+pub type FileObjectStore = HashMap<FileID, RefCell<Box<dyn FileObject>>>;
 
 impl dyn FileObject {
     pub fn is_folder(&self) -> bool {
@@ -127,12 +127,11 @@ impl dyn FileObject {
     pub fn children<'a>(
         &self,
         objects: &'a FileObjectStore,
-    ) -> impl Iterator<Item = &'a RefCell<dyn FileObject>> {
+    ) -> impl Iterator<Item = &'a RefCell<Box<dyn FileObject>>> {
         self.get_base()
             .children
             .iter()
             .filter_map(|child_id| objects.get(child_id))
-            .map(|b| &**b)
     }
 
     pub fn new<O: FileObject + 'static>(o: O) -> Box<RefCell<dyn FileObject>> {
@@ -144,7 +143,7 @@ impl dyn FileObject {
     pub fn create_child_at_end(
         &mut self,
         file_type: FileType,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    ) -> Result<Box<dyn FileObject>, CheeseError> {
         assert!(self.is_folder());
 
         // We know it's at the end, and thus we know that there aren't any children
@@ -157,7 +156,7 @@ impl dyn FileObject {
         file_type: FileType,
         position: DirPosition<FileID>,
         objects: &FileObjectStore,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    ) -> Result<Box<dyn FileObject>, CheeseError> {
         let new_index = match position {
             DirPosition::After(child) => {
                 self.get_base()
@@ -182,12 +181,12 @@ impl dyn FileObject {
         // It might not be the best behavior to recover from an error *after* a file is created on
         // disk, but that might not even be possible, and is kinda okay since we should only ever
         // overwrite that file by accident, even in the worst case
-        let new_object: Box<RefCell<dyn FileObject>> =
+        let new_object: Box<dyn FileObject> =
             create_file(file_type, self.get_schema(), self.get_path(), new_index)?;
 
         self.get_base_mut()
             .children
-            .insert(new_index, new_object.borrow().id().clone());
+            .insert(new_index, new_object.id().clone());
 
         Ok(new_object)
     }

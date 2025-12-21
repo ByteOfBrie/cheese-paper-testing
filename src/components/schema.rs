@@ -3,7 +3,6 @@ use crate::{
     util::CheeseError,
 };
 
-use std::cell::RefCell;
 use std::path::Path;
 
 pub use crate::schemas::FileType;
@@ -25,14 +24,14 @@ pub trait Schema {
         &self,
         file_type: FileType,
         base: BaseFileObject,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError>;
+    ) -> Result<Box<dyn FileObject>, CheeseError>;
 
     fn load_file_object(
         &self,
         file_type: FileType,
         base: BaseFileObject,
         body: Option<String>,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError>;
+    ) -> Result<Box<dyn FileObject>, CheeseError>;
 }
 
 impl std::fmt::Debug for dyn Schema {

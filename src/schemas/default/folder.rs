@@ -32,7 +32,7 @@ pub struct Folder {
 }
 
 impl Folder {
-    pub const IDENTIFIER: usize = 2;
+    pub const IDENTIFIER: &'static str = "folder";
 
     pub const TYPE_INFO: FileTypeInfo = FileTypeInfo {
         identifier: Self::IDENTIFIER,
@@ -112,7 +112,6 @@ impl FileObject for Folder {
     }
 
     fn write_metadata(&mut self, _objects: &FileObjectStore) {
-        self.base.toml_header["file_type"] = toml_edit::value("folder");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.base.toml_header["compile_status"] =

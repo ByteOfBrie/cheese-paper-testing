@@ -29,7 +29,7 @@ pub fn resolve_schema(identifier: &str) -> Result<&'static dyn Schema, CheeseErr
 /// A struct which can be used by any schema to represent any of it's available file types
 pub struct FileTypeInfo {
     /// identifier used by the schema to indicate a file type
-    identifier: usize,
+    identifier: &'static str,
 
     is_folder: bool,
 
@@ -67,6 +67,10 @@ impl std::fmt::Debug for FileTypeInfo {
 }
 
 impl FileTypeInfo {
+    pub fn get_identifier(&self) -> &'static str {
+        self.identifier
+    }
+
     pub fn is_folder(&self) -> bool {
         self.is_folder
     }

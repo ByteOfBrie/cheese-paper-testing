@@ -31,7 +31,7 @@ pub struct Character {
 }
 
 impl Character {
-    pub const IDENTIFIER: usize = 1;
+    pub const IDENTIFIER: &'static str = "character";
 
     pub const TYPE_INFO: FileTypeInfo = FileTypeInfo {
         identifier: Self::IDENTIFIER,
@@ -133,7 +133,6 @@ impl FileObject for Character {
     }
 
     fn write_metadata(&mut self, _objects: &FileObjectStore) {
-        self.base.toml_header["file_type"] = toml_edit::value("character");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.base.toml_header["appearance"] = toml_edit::value(&*self.metadata.appearance);

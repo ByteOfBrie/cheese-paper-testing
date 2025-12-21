@@ -29,7 +29,7 @@ pub struct Place {
 }
 
 impl Place {
-    pub const IDENTIFIER: usize = 3;
+    pub const IDENTIFIER: &'static str = "worldbuilding";
 
     pub const TYPE_INFO: FileTypeInfo = FileTypeInfo {
         identifier: Self::IDENTIFIER,
@@ -121,7 +121,6 @@ impl FileObject for Place {
     }
 
     fn write_metadata(&mut self, _objects: &FileObjectStore) {
-        self.base.toml_header["file_type"] = toml_edit::value("worldbuilding");
         self.base.toml_header["connection"] = toml_edit::value(&*self.metadata.connection);
         self.base.toml_header["description"] = toml_edit::value(&*self.metadata.description);
         self.base.toml_header["appearance"] = toml_edit::value(&*self.metadata.appearance);

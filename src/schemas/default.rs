@@ -53,12 +53,14 @@ impl Schema for DefaultSchema {
             },
             Some(file_type_str) => {
                 match file_type_str {
-                    "scene" => Ok(&Scene::TYPE_INFO),
-                    "folder" => Ok(&Folder::TYPE_INFO),
-                    "character" => Ok(&Character::TYPE_INFO),
-                    "worldbuilding" => Ok(&Place::TYPE_INFO),
+                    Scene::IDENTIFIER => Ok(&Scene::TYPE_INFO),
+                    Folder::IDENTIFIER => Ok(&Folder::TYPE_INFO),
+                    Character::IDENTIFIER => Ok(&Character::TYPE_INFO),
+                    Place::IDENTIFIER => Ok(&Place::TYPE_INFO),
+
                     // "worldbuilding" is the proper string, but also accept "place"
                     "place" => Ok(&Place::TYPE_INFO),
+
                     _ => Err(cheese_error!("Unknown file type: {file_type_str}")),
                 }
             }

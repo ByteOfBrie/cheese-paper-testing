@@ -410,6 +410,8 @@ impl dyn FileObject {
         // Ensure `toml_header` has the up-to-date metadata
         self.get_base_mut().write_metadata();
         self.write_metadata(objects);
+        self.get_base_mut().toml_header["file_type"] =
+            toml_edit::value(self.get_type().get_identifier());
 
         let mut final_str = self.get_base().toml_header.to_string();
 

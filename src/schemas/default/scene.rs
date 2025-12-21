@@ -38,7 +38,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub const IDENTIFIER: usize = 4;
+    pub const IDENTIFIER: &'static str = "scene";
 
     pub const TYPE_INFO: FileTypeInfo = FileTypeInfo {
         identifier: Self::IDENTIFIER,
@@ -152,7 +152,6 @@ impl FileObject for Scene {
     }
 
     fn write_metadata(&mut self, objects: &FileObjectStore) {
-        self.base.toml_header["file_type"] = toml_edit::value("scene");
         self.base.toml_header["summary"] = toml_edit::value(&*self.metadata.summary);
         self.base.toml_header["notes"] = toml_edit::value(&*self.metadata.notes);
         self.base.toml_header["pov"] =

@@ -1,7 +1,7 @@
 use crate::ui::prelude::*;
 use spellbook::Dictionary;
 
-use crate::components::file_objects::{create_dir_if_missing, write_with_temp_file};
+use crate::components::file_objects::utils::{create_dir_if_missing, write_with_temp_file};
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
 use rfd::FileDialog;

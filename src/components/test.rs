@@ -3,7 +3,7 @@ use crate::components::file_objects::FileObjectStore;
 
 // use crate::schemas::FileType;
 
-use crate::components::file_objects::{FileID, FileObject, write_with_temp_file};
+use crate::components::file_objects::{FileID, FileObject, utils::write_with_temp_file};
 
 use crate::components::project::Project;
 use crate::util::CheeseError;

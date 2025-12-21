@@ -1,9 +1,9 @@
 use crate::components::file_objects::FileObjectStore;
-use crate::components::file_objects::base_file_object::{
-    CompileStatus, IncludeOptions, metadata_extract_string, metadata_extract_u64,
+use crate::components::file_objects::utils::{
+    metadata_extract_string, metadata_extract_u64, write_outline_property,
 };
-use crate::components::file_objects::utils::write_outline_property;
 use crate::components::file_objects::{BaseFileObject, FileObject};
+use crate::components::file_objects::{CompileStatus, IncludeOptions};
 use crate::components::project::ExportOptions;
 use crate::components::text::Text;
 use crate::schemas::FileType;

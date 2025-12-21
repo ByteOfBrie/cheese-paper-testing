@@ -1,7 +1,5 @@
 use crate::cheese_error;
-use crate::components::file_objects::{
-    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, write_with_temp_file,
-};
+use crate::components::file_objects::{FileInfo, FileObject, FileObjectMetadata, FileObjectStore};
 use crate::components::schema::Schema;
 use crate::components::text::Text;
 use crate::schemas::DEFAULT_SCHEMA;
@@ -22,11 +20,9 @@ use toml_edit::DocumentMut;
 
 use crate::components::file_objects::{FOLDER_METADATA_FILE_NAME, FileID};
 
-use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
-
-use crate::components::file_objects::base_file_object::{
-    metadata_extract_bool, metadata_extract_string,
-    metadata_extract_u64,
+use crate::components::file_objects::utils::{
+    metadata_extract_bool, metadata_extract_string, metadata_extract_u64,
+    process_name_for_filename, write_outline_property, write_with_temp_file,
 };
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;

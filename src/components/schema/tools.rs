@@ -1,5 +1,5 @@
-use crate::components::file_objects::base_file_object::*;
 use crate::components::file_objects::utils::{get_index_from_name, read_file_contents};
+use crate::components::file_objects::{FileInfo, FileObjectMetadata};
 use crate::components::schema::{FileType, Schema};
 
 use std::cell::RefCell;
@@ -12,9 +12,12 @@ use toml_edit::DocumentMut;
 
 use crate::cheese_error;
 
-use crate::components::file_objects::{BaseFileObject, FileObject, FileID, FileObjectStore, FOLDER_METADATA_FILE_NAME};
+use crate::components::file_objects::{
+    BaseFileObject, FOLDER_METADATA_FILE_NAME, FileID, FileObject, FileObjectStore,
+};
 use crate::util::CheeseError;
 
+#[allow(clippy::only_used_in_recursion)]
 impl dyn Schema {
     fn parent_contains(
         &self,

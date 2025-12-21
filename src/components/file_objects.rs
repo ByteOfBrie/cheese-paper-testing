@@ -1,7 +1,7 @@
-pub mod base_file_object;
-pub mod reference;
-pub mod utils;
+mod base_file_object;
+mod reference;
 mod tools;
+pub mod utils;
 
 use crate::components::Schema;
 use crate::components::schema::FileType;
@@ -15,11 +15,13 @@ use crate::util::CheeseError;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-pub use utils::{create_dir_if_missing, write_with_temp_file};
+pub use utils::{FILENAME_MAX_LENGTH, FOLDER_METADATA_FILE_NAME, HEADER_SPLIT};
 
-pub use base_file_object::{BaseFileObject, FileObjectMetadata, FileInfo};
+pub use base_file_object::{
+    BaseFileObject, CompileStatus, FileInfo, FileObjectMetadata, IncludeOptions,
+};
 
-pub use tools::FOLDER_METADATA_FILE_NAME;
+pub use reference::ObjectReference;
 
 pub trait FileObject: Debug {
     fn get_type(&self) -> FileType;

@@ -1,11 +1,8 @@
 use bitflags::bitflags;
 use uuid::Uuid;
 
-use super::{FileObject, FileID};
-use crate::cheese_error;
-use crate::components::file_objects::utils::{
-    add_index_to_name, process_name_for_filename, truncate_name,
-};
+use super::*;
+use crate::components::file_objects::utils::*;
 // use crate::components::file_objects::{Character, Folder, Place, Scene};
 use crate::components::schema::FileType;
 use crate::util::CheeseError;
@@ -15,9 +12,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 use toml_edit::{DocumentMut, TableLike};
-
-/// the maximum length of a name before we start trying to truncate it
-pub const FILENAME_MAX_LENGTH: usize = 30;
 
 /// Loading a file:
 /// 1. Parse filename as a name -> metadata.name
@@ -161,54 +155,6 @@ pub enum IncludeOptions {
     Never,
 }
 
-pub fn metadata_extract_u64(
-    table: &dyn TableLike,
-    field_name: &str,
-    allow_bool: bool,
-) -> Result<Option<u64>, CheeseError> {
-    match table.get(field_name) {
-        Some(value) => {
-            if let Some(value) = value.as_integer() {
-                Ok(Some(value as u64))
-            } else if allow_bool && let Some(value) = value.as_bool() {
-                Ok(Some(value as u64))
-            } else {
-                Err(cheese_error!("{field_name} was not an integer"))
-            }
-        }
-        None => Ok(None),
-    }
-}
-
-pub fn metadata_extract_string(
-    table: &dyn TableLike,
-    field_name: &str,
-) -> Result<Option<String>, CheeseError> {
-    Ok(match table.get(field_name) {
-        Some(value) => Some(
-            value
-                .as_str()
-                .ok_or_else(|| cheese_error!("{field_name} was not string"))?
-                .to_owned(),
-        ),
-        None => None,
-    })
-}
-
-pub fn metadata_extract_bool(
-    table: &dyn TableLike,
-    field_name: &str,
-) -> Result<Option<bool>, CheeseError> {
-    Ok(match table.get(field_name) {
-        Some(value) => Some(
-            value
-                .as_bool()
-                .ok_or_else(|| cheese_error!("{field_name} was not bool"))?,
-        ),
-        None => None,
-    })
-}
-
 impl FileObjectMetadata {
     /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
     /// appropriate
@@ -246,7 +192,7 @@ impl BaseFileObject {
 
         let mut basename = match self.index {
             Some(index) => {
-                let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
+                let truncated_name = truncate_name(base_name, super::FILENAME_MAX_LENGTH);
                 let file_safe_name = process_name_for_filename(truncated_name);
                 let final_name = add_index_to_name(&file_safe_name, index);
 

@@ -40,6 +40,15 @@ impl Schema for DefaultSchema {
         file_type_identifier: Option<&str>,
     ) -> Result<FileType, CheeseError> {
         match file_type_identifier {
+            None => match filename.is_dir() {
+                true => Ok(&Folder::TYPE_INFO),
+                false => match filename.extension().and_then(|ext| ext.to_str()) {
+                    Some("md") => Ok(&Scene::TYPE_INFO),
+                    _ => Err(cheese_error!(
+                        "Unspecified file type file type while attempting to read {filename:?}"
+                    )),
+                },
+            },
             Some(file_type_str) => {
                 match file_type_str {
                     "scene" => Ok(&Scene::TYPE_INFO),
@@ -51,15 +60,6 @@ impl Schema for DefaultSchema {
                     _ => Err(cheese_error!("Unknown file type: {file_type_str}")),
                 }
             }
-            None => match filename.is_dir() {
-                true => Ok(&Folder::TYPE_INFO),
-                false => match filename.extension().and_then(|ext| ext.to_str()) {
-                    Some("md") => Ok(&Scene::TYPE_INFO),
-                    _ => Err(cheese_error!(
-                        "Unspecified file type file type while attempting to read {filename:?}"
-                    )),
-                },
-            },
         }
     }
 

@@ -10,6 +10,22 @@ pub use default::DEFAULT_SCHEMA;
 
 use std::hash::{Hash, Hasher};
 
+use crate::{cheese_error, components::Schema, util::CheeseError};
+
+pub const SCHEMA_LIST: [&'static dyn Schema; 1] = [&DEFAULT_SCHEMA];
+
+pub fn resolve_schema(identifier: &str) -> Result<&'static dyn Schema, CheeseError> {
+    for schema in SCHEMA_LIST {
+        if schema.get_schema_identifier() == identifier {
+            return Ok(schema);
+        }
+    }
+
+    Err(cheese_error!(
+        "No schema found with identifier '{identifier}'"
+    ))
+}
+
 /// A struct which can be used by any schema to represent any of it's available file types
 pub struct FileTypeInfo {
     /// identifier used by the schema to indicate a file type

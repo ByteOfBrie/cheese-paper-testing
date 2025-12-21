@@ -1,4 +1,4 @@
-use crate::ui::prelude::*;
+use crate::{schemas::DEFAULT_SCHEMA, schemas::SCHEMA_LIST, ui::prelude::*};
 use spellbook::Dictionary;
 
 use crate::components::file_objects::utils::{create_dir_if_missing, write_with_temp_file};
@@ -163,6 +163,7 @@ pub struct EditorState {
     error_message: Option<(String, Instant)>,
     new_project_dir: Option<PathBuf>,
     new_project_name: String,
+    new_project_schema: &'static dyn Schema,
     /// Hacky (?) variable to get around borrows (set in the state rather than close directly)
     pub closing_project: bool,
     pub next_project: Option<PathBuf>,
@@ -229,6 +230,7 @@ impl Default for EditorState {
             error_message: None,
             new_project_dir: None,
             new_project_name: String::new(),
+            new_project_schema: &DEFAULT_SCHEMA,
             closing_project: false,
             next_project: None,
         }
@@ -554,6 +556,19 @@ impl CheesePaperApp {
                 ui.label("Project Name:");
                 ui.text_edit_singleline(&mut self.state.new_project_name);
 
+                ui.label("Project Schema:");
+                egui::ComboBox::from_id_salt("schema selection dropdown")
+                    .selected_text(self.state.new_project_schema.get_schema_name())
+                    .show_ui(ui, |ui| {
+                        for schema in SCHEMA_LIST {
+                            ui.selectable_value(
+                                &mut self.state.new_project_schema,
+                                schema,
+                                schema.get_schema_name(),
+                            );
+                        }
+                    });
+
                 ui.separator();
 
                 egui::Sides::new().show(
@@ -562,6 +577,7 @@ impl CheesePaperApp {
                     |ui| {
                         if ui.button("Ok").clicked() {
                             match Project::new(
+                                self.state.new_project_schema,
                                 owned_folder_dir.clone(),
                                 self.state.new_project_name.clone(),
                             ) {

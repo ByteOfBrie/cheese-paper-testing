@@ -28,6 +28,10 @@ const FILE_TYPE_LIST: [FileType; 4] = [
 pub struct DefaultSchema {}
 
 impl Schema for DefaultSchema {
+    fn get_schema_identifier(&self) -> &'static str {
+        "default"
+    }
+
     fn get_schema_name(&self) -> &'static str {
         "Default"
     }

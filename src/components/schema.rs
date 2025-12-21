@@ -10,6 +10,10 @@ use std::path::Path;
 pub use crate::schemas::FileType;
 
 pub trait Schema {
+    /// the id string used in metadata files to identify this schema
+    fn get_schema_identifier(&self) -> &'static str;
+
+    /// The pretty name of this Schema
     fn get_schema_name(&self) -> &'static str;
 
     fn resolve_type(

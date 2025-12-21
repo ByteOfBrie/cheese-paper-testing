@@ -2,12 +2,14 @@ use crate::cheese_error;
 use crate::components::file_objects::{FileInfo, FileObject, FileObjectMetadata, FileObjectStore};
 use crate::components::schema::Schema;
 use crate::components::text::Text;
-use crate::schemas::DEFAULT_SCHEMA;
+use crate::schemas::{DEFAULT_SCHEMA, resolve_schema};
 use crate::util::CheeseError;
+
 use notify::event::RenameMode;
 use notify::{EventKind, event::ModifyKind};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{DebouncedEvent, Debouncer, RecommendedCache, new_debouncer};
+
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::collections::{HashMap, VecDeque};
@@ -27,10 +29,6 @@ use crate::components::file_objects::utils::{
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
 type WatcherReceiver = std::sync::mpsc::Receiver<Result<Vec<DebouncedEvent>, Vec<notify::Error>>>;
-
-/// Temporary solution. Point to the schema statically here.
-/// Eventually, a solution for loading the schema when opening the project will be needed
-const SCHEMA: &'static dyn Schema = &crate::schemas::DEFAULT_SCHEMA;
 
 /// An entire project. This is somewhat file_object like, but we don't implement everything,
 /// so it's separate (for now)
@@ -110,6 +108,7 @@ const PROJECT_INFO_NAME: &str = "project.toml";
 ///
 /// Name will be used directly in the metadata name, but will be converted to lowercase for the filename
 fn load_top_level_folder(
+    schema: &'static dyn Schema,
     project_path: &Path,
     name: &str,
     objects: &mut FileObjectStore,
@@ -118,7 +117,7 @@ fn load_top_level_folder(
 
     let folder_path = &Path::join(project_path, name.to_lowercase());
     if folder_path.exists() {
-        let created_object = SCHEMA
+        let created_object = schema
             .load_file(folder_path, objects)
             .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
 
@@ -150,7 +149,7 @@ fn load_top_level_folder(
         }
     } else {
         log::debug!("top level folder {name} does not exist, creating...");
-        let top_level_folder = SCHEMA
+        let top_level_folder = schema
             .create_top_level_folder(project_path.to_owned(), name)
             .map_err(|err| {
                 cheese_error!(
@@ -184,7 +183,11 @@ fn create_watcher() -> notify::Result<(RecommendedDebouncer, WatcherReceiver)> {
 
 impl Project {
     /// Create a new project
-    pub fn new(dirname: PathBuf, project_name: String) -> Result<Self, CheeseError> {
+    pub fn new(
+        schema: &'static dyn Schema,
+        dirname: PathBuf,
+        project_name: String,
+    ) -> Result<Self, CheeseError> {
         let canonical_dirname = dirname.canonicalize().unwrap();
         // Not truncating here (for now)
         let file_safe_name = process_name_for_filename(&project_name);
@@ -198,10 +201,10 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
-        let text = SCHEMA.create_top_level_folder(project_path.clone(), "Text")?;
-        let characters = SCHEMA.create_top_level_folder(project_path.clone(), "Characters")?;
+        let text = schema.create_top_level_folder(project_path.clone(), "Text")?;
+        let characters = schema.create_top_level_folder(project_path.clone(), "Characters")?;
         let worldbuilding =
-            SCHEMA.create_top_level_folder(project_path.clone(), "Worldbuilding")?;
+            schema.create_top_level_folder(project_path.clone(), "Worldbuilding")?;
 
         let file = FileInfo {
             dirname: canonical_dirname,
@@ -221,8 +224,11 @@ impl Project {
             .watch(watcher_path, RecursiveMode::Recursive)
             .unwrap();
 
+        let mut toml_header = DocumentMut::new();
+        toml_header["schema"] = toml_edit::value(schema.get_schema_identifier());
+
         let mut project = Self {
-            schema: &DEFAULT_SCHEMA,
+            schema,
             base_metadata: FileObjectMetadata {
                 name: project_name,
                 ..Default::default()
@@ -232,7 +238,7 @@ impl Project {
             characters_id: characters.id().clone(),
             worldbuilding_id: worldbuilding.id().clone(),
             file,
-            toml_header: DocumentMut::new(),
+            toml_header,
             objects: HashMap::new(),
             last_added_event: None,
             event_queue: VecDeque::new(),
@@ -282,7 +288,7 @@ impl Project {
         // Load project metadata
         let project_info_path = Path::join(&path, PROJECT_INFO_NAME);
 
-        let toml_header = if project_info_path.exists() {
+        let mut toml_header = if project_info_path.exists() {
             log::debug!("Found `project_info.toml`, loading project");
 
             let project_info_data =
@@ -305,17 +311,36 @@ impl Project {
                          contain {PROJECT_INFO_NAME} or text folder"
                 ));
             }
-            log::debug!("Found `text/` but no project info file, creating it and continuing");
+            log::warn!("Found `text/` but no project info file, creating it and continuing");
             DocumentMut::new()
         };
 
+        let schema_identifier: String = match toml_header.get("schema") {
+            Some(item) => match item.as_str() {
+                Some(s) => s.to_string(),
+                None => {
+                    return Err(cheese_error!(
+                        "Invalid value found for 'schema' key: {item:?}"
+                    ));
+                }
+            },
+            None => {
+                log::warn!("Project does not have a schema configured. Using default schema");
+                toml_header["schema"] = toml_edit::value(DEFAULT_SCHEMA.get_schema_identifier());
+                file_info.modified = true;
+                DEFAULT_SCHEMA.get_schema_identifier().to_string()
+            }
+        };
+
+        let schema = resolve_schema(&schema_identifier)?;
+
         // Load or create folders
         let mut objects = FileObjectStore::new();
-        let text_id = load_top_level_folder(&path, "Text", &mut objects)?;
+        let text_id = load_top_level_folder(schema, &path, "Text", &mut objects)?;
 
-        let characters_id = load_top_level_folder(&path, "Characters", &mut objects)?;
+        let characters_id = load_top_level_folder(schema, &path, "Characters", &mut objects)?;
 
-        let worldbuilding_id = load_top_level_folder(&path, "Worldbuilding", &mut objects)?;
+        let worldbuilding_id = load_top_level_folder(schema, &path, "Worldbuilding", &mut objects)?;
 
         log::debug!("Finished loading all project file objects, continuing");
 
@@ -333,7 +358,7 @@ impl Project {
             .unwrap();
 
         let mut project = Self {
-            schema: &DEFAULT_SCHEMA,
+            schema: schema,
             metadata,
             base_metadata,
             file: file_info,
@@ -417,6 +442,13 @@ impl Project {
     }
 
     fn write_metadata(&mut self) {
+        assert_eq!(
+            self.toml_header["schema"]
+                .as_str()
+                .expect("schema should be a string"),
+            self.schema.get_schema_identifier()
+        );
+
         self.toml_header["file_format_version"] =
             toml_edit::value(self.base_metadata.version as i64);
         self.toml_header["name"] = toml_edit::value(&self.base_metadata.name);
@@ -912,7 +944,7 @@ impl Project {
                     continue;
                 }
 
-                match SCHEMA.load_file(&event_path, &mut self.objects) {
+                match self.schema.load_file(&event_path, &mut self.objects) {
                     Ok(file_id) => {
                         let parent_path = get_parent_path(&event_path);
                         let parent_id_option = self.find_object_by_path(parent_path);

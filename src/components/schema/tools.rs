@@ -17,6 +17,14 @@ use crate::components::file_objects::{
 };
 use crate::util::CheeseError;
 
+impl PartialEq for dyn Schema {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_schema_identifier() == other.get_schema_identifier()
+    }
+}
+
+impl Eq for dyn Schema {}
+
 #[allow(clippy::only_used_in_recursion)]
 impl dyn Schema {
     fn parent_contains(

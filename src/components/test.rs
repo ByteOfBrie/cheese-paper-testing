@@ -1,8 +1,6 @@
 use crate::components::Schema;
 use crate::components::file_objects::FileObjectStore;
 
-// use crate::schemas::FileType;
-
 use crate::components::file_objects::{FileID, FileObject, utils::write_with_temp_file};
 
 use crate::components::project::Project;
@@ -88,7 +86,12 @@ fn test_basic_create_project() {
     assert!(!project_path.exists());
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 0);
 
-    let project = Project::new(base_dir.path().to_path_buf(), project_name.to_string()).unwrap();
+    let project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        project_name.to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project_path.canonicalize().unwrap(), project.get_path());
 
@@ -268,7 +271,12 @@ fn test_change_index_scene() {
 #[test]
 fn test_create_child() {
     let base_dir = tempfile::TempDir::new().unwrap();
-    let project = Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     // create the scenes
     let scene = project
@@ -325,8 +333,12 @@ fn test_create_child() {
 fn test_set_index_folders() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut top_level_folder = project
         .objects
@@ -513,8 +525,12 @@ fn test_reload_project() {
 
     let sample_body = "sample body";
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut scene = project
         .objects
@@ -646,7 +662,12 @@ fn test_load_markdown() {
     let sample_body = "sample body";
 
     // open and immediately drop the project (just creating the files)
-    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     write_with_temp_file(
         &Path::join(base_dir.path(), "test_project/text/000-New_Scene.md"),
@@ -692,7 +713,12 @@ another multiline block
 contents1
 "#;
     // open and immediately drop the project (just creating the files)
-    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     write_with_temp_file(
         &Path::join(base_dir.path(), "test_project/text/000-New_Scene.md"),
@@ -834,8 +860,12 @@ contents123"#
 fn test_delete() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -963,8 +993,12 @@ fn test_delete() {
 fn test_delete_middle() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -1024,8 +1058,12 @@ fn test_delete_middle() {
 fn test_move_simple() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -1106,8 +1144,12 @@ fn test_move_simple() {
 fn test_move_multiple_times() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -1222,8 +1264,12 @@ fn test_move_multiple_times() {
 fn test_move_folder_contents() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
@@ -1350,8 +1396,12 @@ fn test_move_folder_contents() {
 fn test_move_within_folder_backwards() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
@@ -1456,8 +1506,12 @@ fn test_move_within_folder_backwards() {
 fn test_move_within_folder_forwards() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
@@ -1582,8 +1636,12 @@ fn test_move_within_folder_forwards() {
 fn test_move_between_folder_contents() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -1921,8 +1979,12 @@ fn test_move_between_folder_contents() {
 fn test_move_to_parent() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
@@ -2023,8 +2085,12 @@ fn test_move_to_parent() {
 fn test_move_to_parent_current_position() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
@@ -2125,8 +2191,12 @@ fn test_move_to_parent_current_position() {
 fn test_move_to_self() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
@@ -2274,8 +2344,12 @@ fn test_move_to_self() {
 fn test_move_to_child() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut top_level_folder = project
         .objects
@@ -2405,8 +2479,12 @@ fn test_move_to_child() {
 fn test_move_no_clobber() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut scene1 = project
         .objects
@@ -2545,7 +2623,12 @@ file_type = "place""#;
 file_type = "worldbuilding""#;
 
     // open and immediately drop the project (just creating the files)
-    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     std::fs::create_dir(Path::join(
         base_dir.path(),
@@ -2607,8 +2690,12 @@ fn test_tracker_creation_basic() {
 
     let scene_text = "123456";
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project.objects.len(), 3);
 
@@ -2635,8 +2722,12 @@ fn test_tracker_creation_folder() {
 
     let scene_text = "123456";
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project.objects.len(), 3);
 
@@ -2679,8 +2770,12 @@ fn test_tracker_creation_place() {
     let place_file_text = r#"id = "1"
 file_type = "place""#;
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project.objects.len(), 3);
 
@@ -2719,8 +2814,12 @@ fn test_tracker_creation_by_movement() {
 ++++++++
 123456"#;
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     write_with_temp_file(&other_dir.path().join("scene.md"), scene_text.as_bytes()).unwrap();
 
@@ -2754,8 +2853,12 @@ fn test_tracker_creation_by_movement_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
     let other_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     create_dir(Path::join(other_dir.path(), "000-folder1")).unwrap();
 
@@ -2797,8 +2900,12 @@ fn test_tracker_creation_by_movement_folder() {
 fn test_tracker_delete_file() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -2887,8 +2994,12 @@ fn test_tracker_delete_file() {
 fn test_tracker_delete_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -2999,8 +3110,12 @@ fn test_tracker_rename_file() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -3144,8 +3259,12 @@ fn test_tracker_rename_folder() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -3326,8 +3445,12 @@ fn test_tracker_move_file() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -3520,8 +3643,12 @@ fn test_tracker_move_folder() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -3706,8 +3833,12 @@ fn test_tracker_move_file_reindex() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -3902,8 +4033,12 @@ fn test_tracker_move_file_reindex() {
 fn test_tracker_modification() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let scene_text = r#"id = "1"
 ++++++++
@@ -3959,8 +4094,12 @@ fn test_tracker_move_file_copy_delete() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -4143,8 +4282,12 @@ fn test_tracker_move_file_copy_delete() {
 fn test_tracker_move_modification() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let scene_text = r#"id = "1"
 ++++++++
@@ -4229,8 +4372,12 @@ fn test_tracker_move_reindex_folder() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let mut folder1 = project
         .objects
@@ -4395,8 +4542,12 @@ fn test_tracker_move_reindex_folder() {
 fn test_tracker_move_and_modify_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let folder1_path_orig = base_dir.path().join("test_project/text/000-folder1");
     std::fs::create_dir(&folder1_path_orig).unwrap();
@@ -4578,8 +4729,12 @@ scene4"#;
 fn test_tracker_copy_move_and_modify_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let folder1_path_orig = base_dir.path().join("test_project/text/000-folder1");
     std::fs::create_dir(&folder1_path_orig).unwrap();
@@ -4772,8 +4927,12 @@ scene4"#;
 fn test_tracker_move_into_moved_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_path = base_dir.path().join("test_project/text");
 
@@ -4940,8 +5099,12 @@ scene4"#;
 fn test_tracker_move_from_moved_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_path = base_dir.path().join("test_project/text");
 
@@ -5024,8 +5187,12 @@ scene1"#;
 fn test_tracker_orphaned_file_objects() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_path = base_dir.path().join("test_project/text");
 
@@ -5098,8 +5265,12 @@ scene1"#;
 fn test_tracker_metadata_population() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let scene_text = r#"id = "1"
 ++++++++
@@ -5189,8 +5360,12 @@ fn test_tracker_reindex_timing() {
 
         let base_dir = tempfile::TempDir::new().unwrap();
 
-        let mut project =
-            Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+        let mut project = Project::new(
+            SCHEMA,
+            base_dir.path().to_path_buf(),
+            "test project".to_string(),
+        )
+        .unwrap();
 
         let scene1_text = r#"id = "1"
 ++++++++

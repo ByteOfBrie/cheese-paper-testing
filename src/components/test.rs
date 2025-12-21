@@ -425,9 +425,10 @@ fn test_reload_objects() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let sample_body = "sample body";
-    // let character_appearance = "tall";
-    // let folder_notes = "this is a folder";
-    // let place_description = "lots and lots of trees!";
+    let scene_summary = "it gets more gay";
+    let character_appearance = "tall";
+    let folder_notes = "this is a folder";
+    let place_description = "lots and lots of trees!";
 
     let mut scene = SCHEMA
         .create_file(SCENE, base_dir.path().to_path_buf(), 0)
@@ -443,19 +444,17 @@ fn test_reload_objects() {
         .unwrap();
 
     scene.load_body(sample_body.to_string());
+    *scene.get_test_field() = scene_summary.to_string();
     scene.get_base_mut().file.modified = true;
-    // scene.text = sample_body.to_string().into();
 
-    // TODO figure out what to do with these test cases
+    *character.get_test_field() = character_appearance.to_string();
+    character.get_base_mut().file.modified = true;
 
-    // character.metadata.appearance = character_appearance.to_string().into();
-    // character.get_base_mut().file.modified = true;
+    *folder.get_test_field() = folder_notes.to_string();
+    folder.get_base_mut().file.modified = true;
 
-    // folder.metadata.notes = folder_notes.to_string().into();
-    // folder.get_base_mut().file.modified = true;
-
-    // place.metadata.description = place_description.to_string().into();
-    // place.get_base_mut().file.modified = true;
+    *place.get_test_field() = place_description.to_string();
+    place.get_base_mut().file.modified = true;
 
     // Save all of the objects
     scene.save(&HashMap::new()).unwrap();
@@ -482,47 +481,30 @@ fn test_reload_objects() {
     let mut objects = FileObjectStore::new();
 
     let scene_id_loaded = SCHEMA.load_file(&scene_path, &mut objects).unwrap();
+    let character_id_loaded = SCHEMA.load_file(&character_path, &mut objects).unwrap();
+    let folder_id_loaded = SCHEMA.load_file(&folder_path, &mut objects).unwrap();
+    let place_id_loaded = SCHEMA.load_file(&place_path, &mut objects).unwrap();
+
     assert_eq!(scene_id, scene_id_loaded);
-    let scene_loaded = objects.get(&scene_id).unwrap().borrow();
+    let mut scene_loaded = objects.get(&scene_id).unwrap().borrow_mut();
     assert_eq!(scene_loaded.get_type(), SCENE);
     assert_eq!(scene_loaded.get_body().trim(), sample_body);
-    drop(scene_loaded);
+    assert_eq!(*scene_loaded.get_test_field(), scene_summary);
 
-    let character_id_loaded = SCHEMA.load_file(&character_path, &mut objects).unwrap();
     assert_eq!(character_id, character_id_loaded);
+    let mut character_loaded = objects.get(&character_id).unwrap().borrow_mut();
+    assert_eq!(character_id, character_id_loaded);
+    assert_eq!(*character_loaded.get_test_field(), character_appearance);
 
-    let folder_id_loaded = SCHEMA.load_file(&folder_path, &mut objects).unwrap();
     assert_eq!(folder_id, folder_id_loaded);
+    let mut folder_loaded = objects.get(&folder_id).unwrap().borrow_mut();
+    assert_eq!(folder_id, folder_id_loaded);
+    assert_eq!(*folder_loaded.get_test_field(), folder_notes);
 
-    let place_id_loaded = SCHEMA.load_file(&place_path, &mut objects).unwrap();
     assert_eq!(place_id, place_id_loaded);
-
-    // let character_id_loaded = load_file(&character_path, &mut objects).unwrap();
-    // assert_eq!(character_id, character_id_loaded);
-    // match objects.get(&character_id).unwrap().borrow().get_file_type() {
-    //     FileObjectTypeInterface::Character(character) => {
-    //         assert_eq!(*character.metadata.appearance, character_appearance);
-    //     }
-    //     _ => panic!(),
-    // }
-
-    // let folder_id_loaded = load_file(&folder_path, &mut objects).unwrap();
-    // assert_eq!(folder_id, folder_id_loaded);
-    // match objects.get(&folder_id).unwrap().borrow().get_file_type() {
-    //     FileObjectTypeInterface::Folder(folder) => {
-    //         assert_eq!(*folder.metadata.notes, folder_notes);
-    //     }
-    //     _ => panic!(),
-    // }
-
-    // let place_id_loaded = load_file(&place_path, &mut objects).unwrap();
-    // assert_eq!(place_id, place_id_loaded);
-    // match objects.get(&place_id).unwrap().borrow().get_file_type() {
-    //     FileObjectTypeInterface::Place(place) => {
-    //         assert_eq!(*place.metadata.description, place_description);
-    //     }
-    //     _ => panic!(),
-    // }
+    let mut place_loaded = objects.get(&place_id).unwrap().borrow_mut();
+    assert_eq!(place_id, place_id_loaded);
+    assert_eq!(*place_loaded.get_test_field(), place_description);
 }
 
 #[test]
@@ -731,29 +713,14 @@ contents1
     let scene_id_loaded = SCHEMA.load_file(&scene_path, &mut project.objects).unwrap();
 
     let scene = project.objects.get(&scene_id_loaded).unwrap();
-    let scene = scene.borrow();
+    let mut scene = scene.borrow_mut();
 
     assert!(scene.get_type() == SCENE);
     assert_eq!(scene.get_body().trim(), "contents1");
-
-    // TODO add that other check
-
-    // match project
-    //     .objects
-    //     .get(&scene_id_loaded)
-    //     .unwrap()
-    //     .borrow()
-    //     .get_file_type()
-    // {
-    //     FileObjectTypeInterface::Scene(scene) => {
-    //         assert_eq!(scene.get_body().trim(), "contents1");
-    //         assert_eq!(
-    //             *scene.metadata.summary,
-    //             "multiline block inside\nanother multiline block\n"
-    //         );
-    //     }
-    //     _ => panic!(),
-    // }
+    assert_eq!(
+        *scene.get_test_field(),
+        "multiline block inside\nanother multiline block\n"
+    );
 
     assert!(
         read_to_string(scene_path)

@@ -70,6 +70,7 @@ impl Deref for Text {
 
 impl DerefMut for Text {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.version += 1;
         &mut self.text
     }
 }

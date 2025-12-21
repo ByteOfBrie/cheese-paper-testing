@@ -161,6 +161,11 @@ impl FileObject for Character {
     fn as_editor_mut(&mut self) -> &mut dyn crate::ui::FileObjectEditor {
         self
     }
+
+    #[cfg(test)]
+    fn get_test_field(&mut self) -> &mut String {
+        &mut self.metadata.appearance
+    }
 }
 
 // shortcuts for not having to cast every time

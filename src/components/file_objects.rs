@@ -80,4 +80,8 @@ pub trait FileObject: Debug {
     fn as_editor(&self) -> &dyn FileObjectEditor;
 
     fn as_editor_mut(&mut self) -> &mut dyn FileObjectEditor;
+
+    /// a way to write and read directly to the metadata, for use in tests
+    #[cfg(test)]
+    fn get_test_field(&mut self) -> &mut String;
 }

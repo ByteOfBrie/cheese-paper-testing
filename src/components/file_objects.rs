@@ -8,7 +8,7 @@ use crate::components::schema::FileType;
 use crate::components::project::ExportOptions;
 use crate::ui::FileObjectEditor;
 
-pub use base::{FileID, FileInfo, FileObjectStore, load_file, move_child};
+pub use base::{FileID, FileInfo, FileObjectStore};
 
 use crate::util::CheeseError;
 use std::fmt::Debug;

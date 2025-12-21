@@ -3,9 +3,7 @@ use crate::components::file_objects::FileObjectStore;
 
 // use crate::schemas::FileType;
 
-use crate::components::file_objects::{
-    FileID, FileObject, load_file, move_child, write_with_temp_file,
-};
+use crate::components::file_objects::{FileID, FileObject, write_with_temp_file};
 
 use crate::components::project::Project;
 use crate::util::CheeseError;
@@ -111,10 +109,18 @@ fn test_basic_create_project() {
 fn test_basic_create_file_object() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
-    let character = SCHEMA.create_file(CHARACTER, base_dir.path().to_path_buf(), 0).unwrap();
-    let folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 0).unwrap();
-    let place = SCHEMA.create_file(PLACE, base_dir.path().to_path_buf(), 0).unwrap();
+    let scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let character = SCHEMA
+        .create_file(CHARACTER, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let place = SCHEMA
+        .create_file(PLACE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
 
     // Ensure that all four of the files exist in the proper place
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 4);
@@ -171,9 +177,13 @@ fn test_create_top_level_folder() -> Result<(), CheeseError> {
 fn test_complicated_file_object_names() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
 
-    let scene1 = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 1).unwrap();
+    let scene1 = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 1)
+        .unwrap();
 
     scene.get_base_mut().metadata.name =
         "This is a really long scene name that will have to be shortened".to_string();
@@ -218,9 +228,13 @@ fn test_complicated_file_object_names() {
 fn test_change_index_scene() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
 
-    let scene1 = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 1).unwrap();
+    let scene1 = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 1)
+        .unwrap();
 
     scene.load_body("sample scene text".to_string());
     scene.get_base_mut().file.modified = true;
@@ -351,7 +365,9 @@ fn test_set_index_folders() {
 fn test_avoid_pointless_save() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
 
     let scene_old_modtime = scene.get_base().file.modtime;
     // Check that we get the correct modtime
@@ -361,7 +377,9 @@ fn test_avoid_pointless_save() {
     scene.save(&HashMap::new()).unwrap();
     assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
 
-    let mut folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 1).unwrap();
+    let mut folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 1)
+        .unwrap();
 
     let folder_old_modtime = folder.get_base().file.modtime;
     folder.save(&HashMap::new()).unwrap();
@@ -374,7 +392,9 @@ fn test_save_in_folder() {
 
     let sample_text = "sample body";
 
-    let mut folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 0)
+        .unwrap();
 
     let mut scene = folder.create_child_at_end(SCENE).unwrap();
 
@@ -408,10 +428,18 @@ fn test_reload_objects() {
     // let folder_notes = "this is a folder";
     // let place_description = "lots and lots of trees!";
 
-    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
-    let mut character = SCHEMA.create_file(CHARACTER, base_dir.path().to_path_buf(), 1).unwrap();
-    let mut folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 2).unwrap();
-    let mut place = SCHEMA.create_file(PLACE, base_dir.path().to_path_buf(), 3).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let mut character = SCHEMA
+        .create_file(CHARACTER, base_dir.path().to_path_buf(), 1)
+        .unwrap();
+    let mut folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 2)
+        .unwrap();
+    let mut place = SCHEMA
+        .create_file(PLACE, base_dir.path().to_path_buf(), 3)
+        .unwrap();
 
     scene.load_body(sample_body.to_string());
     scene.get_base_mut().file.modified = true;
@@ -452,20 +480,20 @@ fn test_reload_objects() {
 
     let mut objects = FileObjectStore::new();
 
-    let scene_id_loaded = load_file(SCHEMA, &scene_path, &mut objects).unwrap();
+    let scene_id_loaded = SCHEMA.load_file(&scene_path, &mut objects).unwrap();
     assert_eq!(scene_id, scene_id_loaded);
     let scene_loaded = objects.get(&scene_id).unwrap().borrow();
     assert_eq!(scene_loaded.get_type(), SCENE);
     assert_eq!(scene_loaded.get_body().trim(), sample_body);
     drop(scene_loaded);
 
-    let character_id_loaded = load_file(SCHEMA, &character_path, &mut objects).unwrap();
+    let character_id_loaded = SCHEMA.load_file(&character_path, &mut objects).unwrap();
     assert_eq!(character_id, character_id_loaded);
 
-    let folder_id_loaded = load_file(SCHEMA, &folder_path, &mut objects).unwrap();
+    let folder_id_loaded = SCHEMA.load_file(&folder_path, &mut objects).unwrap();
     assert_eq!(folder_id, folder_id_loaded);
 
-    let place_id_loaded = load_file(SCHEMA, &place_path, &mut objects).unwrap();
+    let place_id_loaded = SCHEMA.load_file(&place_path, &mut objects).unwrap();
     assert_eq!(place_id, place_id_loaded);
 
     // let character_id_loaded = load_file(&character_path, &mut objects).unwrap();
@@ -699,7 +727,7 @@ contents1
         .borrow()
         .get_path();
 
-    let scene_id_loaded = load_file(SCHEMA, &scene_path, &mut project.objects).unwrap();
+    let scene_id_loaded = SCHEMA.load_file(&scene_path, &mut project.objects).unwrap();
 
     let scene = project.objects.get(&scene_id_loaded).unwrap();
     let scene = scene.borrow();
@@ -738,7 +766,8 @@ contents1
 fn test_name_from_filename() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text")
+    let text_path = SCHEMA
+        .create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -750,7 +779,7 @@ fn test_name_from_filename() {
     )
     .unwrap();
 
-    let scene_id_loaded = load_file(SCHEMA, &text_path, &mut objects).unwrap();
+    let scene_id_loaded = SCHEMA.load_file(&text_path, &mut objects).unwrap();
     let folder = objects.get(&scene_id_loaded).unwrap();
     let mut folder = folder.borrow_mut();
 
@@ -767,7 +796,8 @@ fn test_fix_indexing_on_load() {
 
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text")
+    let text_path = SCHEMA
+        .create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -818,7 +848,7 @@ contents123"#
 
     let mut objects = FileObjectStore::new();
 
-    let scene_id_loaded = load_file(SCHEMA, &text_path, &mut objects).unwrap();
+    let scene_id_loaded = SCHEMA.load_file(&text_path, &mut objects).unwrap();
     let folder = objects.get(&scene_id_loaded).unwrap();
     let mut folder = folder.borrow_mut();
 
@@ -1069,7 +1099,9 @@ fn test_move_simple() {
     assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the move
-    move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk
     assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
@@ -1149,7 +1181,9 @@ fn test_move_multiple_times() {
     assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the first move
-    move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk
     assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
@@ -1181,7 +1215,9 @@ fn test_move_multiple_times() {
     );
 
     // Do the second move (back)
-    move_child(&scene_id, &folder2_id, &folder1_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder2_id, &folder1_id, 0, &project.objects)
+        .unwrap();
 
     // Make sure the file objects moved the children appropriately
     assert_eq!(
@@ -1263,7 +1299,9 @@ fn test_move_folder_contents() {
     assert!(project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    move_child(&folder2_id, &text_id, &folder1_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&folder2_id, &text_id, &folder1_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     // 1. old folder isn't there
@@ -1383,7 +1421,9 @@ fn test_move_within_folder_backwards() {
     assert!(project_path.join("text/001-scene1.md").exists());
 
     // Do the move, easy case first: moving scene1 backwards
-    move_child(&scene_id, &text_id, &text_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &text_id, &text_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-scene1.md").exists());
@@ -1487,7 +1527,9 @@ fn test_move_within_folder_forwards() {
     assert!(project_path.join("text/001-scene1.md").exists());
 
     // Do the move
-    move_child(&folder_id, &text_id, &text_id, 1, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&folder_id, &text_id, &text_id, 1, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-scene1.md").exists());
@@ -1628,7 +1670,9 @@ fn test_move_between_folder_contents() {
     assert!(project_path.join("text/000-folder1/002-c.md").exists());
 
     // Move b into folder 2
-    move_child(&scene_b_id, &folder1_id, &folder2_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_b_id, &folder1_id, &folder2_id, 0, &project.objects)
+        .unwrap();
 
     // Ensure the file got moved
     assert!(project_path.join("text/001-folder2/000-b.md").exists());
@@ -1766,7 +1810,9 @@ fn test_move_between_folder_contents() {
     );
 
     // Now, move b back into the start of folder 1
-    move_child(&scene_b_id, &folder2_id, &folder1_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_b_id, &folder2_id, &folder1_id, 0, &project.objects)
+        .unwrap();
 
     // Ensure indexing is correct in the new folder
     assert!(!project_path.join("text/001-folder2/000-b.md").exists());
@@ -1940,7 +1986,9 @@ fn test_move_to_parent() {
     assert!(!project_path.join("text/001-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    move_child(&scene_id, &folder1_id, &text_id, 1, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &text_id, 1, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-folder1/metadata.toml").exists());
@@ -2040,7 +2088,9 @@ fn test_move_to_parent_current_position() {
     assert!(!project_path.join("text/001-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    move_child(&scene_id, &folder1_id, &text_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &text_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-scene1.md").exists());
@@ -2166,7 +2216,9 @@ fn test_move_to_self() {
         .unwrap();
 
     // Do the move
-    move_child(&folder_id, &text_id, &text_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&folder_id, &text_id, &text_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that nothing happened on disk:
     assert!(project_path.join("text/000-folder1/").exists());
@@ -2288,7 +2340,7 @@ fn test_move_to_child() {
     project.save().unwrap();
 
     // Try to move into a folder it directly contains:
-    let immediate_move = move_child(
+    let immediate_move = SCHEMA.move_child(
         &top_level_folder_id,
         &project.text_id,
         &mid_level_folder_id,
@@ -2302,7 +2354,7 @@ fn test_move_to_child() {
     )));
 
     // Try to move into a folder contained within a child:
-    let child_move = move_child(
+    let child_move = SCHEMA.move_child(
         &top_level_folder_id,
         &project.text_id,
         &child_folder_id,
@@ -2422,14 +2474,15 @@ fn test_move_no_clobber() {
     assert!(project_path.join("text/001-a.md").exists());
 
     // Move b into folder 2
-    move_child(
-        &scene1_id,
-        &project.text_id,
-        &project.text_id,
-        1,
-        &project.objects,
-    )
-    .unwrap();
+    SCHEMA
+        .move_child(
+            &scene1_id,
+            &project.text_id,
+            &project.text_id,
+            1,
+            &project.objects,
+        )
+        .unwrap();
 
     assert!(project_path.join("text/000-a.md").exists());
     assert!(project_path.join("text/001-a.md").exists());
@@ -2501,7 +2554,9 @@ fn test_move_no_clobber() {
 fn test_place_nesting() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut text = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text").unwrap();
+    let mut text = SCHEMA
+        .create_top_level_folder(base_dir.path().to_path_buf(), "Text")
+        .unwrap();
 
     let mut place1 = text.create_child_at_end(PLACE).unwrap();
 

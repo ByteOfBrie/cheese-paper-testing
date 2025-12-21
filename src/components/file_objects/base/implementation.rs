@@ -181,7 +181,8 @@ impl dyn FileObject {
         // disk, but that might not even be possible, and is kinda okay since we should only ever
         // overwrite that file by accident, even in the worst case
         let new_object: Box<dyn FileObject> =
-            self.get_schema().create_file(file_type, self.get_path(), new_index)?;
+            self.get_schema()
+                .create_file(file_type, self.get_path(), new_index)?;
 
         self.get_base_mut()
             .children

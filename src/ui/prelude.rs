@@ -3,6 +3,7 @@ pub use {
     crate::components::{
         file_objects::{FileID, FileObject, FileObjectStore},
         project::Project,
+        schema::Schema,
         text::{Text, TextUID},
     },
     crate::schemas::FileType,

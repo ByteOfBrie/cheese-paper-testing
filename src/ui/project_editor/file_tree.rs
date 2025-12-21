@@ -1,9 +1,12 @@
 use super::ProjectEditor;
 
-use crate::components::file_objects::move_child;
 use crate::ui::prelude::*;
 
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
+
+/// Temporary solution. Point to the schema statically here.
+/// Eventually, a solution for loading the schema when opening the project will be needed
+const SCHEMA: &'static dyn Schema = &crate::schemas::DEFAULT_SCHEMA;
 
 /// Context menu actions for file objects, should only be constructed by file objects
 enum ContextMenuActions {
@@ -230,7 +233,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
 
                     match editor.project.find_object_parent(moving_file_id) {
                         Some(source_file_id) => {
-                            if let Err(err) = move_child(
+                            if let Err(err) = SCHEMA.move_child(
                                 moving_file_id,
                                 &source_file_id,
                                 target_file_id,

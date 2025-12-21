@@ -1,7 +1,6 @@
 use crate::cheese_error;
 use crate::components::file_objects::{
-    FileInfo, FileObject, FileObjectMetadata, FileObjectStore,
-    load_file, write_with_temp_file,
+    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, write_with_temp_file,
 };
 use crate::components::schema::Schema;
 use crate::components::text::Text;
@@ -121,7 +120,8 @@ fn load_top_level_folder(
 
     let folder_path = &Path::join(project_path, name.to_lowercase());
     if folder_path.exists() {
-        let created_object = load_file(SCHEMA, folder_path, objects)
+        let created_object = SCHEMA
+            .load_file(folder_path, objects)
             .map_err(|err| cheese_error!("failed to load top level folder {name}\n{}", err))?;
 
         let created_object_box = objects.get(&created_object).unwrap();
@@ -152,7 +152,8 @@ fn load_top_level_folder(
         }
     } else {
         log::debug!("top level folder {name} does not exist, creating...");
-        let top_level_folder = SCHEMA.create_top_level_folder(project_path.to_owned(), name)
+        let top_level_folder = SCHEMA
+            .create_top_level_folder(project_path.to_owned(), name)
             .map_err(|err| {
                 cheese_error!(
                     "An error occured while creating the top level folder\n{}",
@@ -201,7 +202,8 @@ impl Project {
 
         let text = SCHEMA.create_top_level_folder(project_path.clone(), "Text")?;
         let characters = SCHEMA.create_top_level_folder(project_path.clone(), "Characters")?;
-        let worldbuilding = SCHEMA.create_top_level_folder(project_path.clone(), "Worldbuilding")?;
+        let worldbuilding =
+            SCHEMA.create_top_level_folder(project_path.clone(), "Worldbuilding")?;
 
         let file = FileInfo {
             dirname: canonical_dirname,
@@ -915,7 +917,7 @@ impl Project {
                     continue;
                 }
 
-                match load_file(SCHEMA, &event_path, &mut self.objects) {
+                match SCHEMA.load_file(&event_path, &mut self.objects) {
                     Ok(file_id) => {
                         let parent_path = get_parent_path(&event_path);
                         let parent_id_option = self.find_object_by_path(parent_path);

@@ -1,6 +1,6 @@
 use crate::cheese_error;
 use crate::components::file_objects::{
-    FileInfo, FileObject, FileObjectMetadata, FileObjectStore, base::create_top_level_folder,
+    FileInfo, FileObject, FileObjectMetadata, FileObjectStore,
     load_file, write_with_temp_file,
 };
 use crate::components::schema::Schema;
@@ -152,7 +152,7 @@ fn load_top_level_folder(
         }
     } else {
         log::debug!("top level folder {name} does not exist, creating...");
-        let top_level_folder = create_top_level_folder(SCHEMA, project_path.to_owned(), name)
+        let top_level_folder = SCHEMA.create_top_level_folder(project_path.to_owned(), name)
             .map_err(|err| {
                 cheese_error!(
                     "An error occured while creating the top level folder\n{}",
@@ -199,9 +199,9 @@ impl Project {
             std::fs::create_dir(&project_path)?;
         }
 
-        let text = create_top_level_folder(SCHEMA, project_path.clone(), "Text")?;
-        let characters = create_top_level_folder(SCHEMA, project_path.clone(), "Characters")?;
-        let worldbuilding = create_top_level_folder(SCHEMA, project_path.clone(), "Worldbuilding")?;
+        let text = SCHEMA.create_top_level_folder(project_path.clone(), "Text")?;
+        let characters = SCHEMA.create_top_level_folder(project_path.clone(), "Characters")?;
+        let worldbuilding = SCHEMA.create_top_level_folder(project_path.clone(), "Worldbuilding")?;
 
         let file = FileInfo {
             dirname: canonical_dirname,

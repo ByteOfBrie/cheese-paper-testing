@@ -3,7 +3,6 @@ use crate::components::file_objects::FileObjectStore;
 
 // use crate::schemas::FileType;
 
-use crate::components::file_objects::base::{create_file, create_top_level_folder};
 use crate::components::file_objects::{
     FileID, FileObject, load_file, move_child, write_with_temp_file,
 };
@@ -112,10 +111,10 @@ fn test_basic_create_project() {
 fn test_basic_create_file_object() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let character = create_file(CHARACTER, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let place = create_file(PLACE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
+    let scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
+    let character = SCHEMA.create_file(CHARACTER, base_dir.path().to_path_buf(), 0).unwrap();
+    let folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 0).unwrap();
+    let place = SCHEMA.create_file(PLACE, base_dir.path().to_path_buf(), 0).unwrap();
 
     // Ensure that all four of the files exist in the proper place
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 4);
@@ -154,7 +153,7 @@ fn test_basic_create_file_object() -> Result<(), CheeseError> {
 fn test_create_top_level_folder() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let text = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")?;
+    let text = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text")?;
 
     assert_eq!(read_dir(base_dir.path())?.count(), 1);
     assert_eq!(read_dir(text.get_path())?.count(), 1);
@@ -172,9 +171,9 @@ fn test_create_top_level_folder() -> Result<(), CheeseError> {
 fn test_complicated_file_object_names() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
 
-    let scene1 = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
+    let scene1 = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 1).unwrap();
 
     scene.get_base_mut().metadata.name =
         "This is a really long scene name that will have to be shortened".to_string();
@@ -219,9 +218,9 @@ fn test_complicated_file_object_names() {
 fn test_change_index_scene() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
 
-    let scene1 = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
+    let scene1 = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 1).unwrap();
 
     scene.load_body("sample scene text".to_string());
     scene.get_base_mut().file.modified = true;
@@ -352,7 +351,7 @@ fn test_set_index_folders() {
 fn test_avoid_pointless_save() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
 
     let scene_old_modtime = scene.get_base().file.modtime;
     // Check that we get the correct modtime
@@ -362,7 +361,7 @@ fn test_avoid_pointless_save() {
     scene.save(&HashMap::new()).unwrap();
     assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
 
-    let mut folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
+    let mut folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 1).unwrap();
 
     let folder_old_modtime = folder.get_base().file.modtime;
     folder.save(&HashMap::new()).unwrap();
@@ -375,7 +374,7 @@ fn test_save_in_folder() {
 
     let sample_text = "sample body";
 
-    let mut folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 0).unwrap();
 
     let mut scene = folder.create_child_at_end(SCENE).unwrap();
 
@@ -409,10 +408,10 @@ fn test_reload_objects() {
     // let folder_notes = "this is a folder";
     // let place_description = "lots and lots of trees!";
 
-    let mut scene = create_file(SCENE, SCHEMA, base_dir.path().to_path_buf(), 0).unwrap();
-    let mut character = create_file(CHARACTER, SCHEMA, base_dir.path().to_path_buf(), 1).unwrap();
-    let mut folder = create_file(FOLDER, SCHEMA, base_dir.path().to_path_buf(), 2).unwrap();
-    let mut place = create_file(PLACE, SCHEMA, base_dir.path().to_path_buf(), 3).unwrap();
+    let mut scene = SCHEMA.create_file(SCENE, base_dir.path().to_path_buf(), 0).unwrap();
+    let mut character = SCHEMA.create_file(CHARACTER, base_dir.path().to_path_buf(), 1).unwrap();
+    let mut folder = SCHEMA.create_file(FOLDER, base_dir.path().to_path_buf(), 2).unwrap();
+    let mut place = SCHEMA.create_file(PLACE, base_dir.path().to_path_buf(), 3).unwrap();
 
     scene.load_body(sample_body.to_string());
     scene.get_base_mut().file.modified = true;
@@ -739,7 +738,7 @@ contents1
 fn test_name_from_filename() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")
+    let text_path = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -768,7 +767,7 @@ fn test_fix_indexing_on_load() {
 
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text")
+    let text_path = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -2502,7 +2501,7 @@ fn test_move_no_clobber() {
 fn test_place_nesting() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut text = create_top_level_folder(SCHEMA, base_dir.path().to_path_buf(), "Text").unwrap();
+    let mut text = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text").unwrap();
 
     let mut place1 = text.create_child_at_end(PLACE).unwrap();
 

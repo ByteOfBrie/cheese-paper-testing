@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::cheese_error;
-use crate::components::file_objects::base::create_file;
 use crate::components::file_objects::utils::{get_index_from_name, write_with_temp_file};
 // use crate::components::file_objects::{Character, Folder, Place, Scene};
 use crate::util::CheeseError;
@@ -182,7 +181,7 @@ impl dyn FileObject {
         // disk, but that might not even be possible, and is kinda okay since we should only ever
         // overwrite that file by accident, even in the worst case
         let new_object: Box<dyn FileObject> =
-            create_file(file_type, self.get_schema(), self.get_path(), new_index)?;
+            self.get_schema().create_file(file_type, self.get_path(), new_index)?;
 
         self.get_base_mut()
             .children

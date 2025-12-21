@@ -2,6 +2,12 @@ use std::io::Write;
 use std::path::Path;
 use tempfile::Builder;
 
+use crate::cheese_error;
+use crate::util::CheeseError;
+
+/// Value that splits the header of any file that contains non-metadata content
+pub const HEADER_SPLIT: &str = "++++++++";
+
 /// Generic file utilities
 use regex::Regex;
 
@@ -145,4 +151,28 @@ pub fn write_outline_property(property_name: &str, property: &str, export_string
         export_string.push_str(property);
         export_string.push_str("\n\n");
     }
+}
+
+/// Reads the contents of a file from disk
+pub fn read_file_contents(file_to_read: &Path) -> Result<(String, Option<String>), CheeseError> {
+    let extension = match file_to_read.extension() {
+        Some(val) => val,
+        None => return Err(cheese_error!("value was not string")),
+    };
+
+    let file_data = std::fs::read_to_string(file_to_read)?;
+
+    let (metadata_str, file_content): (&str, Option<&str>) = if extension == "md" {
+        match file_data.split_once(HEADER_SPLIT) {
+            None => ("", Some(&file_data)),
+            Some((start, end)) => (start, Some(end)),
+        }
+    } else {
+        (&file_data, None)
+    };
+
+    Ok((
+        metadata_str.to_owned(),
+        file_content.map(|s| s.trim().to_owned()),
+    ))
 }

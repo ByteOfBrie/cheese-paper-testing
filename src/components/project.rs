@@ -23,8 +23,8 @@ use toml_edit::DocumentMut;
 use crate::components::file_objects::utils::{process_name_for_filename, write_outline_property};
 
 use crate::components::file_objects::base::{
-    FOLDER_METADATA_FILE_NAME, FileID, load_base_metadata, metadata_extract_bool,
-    metadata_extract_string, metadata_extract_u64,
+    FOLDER_METADATA_FILE_NAME, FileID, metadata_extract_bool, metadata_extract_string,
+    metadata_extract_u64,
 };
 
 type RecommendedDebouncer = Debouncer<RecommendedWatcher, RecommendedCache>;
@@ -321,7 +321,7 @@ impl Project {
 
         log::debug!("Finished loading all project file objects, continuing");
 
-        load_base_metadata(toml_header.as_table(), &mut base_metadata, &mut file_info)?;
+        base_metadata.load_base_metadata(toml_header.as_table(), &mut file_info)?;
 
         // Create the watcher path by hand since we can't call get_path() yet
         let watcher_path = file_info.dirname.join(&file_info.basename);
@@ -577,11 +577,8 @@ impl Project {
 
         self.toml_header = new_toml_header;
 
-        load_base_metadata(
-            self.toml_header.as_table(),
-            &mut self.base_metadata,
-            &mut self.file,
-        )?;
+        self.base_metadata
+            .load_base_metadata(self.toml_header.as_table(), &mut self.file)?;
         self.load_metadata()?;
 
         Ok(())

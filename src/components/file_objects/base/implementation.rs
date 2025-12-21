@@ -11,8 +11,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use toml_edit::DocumentMut;
 
-use super::{FOLDER_METADATA_FILE_NAME, FileType, HEADER_SPLIT};
+use super::{FOLDER_METADATA_FILE_NAME, FileType};
 use crate::components::file_objects::FileObject;
+use crate::components::file_objects::utils::{HEADER_SPLIT, read_file_contents};
 
 pub type FileID = Rc<String>;
 
@@ -40,7 +41,7 @@ impl dyn FileObject {
     }
 
     pub fn calculate_filename(&self) -> OsString {
-        super::calculate_filename(self.get_type(), self.get_base())
+        self.get_base().calculate_filename(self.get_type())
     }
 
     /// Calculates the object's current path. For objects in a single file, this is their path
@@ -98,7 +99,7 @@ impl dyn FileObject {
             return Ok(());
         }
 
-        let (metadata_str, file_body) = super::read_file_contents(&file_to_read)?;
+        let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
 
         let new_toml_header = metadata_str
             .parse::<DocumentMut>()
@@ -106,11 +107,9 @@ impl dyn FileObject {
 
         let base_file_object = self.get_base_mut();
 
-        super::load_base_metadata(
-            new_toml_header.as_table(),
-            &mut base_file_object.metadata,
-            &mut base_file_object.file,
-        )?;
+        base_file_object
+            .metadata
+            .load_base_metadata(new_toml_header.as_table(), &mut base_file_object.file)?;
 
         base_file_object.toml_header = new_toml_header;
 

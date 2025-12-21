@@ -1,8 +1,5 @@
 use crate::components::file_objects::base::*;
-use crate::components::file_objects::utils::{
-    add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
-};
-use crate::components::file_objects::*;
+use crate::components::file_objects::utils::{get_index_from_name, read_file_contents};
 use crate::components::schema::{FileType, Schema};
 
 use std::cell::RefCell;
@@ -11,7 +8,7 @@ use std::ffi::OsString;
 use std::fs::create_dir;
 use std::path::{Path, PathBuf};
 
-use toml_edit::{DocumentMut, TableLike};
+use toml_edit::DocumentMut;
 
 use crate::cheese_error;
 
@@ -343,9 +340,11 @@ impl dyn Schema {
                 modified,
             };
 
-            load_base_metadata(toml_header.as_table(), &mut metadata, &mut file_info).map_err(
-                |err| cheese_error!("Error while parsing metadata for {filename:?}: {err}"),
-            )?;
+            metadata
+                .load_base_metadata(toml_header.as_table(), &mut file_info)
+                .map_err(|err| {
+                    cheese_error!("Error while parsing metadata for {filename:?}: {err}")
+                })?;
 
             let base = BaseFileObject {
                 metadata,

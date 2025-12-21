@@ -4,18 +4,17 @@ pub use implementation::*;
 use bitflags::bitflags;
 use uuid::Uuid;
 
-use super::{BaseFileObject, FileObject, FileObjectMetadata};
+use super::FileObject;
 use crate::cheese_error;
 use crate::components::file_objects::utils::{
-    add_index_to_name, get_index_from_name, process_name_for_filename, truncate_name,
+    add_index_to_name, process_name_for_filename, truncate_name,
 };
 // use crate::components::file_objects::{Character, Folder, Place, Scene};
-use crate::components::schema::{FileType, Schema};
+use crate::components::schema::FileType;
 use crate::util::CheeseError;
-use std::cell::RefCell;
 use std::ffi::OsString;
 use std::fmt::Debug;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::SystemTime;
 use toml_edit::{DocumentMut, TableLike};
@@ -26,8 +25,33 @@ pub const FILENAME_MAX_LENGTH: usize = 30;
 /// filename of the object within a folder containing its metadata (without extension)
 pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
-/// Value that splits the header of any file that contains non-metadata content
-const HEADER_SPLIT: &str = "++++++++";
+/// Loading a file:
+/// 1. Parse filename as a name -> metadata.name
+/// 2. Load file, storing the metadata in some intermediate place
+/// 3. Store the rest of the file into the metadata automatically (as present)
+/// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
+///
+/// Baseline metadata for all file objects
+#[derive(Debug)]
+pub struct FileObjectMetadata {
+    /// Version of the object, can eventually be used to detect compatibility changes
+    pub version: u64,
+    /// Name of the object (e.g., title of a scene, character name)
+    pub name: String,
+    /// ID unique across all objects. The reference implementations use UUIDv4, but any string
+    /// is acceptable
+    pub id: Rc<String>,
+}
+
+#[derive(Debug)]
+pub struct BaseFileObject {
+    pub metadata: FileObjectMetadata,
+    /// Index (ordering within parent)
+    pub index: Option<usize>,
+    pub file: FileInfo,
+    pub toml_header: DocumentMut,
+    pub children: Vec<FileID>,
+}
 
 impl Default for FileObjectMetadata {
     fn default() -> Self {
@@ -191,82 +215,60 @@ pub fn metadata_extract_bool(
     })
 }
 
-/// Reads the contents of a file from disk
-pub fn read_file_contents(file_to_read: &Path) -> Result<(String, Option<String>), CheeseError> {
-    let extension = match file_to_read.extension() {
-        Some(val) => val,
-        None => return Err(cheese_error!("value was not string")),
-    };
-
-    let file_data = std::fs::read_to_string(file_to_read)?;
-
-    let (metadata_str, file_content): (&str, Option<&str>) = if extension == "md" {
-        match file_data.split_once(HEADER_SPLIT) {
-            None => ("", Some(&file_data)),
-            Some((start, end)) => (start, Some(end)),
+impl FileObjectMetadata {
+    /// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
+    /// appropriate
+    pub fn load_base_metadata(
+        &mut self,
+        metadata_table: &dyn TableLike,
+        file_info: &mut FileInfo,
+    ) -> Result<(), CheeseError> {
+        match metadata_extract_u64(metadata_table, "file_format_version", false)? {
+            Some(version) => self.version = version,
+            None => file_info.modified = true,
         }
-    } else {
-        (&file_data, None)
-    };
 
-    Ok((
-        metadata_str.to_owned(),
-        file_content.map(|s| s.trim().to_owned()),
-    ))
-}
-
-/// Given a freshly read metadata dictionary, read it into the file objects, setting modified as
-/// appropriate
-pub fn load_base_metadata(
-    metadata_table: &dyn TableLike,
-    metadata_object: &mut FileObjectMetadata,
-    file_info: &mut FileInfo,
-) -> Result<(), CheeseError> {
-    match metadata_extract_u64(metadata_table, "file_format_version", false)? {
-        Some(version) => metadata_object.version = version,
-        None => file_info.modified = true,
-    }
-
-    match metadata_extract_string(metadata_table, "name")? {
-        Some(name) => metadata_object.name = name,
-        None => file_info.modified = true,
-    }
-
-    match metadata_extract_string(metadata_table, "id")? {
-        Some(id) => metadata_object.id = Rc::new(id),
-        None => file_info.modified = true,
-    }
-
-    Ok(())
-}
-
-/// Calculates the filename for a particular object
-fn calculate_filename(file_type: FileType, base_info: &BaseFileObject) -> OsString {
-    let base_name: &str = match base_info.metadata.name.is_empty() {
-        false => &base_info.metadata.name,
-        true => file_type.empty_string_name(),
-    };
-
-    let mut basename = match base_info.index {
-        Some(index) => {
-            let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
-            let file_safe_name = process_name_for_filename(truncated_name);
-            let final_name = add_index_to_name(&file_safe_name, index);
-
-            OsString::from(final_name)
+        match metadata_extract_string(metadata_table, "name")? {
+            Some(name) => self.name = name,
+            None => file_info.modified = true,
         }
-        None => OsString::from(process_name_for_filename(base_name)),
-    };
 
-    if !file_type.is_folder() {
-        basename.push(".");
-        basename.push(file_type.extension());
+        match metadata_extract_string(metadata_table, "id")? {
+            Some(id) => self.id = Rc::new(id),
+            None => file_info.modified = true,
+        }
+
+        Ok(())
     }
-
-    basename
 }
 
 impl BaseFileObject {
+    /// Calculates the filename for a particular object
+    fn calculate_filename(&self, file_type: FileType) -> OsString {
+        let base_name: &str = match self.metadata.name.is_empty() {
+            false => &self.metadata.name,
+            true => file_type.empty_string_name(),
+        };
+
+        let mut basename = match self.index {
+            Some(index) => {
+                let truncated_name = truncate_name(base_name, FILENAME_MAX_LENGTH);
+                let file_safe_name = process_name_for_filename(truncated_name);
+                let final_name = add_index_to_name(&file_safe_name, index);
+
+                OsString::from(final_name)
+            }
+            None => OsString::from(process_name_for_filename(base_name)),
+        };
+
+        if !file_type.is_folder() {
+            basename.push(".");
+            basename.push(file_type.extension());
+        }
+
+        basename
+    }
+
     /// Create a new file object in a folder
     pub fn new(dirname: PathBuf, index: Option<usize>) -> Self {
         Self {

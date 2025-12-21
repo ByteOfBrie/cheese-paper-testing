@@ -13,37 +13,10 @@ pub use base::{FileID, FileInfo, FileObjectStore};
 use crate::util::CheeseError;
 use std::fmt::Debug;
 use std::rc::Rc;
-use toml_edit::DocumentMut;
 
 pub use utils::{create_dir_if_missing, write_with_temp_file};
 
-/// Loading a file:
-/// 1. Parse filename as a name -> metadata.name
-/// 2. Load file, storing the metadata in some intermediate place
-/// 3. Store the rest of the file into the metadata automatically (as present)
-/// 4. Check for a meaningful name in the metadata (present and not the default), write if meaningful
-///
-/// Baseline metadata for all file objects
-#[derive(Debug)]
-pub struct FileObjectMetadata {
-    /// Version of the object, can eventually be used to detect compatibility changes
-    pub version: u64,
-    /// Name of the object (e.g., title of a scene, character name)
-    pub name: String,
-    /// ID unique across all objects. The reference implementations use UUIDv4, but any string
-    /// is acceptable
-    pub id: Rc<String>,
-}
-
-#[derive(Debug)]
-pub struct BaseFileObject {
-    pub metadata: FileObjectMetadata,
-    /// Index (ordering within parent)
-    pub index: Option<usize>,
-    pub file: FileInfo,
-    pub toml_header: DocumentMut,
-    pub children: Vec<FileID>,
-}
+pub use base::{BaseFileObject, FileObjectMetadata};
 
 pub trait FileObject: Debug {
     fn get_type(&self) -> FileType;

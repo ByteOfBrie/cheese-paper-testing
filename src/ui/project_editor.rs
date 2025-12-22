@@ -11,7 +11,7 @@ use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 
-use action::Action;
+use action::Actions;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
@@ -38,22 +38,11 @@ pub struct TypingStatus {
     pub current_word: Range<usize>,
 }
 
-#[derive(Debug)]
-struct UpdatesNeeded {
-    title: bool,
-
-    theme: bool,
-}
-
 pub struct ProjectEditor {
     pub project: Project,
 
     /// List of tabs that are open (egui::Dock requires state to be stored this way)
     dock_state: DockState<OpenPage>,
-
-    /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
-    /// in the project metadata editor as well
-    updates_needed: UpdatesNeeded,
 
     pub editor_context: EditorContext,
 
@@ -72,7 +61,6 @@ impl Debug for ProjectEditor {
         f.debug_struct("ProjectEditor")
             .field("project", &self.project)
             .field("dock_state", &self.dock_state)
-            .field("updates_needed", &self.updates_needed)
             .field("editor_context", &self.editor_context)
             .field("tracker", &self.tracker)
             .finish()
@@ -261,7 +249,7 @@ pub struct EditorContext {
     pub search: Search,
     pub stores: Stores,
     pub references: References,
-    pub actions: Vec<Action>,
+    pub actions: Actions,
 
     /// Duplicates the value from state.data, which is then more recent
     pub last_export_folder: PathBuf,
@@ -337,9 +325,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             let page = tab.page.clone();
             self.editor_context
                 .actions
-                .push(Action::new(move |project_editor| {
-                    project_editor.keep_editor_tab(&page)
-                }))
+                .schedule(move |project_editor, _ctx| project_editor.keep_editor_tab(&page));
         }
     }
 
@@ -535,7 +521,10 @@ impl ProjectEditor {
 
                         if ui.button("Randomize Theme").clicked() {
                             self.editor_context.settings.randomize_theme();
-                            self.updates_needed.theme = true;
+                            self.editor_context.actions.schedule(|project_editor, ctx| {
+                                project_editor.update_theme(ctx);
+                            });
+                            // self.updates_needed.theme = true;
                         }
                     });
                 });
@@ -571,19 +560,6 @@ impl ProjectEditor {
     }
 
     fn process_state(&mut self, ctx: &egui::Context) {
-        // update window title. silly that we have to do it here, but we can't set it when calling new()
-        // since we don't have the `egui::Context`. This will also need to happen once we can actually
-        // set project names
-        if self.updates_needed.title {
-            update_title(&self.project.base_metadata.name, ctx);
-            self.updates_needed.title = false;
-        }
-
-        if self.updates_needed.theme {
-            self.update_theme(ctx);
-            self.updates_needed.theme = false;
-        }
-
         if self.editor_context.search.exiting_search {
             self.editor_context.version += 1;
         }
@@ -617,9 +593,9 @@ impl ProjectEditor {
             self.set_editor_tab(&focused_text_box.page.clone(), false);
         }
 
-        let actions = std::mem::take(&mut self.editor_context.actions);
+        let actions = self.editor_context.actions.get();
         for action in actions {
-            action.perform(self);
+            action(self, ctx);
         }
     }
 
@@ -698,10 +674,6 @@ impl ProjectEditor {
         let mut project_editor = Self {
             project,
             dock_state: DockState::new(open_tabs),
-            updates_needed: UpdatesNeeded {
-                title: true,
-                theme: true,
-            },
             editor_context: EditorContext {
                 settings,
                 dictionary_state,
@@ -709,7 +681,7 @@ impl ProjectEditor {
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
                 stores: Stores::default(),
-                actions: Vec::new(),
+                actions: Actions::default(),
                 references,
                 last_export_folder,
                 version: 0,

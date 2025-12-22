@@ -1,19 +1,20 @@
 use super::ProjectEditor;
 
-pub struct Action(Box<dyn FnOnce(&mut ProjectEditor)>);
+#[derive(Default)]
+pub struct Actions(Vec<Box<dyn FnOnce(&mut ProjectEditor, &egui::Context)>>);
 
-impl std::fmt::Debug for Action {
+impl std::fmt::Debug for Actions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "Project Editor Action")
+        write!(f, "[Actions ({} scheduled)]", self.0.len())
     }
 }
 
-impl Action {
-    pub fn new(f: impl FnOnce(&mut ProjectEditor) + 'static) -> Self {
-        Self(Box::new(f))
+impl Actions {
+    pub fn schedule(&mut self, f: impl FnOnce(&mut ProjectEditor, &egui::Context) + 'static) {
+        self.0.push(Box::new(f))
     }
 
-    pub fn perform(self, editor: &mut ProjectEditor) {
-        self.0(editor)
+    pub fn get(&mut self) -> Vec<Box<dyn FnOnce(&mut ProjectEditor, &egui::Context)>> {
+        std::mem::take(&mut self.0)
     }
 }

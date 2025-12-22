@@ -10,7 +10,6 @@ use crate::components::file_objects::utils::process_name_for_filename;
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
-use crate::ui::settings::WidgetTheme;
 
 use action::Action;
 
@@ -19,7 +18,6 @@ use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::path::PathBuf;
 
-use egui::style::WidgetVisuals;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::TreeViewState;
@@ -358,26 +356,6 @@ fn update_title(project_name: &str, ctx: &egui::Context) {
     )));
 }
 
-fn update_widget_theme(widget_theme_option: &Option<WidgetTheme>, widget: &mut WidgetVisuals) {
-    if let Some(widget_theme) = widget_theme_option {
-        if let Some(fg_stroke_color) = widget_theme.fg_stroke_color {
-            widget.fg_stroke.color = fg_stroke_color;
-        }
-
-        if let Some(bg_stroke_color) = widget_theme.bg_stroke_color {
-            widget.bg_stroke.color = bg_stroke_color;
-        }
-
-        if let Some(bg_fill) = widget_theme.bg_fill {
-            widget.bg_fill = bg_fill;
-        }
-
-        if let Some(weak_bg_fill) = widget_theme.weak_bg_fill {
-            widget.weak_bg_fill = weak_bg_fill;
-        }
-    }
-}
-
 impl ProjectEditor {
     pub fn panels(&mut self, ctx: &egui::Context, state: &mut EditorState) {
         self.process_input(ctx);
@@ -587,77 +565,9 @@ impl ProjectEditor {
     }
 
     fn update_theme(&self, ctx: &egui::Context) {
-        if let Some(settings_theme) = self.editor_context.settings.theme() {
-            ctx.style_mut(|style| {
-                style.visuals.override_text_color = settings_theme.override_text_color;
-
-                style.visuals.weak_text_color = settings_theme.weak_text_color;
-
-                style.visuals.text_edit_bg_color = settings_theme.text_edit_bg_color;
-
-                if let Some(defined_hyperlink_color) = settings_theme.hyperlink_color {
-                    style.visuals.hyperlink_color = defined_hyperlink_color;
-                }
-
-                if let Some(defined_faint_bg_color) = settings_theme.faint_bg_color {
-                    style.visuals.faint_bg_color = defined_faint_bg_color;
-                }
-
-                if let Some(defined_extreme_bg_color) = settings_theme.extreme_bg_color {
-                    style.visuals.extreme_bg_color = defined_extreme_bg_color;
-                }
-
-                if let Some(defined_warn_fg_color) = settings_theme.warn_fg_color {
-                    style.visuals.warn_fg_color = defined_warn_fg_color;
-                }
-
-                if let Some(defined_error_fg_color) = settings_theme.error_fg_color {
-                    style.visuals.error_fg_color = defined_error_fg_color;
-                }
-
-                if let Some(defined_window_fill_color) = settings_theme.window_fill_color {
-                    style.visuals.window_fill = defined_window_fill_color;
-                }
-
-                if let Some(defined_panel_fill_color) = settings_theme.panel_fill_color {
-                    style.visuals.panel_fill = defined_panel_fill_color;
-                }
-
-                if let Some(window_stroke_color) = settings_theme.window_stroke_color {
-                    style.visuals.window_stroke.color = window_stroke_color;
-                }
-
-                if let Some(selection_bg_color) = settings_theme.selection_bg_color {
-                    style.visuals.selection.bg_fill = selection_bg_color;
-                }
-
-                if let Some(selection_fg_stroke_color) = settings_theme.selection_fg_stroke_color {
-                    style.visuals.selection.stroke.color = selection_fg_stroke_color;
-                }
-
-                update_widget_theme(
-                    &settings_theme.active_widget,
-                    &mut style.visuals.widgets.active,
-                );
-
-                update_widget_theme(
-                    &settings_theme.inactive_widget,
-                    &mut style.visuals.widgets.inactive,
-                );
-
-                update_widget_theme(
-                    &settings_theme.noninteractive_widget,
-                    &mut style.visuals.widgets.noninteractive,
-                );
-
-                update_widget_theme(
-                    &settings_theme.hovered_widget,
-                    &mut style.visuals.widgets.hovered,
-                );
-
-                update_widget_theme(&settings_theme.open_widget, &mut style.visuals.widgets.open);
-            });
-        }
+        ctx.style_mut(|style| {
+            self.editor_context.settings.theme().apply(style);
+        });
     }
 
     fn process_state(&mut self, ctx: &egui::Context) {

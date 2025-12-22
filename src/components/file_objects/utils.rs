@@ -1,6 +1,19 @@
 use std::io::Write;
 use std::path::Path;
 use tempfile::Builder;
+use toml_edit::TableLike;
+
+use crate::cheese_error;
+use crate::util::CheeseError;
+
+/// Value that splits the header of any file that contains non-metadata content
+pub const HEADER_SPLIT: &str = "++++++++";
+
+/// the maximum length of a name before we start trying to truncate it
+pub const FILENAME_MAX_LENGTH: usize = 30;
+
+/// filename of the object within a folder containing its metadata (without extension)
+pub const FOLDER_METADATA_FILE_NAME: &str = "metadata.toml";
 
 /// Generic file utilities
 use regex::Regex;
@@ -122,6 +135,54 @@ fn test_write_with_temp_file() -> std::io::Result<()> {
     Ok(())
 }
 
+pub fn metadata_extract_u64(
+    table: &dyn TableLike,
+    field_name: &str,
+    allow_bool: bool,
+) -> Result<Option<u64>, CheeseError> {
+    match table.get(field_name) {
+        Some(value) => {
+            if let Some(value) = value.as_integer() {
+                Ok(Some(value as u64))
+            } else if allow_bool && let Some(value) = value.as_bool() {
+                Ok(Some(value as u64))
+            } else {
+                Err(cheese_error!("{field_name} was not an integer"))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+pub fn metadata_extract_string(
+    table: &dyn TableLike,
+    field_name: &str,
+) -> Result<Option<String>, CheeseError> {
+    Ok(match table.get(field_name) {
+        Some(value) => Some(
+            value
+                .as_str()
+                .ok_or_else(|| cheese_error!("{field_name} was not string"))?
+                .to_owned(),
+        ),
+        None => None,
+    })
+}
+
+pub fn metadata_extract_bool(
+    table: &dyn TableLike,
+    field_name: &str,
+) -> Result<Option<bool>, CheeseError> {
+    Ok(match table.get(field_name) {
+        Some(value) => Some(
+            value
+                .as_bool()
+                .ok_or_else(|| cheese_error!("{field_name} was not bool"))?,
+        ),
+        None => None,
+    })
+}
+
 pub fn write_outline_property(property_name: &str, property: &str, export_string: &mut String) {
     if property.is_empty() {
         return;
@@ -145,4 +206,28 @@ pub fn write_outline_property(property_name: &str, property: &str, export_string
         export_string.push_str(property);
         export_string.push_str("\n\n");
     }
+}
+
+/// Reads the contents of a file from disk
+pub fn read_file_contents(file_to_read: &Path) -> Result<(String, Option<String>), CheeseError> {
+    let extension = match file_to_read.extension() {
+        Some(val) => val,
+        None => return Err(cheese_error!("value was not string")),
+    };
+
+    let file_data = std::fs::read_to_string(file_to_read)?;
+
+    let (metadata_str, file_content): (&str, Option<&str>) = if extension == "md" {
+        match file_data.split_once(HEADER_SPLIT) {
+            None => ("", Some(&file_data)),
+            Some((start, end)) => (start, Some(end)),
+        }
+    } else {
+        (&file_data, None)
+    };
+
+    Ok((
+        metadata_str.to_owned(),
+        file_content.map(|s| s.trim().to_owned()),
+    ))
 }

@@ -4,6 +4,7 @@ mod project_metadata_editor;
 
 use crate::ui::prelude::*;
 
+use crate::ui::settings::settings_page::SettingsPage;
 pub use file_object_editor::FileObjectEditor;
 
 use egui::{Id, Key, Modifiers};
@@ -18,12 +19,14 @@ use egui::{Id, Key, Modifiers};
 pub enum Page {
     ProjectMetadata,
     FileObject(FileID),
+    Settings,
     Export,
 }
 
 impl Page {
     const PROJECT_METADATA_ID: &str = "project_metadata";
     const EXPORT_ID: &str = "export";
+    const SETTINGS_ID: &str = "settings";
 
     /// Get an id from a string. This (and its reverse, `get_id`) could be replaced by `From`
     /// (and `Into`), but this seems like it might be more explicit?
@@ -39,6 +42,7 @@ impl Page {
         match self {
             Self::ProjectMetadata => Self::PROJECT_METADATA_ID,
             Self::Export => Self::EXPORT_ID,
+            Self::Settings => Self::SETTINGS_ID,
             Self::FileObject(id) => id,
         }
     }
@@ -54,16 +58,32 @@ impl Page {
     pub fn is_searchable(&self) -> bool {
         match self {
             Self::Export => false,
+            Self::Settings => false,
             Self::FileObject(_) => true,
             Self::ProjectMetadata => true,
         }
     }
+
+    pub fn open(self, keep: bool) -> OpenPage {
+        OpenPage { page: self, keep }
+    }
+}
+
+/// the identifier for a Page which has been open in a Tab
+#[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OpenPage {
+    pub page: Page,
+
+    /// indicate if the page should be kept. if not, it will be closed when a new tab is opened.
+    pub keep: bool,
 }
 
 #[derive(Debug, Default)]
 pub struct PageData {
     search: Search,
     last_selected_id: Option<Id>,
+
+    settings_page: Option<SettingsPage>,
 }
 
 pub type Store = RenderDataStore<Page, PageData>;
@@ -77,9 +97,36 @@ enum FocusShiftDirection {
     Previous,
 }
 
-impl Page {
+const MAX_TITLE_LENGTH: usize = 20;
+
+impl OpenPage {
+    pub fn title(&self, project: &mut Project) -> egui::WidgetText {
+        let text: egui::RichText = match &self.page {
+            Page::ProjectMetadata => "Project Metadata".into(),
+            Page::FileObject(file_id) => {
+                if let Some(object) = project.objects.get(file_id) {
+                    let text = object.borrow().get_title();
+                    text.chars()
+                        .take(MAX_TITLE_LENGTH)
+                        .collect::<String>()
+                        .into()
+                } else {
+                    // any deleted scenes should be cleaned up before we get here, but we have this
+                    // logic instead of panicking anyway
+                    "<Deleted>".into()
+                }
+            }
+            Page::Export => "Export".into(),
+            Page::Settings => "Settings".into(),
+        };
+
+        let text = if self.keep { text } else { text.italics() };
+
+        text.into()
+    }
+
     pub fn ui(&self, ui: &mut Ui, project: &mut Project, ctx: &mut EditorContext) {
-        let rdata = ctx.stores.page.get(self);
+        let rdata = ctx.stores.page.get(&self.page);
         let page_data: &mut PageData = &mut rdata.borrow_mut();
 
         let focus_shift_option = if ui.input_mut(|i| i.consume_key(Modifiers::SHIFT, Key::Tab)) {
@@ -90,23 +137,30 @@ impl Page {
             None
         };
 
-        let page_search_active = if self.is_searchable() {
+        let page_search_active = if self.page.is_searchable() {
             self.process_page_search(page_data, ui, project, ctx)
         } else {
             false
         };
 
         // Draw the UI, saving the ids of the (selectable) elements to do tabbing on
-        let page_tabable_ids = match self {
-            Self::ProjectMetadata => project.metadata_ui(ui, ctx),
-            Self::FileObject(file_object_id) => {
+        let page_tabable_ids = match &self.page {
+            Page::ProjectMetadata => project.metadata_ui(ui, ctx),
+            Page::FileObject(file_object_id) => {
                 if let Some(file_object) = project.objects.get(file_object_id) {
                     file_object.borrow_mut().as_editor_mut().ui(ui, ctx)
                 } else {
                     Vec::new()
                 }
             }
-            Self::Export => project.export_ui(ui, ctx),
+            Page::Export => project.export_ui(ui, ctx),
+            Page::Settings => {
+                if page_data.settings_page.is_none() {
+                    page_data.settings_page = Some(SettingsPage::load(ctx));
+                }
+                let settings_page = page_data.settings_page.as_mut().unwrap();
+                settings_page.ui(ui, ctx)
+            }
         };
 
         if let Some(focus_shift) = focus_shift_option {
@@ -209,8 +263,8 @@ impl Page {
             if page_data.search.redo_search {
                 page_data.search.search_results = Some(HashMap::new());
 
-                if let Some(searchable) = project.get_searchable(self) {
-                    searchable.search(self, &mut page_data.search);
+                if let Some(searchable) = project.get_searchable(&self.page) {
+                    searchable.search(&self.page, &mut page_data.search);
                 }
 
                 ctx.version += 1;
@@ -231,8 +285,8 @@ impl Page {
 }
 
 // Needs to be &mut Tab since `egui_dock::TabViewer::id` gives us a mut reference
-impl From<&mut Page> for egui::Id {
-    fn from(val: &mut Page) -> Self {
+impl From<&mut OpenPage> for egui::Id {
+    fn from(val: &mut OpenPage) -> Self {
         egui::Id::new(val)
     }
 }

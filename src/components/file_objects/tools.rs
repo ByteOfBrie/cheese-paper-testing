@@ -4,29 +4,131 @@ use std::rc::Rc;
 
 use crate::cheese_error;
 use crate::components::file_objects::utils::{get_index_from_name, write_with_temp_file};
-use crate::components::file_objects::{Character, Folder, Place, Scene};
+// use crate::components::file_objects::{Character, Folder, Place, Scene};
 use crate::util::CheeseError;
 use egui_ltreeview::DirPosition;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use toml_edit::DocumentMut;
 
-use super::{FileType, HEADER_SPLIT};
-use crate::components::file_objects::FileObject;
+use super::*;
+use crate::components::file_objects::utils::read_file_contents;
 
 pub type FileID = Rc<String>;
 
-pub type FileObjectStore = HashMap<FileID, Box<RefCell<dyn FileObject>>>;
+pub type FileObjectStore = HashMap<FileID, RefCell<Box<dyn FileObject>>>;
 
 impl dyn FileObject {
+    pub fn is_folder(&self) -> bool {
+        self.get_type().is_folder()
+    }
+
+    pub fn has_body(&self) -> bool {
+        self.get_type().has_body()
+    }
+
+    pub fn type_name(&self) -> &'static str {
+        self.get_type().type_name()
+    }
+
+    pub fn empty_string_name(&self) -> &'static str {
+        self.get_type().empty_string_name()
+    }
+
+    pub fn extension(&self) -> &'static str {
+        self.get_type().extension()
+    }
+
+    pub fn calculate_filename(&self) -> OsString {
+        self.get_base().calculate_filename(self.get_type())
+    }
+
+    /// Calculates the object's current path. For objects in a single file, this is their path
+    /// (including the extension), for folder-based objects (i.e., Folder, Place), this is the
+    /// path to the folder.
+    ///
+    /// Also see `get_file`
+    pub fn get_path(&self) -> PathBuf {
+        Path::join(
+            &self.get_base().file.dirname,
+            &self.get_base().file.basename,
+        )
+    }
+
+    /// The path to an object's underlying file, the equivalent of `get_path` when doing file
+    /// operations on this object
+    pub fn get_file(&self) -> PathBuf {
+        let base_path = self.get_path();
+        if self.is_folder() {
+            Path::join(&base_path, FOLDER_METADATA_FILE_NAME)
+        } else {
+            base_path
+        }
+    }
+
+    /// Determine if the file should be loaded
+    fn should_load(&mut self, file_to_read: &Path) -> Result<bool, CheeseError> {
+        let current_modtime = match std::fs::metadata(file_to_read) {
+            Ok(file_metadata) => file_metadata.modified()?,
+            Err(err) => {
+                log::warn!(
+                    "attempted to load file that does not exist: {:?}",
+                    file_to_read
+                );
+                return Err(err.into());
+            }
+        };
+
+        if let Some(old_modtime) = self.get_base().file.modtime
+            && old_modtime == current_modtime
+        {
+            // We've already loaded the latest revision, nothing to do
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    /// Reloads the contents of this file object from disk. Assumes that the file has been properly
+    /// initialized already
+    pub fn reload_file(&mut self) -> Result<(), CheeseError> {
+        let file_to_read = self.get_file();
+
+        if !self.should_load(&file_to_read)? {
+            return Ok(());
+        }
+
+        let (metadata_str, file_body) = read_file_contents(&file_to_read)?;
+
+        let new_toml_header = metadata_str
+            .parse::<DocumentMut>()
+            .expect("invalid file metadata header");
+
+        let base_file_object = self.get_base_mut();
+
+        base_file_object
+            .metadata
+            .load_base_metadata(new_toml_header.as_table(), &mut base_file_object.file)?;
+
+        base_file_object.toml_header = new_toml_header;
+
+        self.load_metadata()?;
+
+        if let Some(file_body) = file_body {
+            self.load_body(file_body);
+        }
+
+        Ok(())
+    }
+
     pub fn children<'a>(
         &self,
         objects: &'a FileObjectStore,
-    ) -> impl Iterator<Item = &'a RefCell<dyn FileObject>> {
+    ) -> impl Iterator<Item = &'a RefCell<Box<dyn FileObject>>> {
         self.get_base()
             .children
             .iter()
             .filter_map(|child_id| objects.get(child_id))
-            .map(|b| &**b)
     }
 
     pub fn new<O: FileObject + 'static>(o: O) -> Box<RefCell<dyn FileObject>> {
@@ -38,7 +140,7 @@ impl dyn FileObject {
     pub fn create_child_at_end(
         &mut self,
         file_type: FileType,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    ) -> Result<Box<dyn FileObject>, CheeseError> {
         assert!(self.is_folder());
 
         // We know it's at the end, and thus we know that there aren't any children
@@ -51,7 +153,7 @@ impl dyn FileObject {
         file_type: FileType,
         position: DirPosition<FileID>,
         objects: &FileObjectStore,
-    ) -> Result<Box<RefCell<dyn FileObject>>, CheeseError> {
+    ) -> Result<Box<dyn FileObject>, CheeseError> {
         let new_index = match position {
             DirPosition::After(child) => {
                 self.get_base()
@@ -76,16 +178,13 @@ impl dyn FileObject {
         // It might not be the best behavior to recover from an error *after* a file is created on
         // disk, but that might not even be possible, and is kinda okay since we should only ever
         // overwrite that file by accident, even in the worst case
-        let new_object: Box<RefCell<dyn FileObject>> = match file_type {
-            FileType::Scene => Self::new(Scene::new(self.get_path(), new_index)?),
-            FileType::Character => Self::new(Character::new(self.get_path(), new_index)?),
-            FileType::Folder => Self::new(Folder::new(self.get_path(), new_index)?),
-            FileType::Place => Self::new(Place::new(self.get_path(), new_index)?),
-        };
+        let new_object: Box<dyn FileObject> =
+            self.get_schema()
+                .create_file(file_type, self.get_path(), new_index)?;
 
         self.get_base_mut()
             .children
-            .insert(new_index, new_object.borrow().id().clone());
+            .insert(new_index, new_object.id().clone());
 
         Ok(new_object)
     }
@@ -315,6 +414,8 @@ impl dyn FileObject {
         // Ensure `toml_header` has the up-to-date metadata
         self.get_base_mut().write_metadata();
         self.write_metadata(objects);
+        self.get_base_mut().toml_header["file_type"] =
+            toml_edit::value(self.get_type().get_identifier());
 
         let mut final_str = self.get_base().toml_header.to_string();
 

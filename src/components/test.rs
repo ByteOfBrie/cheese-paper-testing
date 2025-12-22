@@ -1,37 +1,32 @@
-#[cfg(test)]
+use crate::components::Schema;
 use crate::components::file_objects::FileObjectStore;
-#[cfg(test)]
-use crate::components::file_objects::MutFileObjectTypeInterface;
-#[cfg(test)]
-use crate::components::file_objects::base::FileType;
-#[cfg(test)]
-use crate::components::file_objects::{
-    Character, FileID, FileObject, FileObjectTypeInterface, Folder, Place, Scene, load_file,
-    move_child, write_with_temp_file,
-};
-#[cfg(test)]
+
+use crate::components::file_objects::{FileID, FileObject, utils::write_with_temp_file};
+
 use crate::components::project::Project;
-#[cfg(test)]
 use crate::util::CheeseError;
-#[cfg(test)]
 use std::collections::HashMap;
-#[cfg(test)]
 use std::ffi::OsString;
-#[cfg(test)]
 use std::fs::create_dir;
-#[cfg(test)]
 use std::fs::{read_dir, read_to_string};
-#[cfg(test)]
 use std::path::Path;
 
-#[cfg(test)]
 use std::cell::RefCell;
-#[cfg(test)]
 use std::rc::Rc;
-#[cfg(test)]
 use std::{fmt::Display, thread, time};
 
-#[cfg(test)]
+use crate::schemas::FileType;
+use crate::schemas::SCHEMA_LIST;
+
+/// These tests were not written to be agnostic to the kind of file types that exist.
+/// Rather than re-write them immediately, it is best to make an iteration of the tests which
+/// are not changed in functionality, and test if the post-refactor code still behaves the same way
+/// For this purpose, here is a 'hack' to give us access to the file types which are private
+/// to the schema::default module
+use crate::schemas::export_file_types::{CHARACTER, FOLDER, PLACE, SCENE};
+
+const SCHEMA: &'static dyn Schema = &crate::schemas::DEFAULT_SCHEMA;
+
 fn file_id(s: &str) -> Rc<String> {
     Rc::new(s.to_string())
 }
@@ -58,11 +53,12 @@ fn save_and_process_updates(project: &mut Project) {
 }
 
 /// Helper to get the file id from a path
-#[cfg(test)]
+
 fn get_id_from_file(filename: &Path) -> Option<FileID> {
     use toml_edit::DocumentMut;
 
-    use crate::components::file_objects::base::{FOLDER_METADATA_FILE_NAME, read_file_contents};
+    use crate::components::file_objects::FOLDER_METADATA_FILE_NAME;
+    use crate::components::file_objects::utils::read_file_contents;
 
     if !filename.exists() {
         return None;
@@ -114,7 +110,12 @@ fn test_basic_create_project() {
     assert!(!project_path.exists());
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 0);
 
-    let project = Project::new(base_dir.path().to_path_buf(), project_name.to_string()).unwrap();
+    let project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        project_name.to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project_path.canonicalize().unwrap(), project.get_path());
 
@@ -136,10 +137,18 @@ fn test_basic_create_project() {
 fn test_basic_create_file_object() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let character = Character::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let folder = Folder::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let place = Place::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let character = SCHEMA
+        .create_file(CHARACTER, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let place = SCHEMA
+        .create_file(PLACE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
 
     // Ensure that all four of the files exist in the proper place
     assert_eq!(read_dir(base_dir.path()).unwrap().count(), 4);
@@ -178,7 +187,7 @@ fn test_basic_create_file_object() -> Result<(), CheeseError> {
 fn test_create_top_level_folder() -> Result<(), CheeseError> {
     let base_dir = tempfile::TempDir::new()?;
 
-    let text = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")?;
+    let text = SCHEMA.create_top_level_folder(base_dir.path().to_path_buf(), "Text")?;
 
     assert_eq!(read_dir(base_dir.path())?.count(), 1);
     assert_eq!(read_dir(text.get_path())?.count(), 1);
@@ -196,13 +205,19 @@ fn test_create_top_level_folder() -> Result<(), CheeseError> {
 fn test_complicated_file_object_names() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let scene1 = Scene::new(base_dir.path().to_path_buf(), 1).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+
+    let scene1 = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 1)
+        .unwrap();
+
     scene.get_base_mut().metadata.name =
         "This is a really long scene name that will have to be shortened".to_string();
     scene.get_base_mut().file.modified = true;
 
-    <dyn FileObject>::save(&mut scene, &HashMap::new()).unwrap();
+    scene.save(&HashMap::new()).unwrap();
 
     // This is probably getting too far into specifics of behavior for this test,
     // but I don't think it'll change very much, so I'm writing it like this now
@@ -240,16 +255,20 @@ fn test_complicated_file_object_names() {
 #[test]
 fn test_change_index_scene() {
     let base_dir = tempfile::TempDir::new().unwrap();
-    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let scene1 = Scene::new(base_dir.path().to_path_buf(), 1).unwrap();
 
-    scene.text = "sample scene text".to_string().into();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+
+    let scene1 = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 1)
+        .unwrap();
+
+    scene.load_body("sample scene text".to_string());
     scene.get_base_mut().file.modified = true;
     scene.save(&HashMap::new()).unwrap();
 
-    (&mut scene as &mut dyn FileObject)
-        .set_index(2, &HashMap::new())
-        .unwrap();
+    scene.set_index(2, &HashMap::new()).unwrap();
 
     // Make sure the untouched scene didn't change somehow
     assert_eq!(
@@ -276,7 +295,12 @@ fn test_change_index_scene() {
 #[test]
 fn test_create_child() {
     let base_dir = tempfile::TempDir::new().unwrap();
-    let project = Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     // create the scenes
     let scene = project
@@ -284,7 +308,7 @@ fn test_create_child() {
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
 
     let character = project
@@ -292,7 +316,7 @@ fn test_create_child() {
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Character)
+        .create_child_at_end(CHARACTER)
         .unwrap();
 
     let folder = project
@@ -300,7 +324,7 @@ fn test_create_child() {
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
 
     let place = project
@@ -308,7 +332,7 @@ fn test_create_child() {
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Place)
+        .create_child_at_end(PLACE)
         .unwrap();
 
     // Four file objects plus the metadata
@@ -319,51 +343,46 @@ fn test_create_child() {
         .borrow()
         .get_path();
     assert_eq!(read_dir(path).unwrap().count(), 5);
-    assert!(scene.borrow().get_file().exists());
-    assert_eq!(scene.borrow().get_base().index, Some(0));
-    assert!(character.borrow().get_file().exists());
-    assert_eq!(character.borrow().get_base().index, Some(1));
-    assert!(folder.borrow().get_file().exists());
-    assert_eq!(folder.borrow().get_base().index, Some(2));
-    assert!(place.borrow().get_file().exists());
-    assert_eq!(place.borrow().get_base().index, Some(3));
+    assert!(scene.get_file().exists());
+    assert_eq!(scene.get_base().index, Some(0));
+    assert!(character.get_file().exists());
+    assert_eq!(character.get_base().index, Some(1));
+    assert!(folder.get_file().exists());
+    assert_eq!(folder.get_base().index, Some(2));
+    assert!(place.get_file().exists());
+    assert_eq!(place.get_base().index, Some(3));
 }
 
 #[test]
 fn test_set_index_folders() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let top_level_folder = project
+    let mut top_level_folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
 
-    let mid_level_folder = top_level_folder
-        .borrow_mut()
-        .create_child_at_end(FileType::Folder)
-        .unwrap();
-    let child_scene = mid_level_folder
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    let child_scene_id = child_scene.borrow().get_base().metadata.id.clone();
+    let mut mid_level_folder = top_level_folder.create_child_at_end(FOLDER).unwrap();
+    let child_scene = mid_level_folder.create_child_at_end(SCENE).unwrap();
+    let child_scene_id = child_scene.get_base().metadata.id.clone();
 
-    assert!(child_scene.borrow().get_file().exists());
-    assert_eq!(child_scene.borrow().get_base().index, Some(0));
+    assert!(child_scene.get_file().exists());
+    assert_eq!(child_scene.get_base().index, Some(0));
 
     project.add_object(mid_level_folder);
     project.add_object(child_scene);
 
-    top_level_folder
-        .borrow_mut()
-        .set_index(1, &project.objects)
-        .unwrap();
+    top_level_folder.set_index(1, &project.objects).unwrap();
 
     let child = project.objects.remove(&child_scene_id).unwrap();
 
@@ -383,7 +402,10 @@ fn test_set_index_folders() {
 fn test_avoid_pointless_save() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+
     let scene_old_modtime = scene.get_base().file.modtime;
     // Check that we get the correct modtime
     assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
@@ -392,7 +414,10 @@ fn test_avoid_pointless_save() {
     scene.save(&HashMap::new()).unwrap();
     assert_eq!(scene.get_base().file.modtime, scene_old_modtime);
 
-    let mut folder = Folder::new(base_dir.path().to_path_buf(), 1).unwrap();
+    let mut folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 1)
+        .unwrap();
+
     let folder_old_modtime = folder.get_base().file.modtime;
     folder.save(&HashMap::new()).unwrap();
     assert_eq!(folder.get_base().file.modtime, folder_old_modtime);
@@ -404,19 +429,20 @@ fn test_save_in_folder() {
 
     let sample_text = "sample body";
 
-    let mut folder = Folder::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let scene = (&mut folder as &mut dyn FileObject)
-        .create_child_at_end(FileType::Scene)
+    let mut folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 0)
         .unwrap();
 
-    scene.borrow_mut().load_body(sample_text.to_owned());
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder.create_child_at_end(SCENE).unwrap();
 
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    scene.load_body(sample_text.to_owned());
+    scene.get_base_mut().file.modified = true;
+
+    let scene_id = scene.get_base().metadata.id.clone();
 
     let mut map: FileObjectStore = HashMap::new();
-    let id = scene.borrow().get_base().metadata.id.clone();
-    map.insert(id, scene);
+    let id = scene.get_base().metadata.id.clone();
+    map.insert(id, RefCell::new(scene));
 
     folder.save(&map).unwrap();
 
@@ -435,25 +461,35 @@ fn test_reload_objects() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let sample_body = "sample body";
+    let scene_summary = "it gets more gay";
     let character_appearance = "tall";
     let folder_notes = "this is a folder";
     let place_description = "lots and lots of trees!";
 
-    let mut scene = Scene::new(base_dir.path().to_path_buf(), 0).unwrap();
-    let mut folder = Folder::new(base_dir.path().to_path_buf(), 1).unwrap();
-    let mut character = Character::new(base_dir.path().to_path_buf(), 2).unwrap();
-    let mut place = Place::new(base_dir.path().to_path_buf(), 3).unwrap();
+    let mut scene = SCHEMA
+        .create_file(SCENE, base_dir.path().to_path_buf(), 0)
+        .unwrap();
+    let mut character = SCHEMA
+        .create_file(CHARACTER, base_dir.path().to_path_buf(), 1)
+        .unwrap();
+    let mut folder = SCHEMA
+        .create_file(FOLDER, base_dir.path().to_path_buf(), 2)
+        .unwrap();
+    let mut place = SCHEMA
+        .create_file(PLACE, base_dir.path().to_path_buf(), 3)
+        .unwrap();
 
-    scene.text = sample_body.to_string().into();
+    scene.load_body(sample_body.to_string());
+    *scene.get_test_field() = scene_summary.to_string();
     scene.get_base_mut().file.modified = true;
 
-    character.metadata.appearance = character_appearance.to_string().into();
+    *character.get_test_field() = character_appearance.to_string();
     character.get_base_mut().file.modified = true;
 
-    folder.metadata.notes = folder_notes.to_string().into();
+    *folder.get_test_field() = folder_notes.to_string();
     folder.get_base_mut().file.modified = true;
 
-    place.metadata.description = place_description.to_string().into();
+    *place.get_test_field() = place_description.to_string();
     place.get_base_mut().file.modified = true;
 
     // Save all of the objects
@@ -480,41 +516,31 @@ fn test_reload_objects() {
 
     let mut objects = FileObjectStore::new();
 
-    let scene_id_loaded = load_file(&scene_path, &mut objects).unwrap();
+    let scene_id_loaded = SCHEMA.load_file(&scene_path, &mut objects).unwrap();
+    let character_id_loaded = SCHEMA.load_file(&character_path, &mut objects).unwrap();
+    let folder_id_loaded = SCHEMA.load_file(&folder_path, &mut objects).unwrap();
+    let place_id_loaded = SCHEMA.load_file(&place_path, &mut objects).unwrap();
+
     assert_eq!(scene_id, scene_id_loaded);
-    match objects.get(&scene_id).unwrap().borrow().get_file_type() {
-        FileObjectTypeInterface::Scene(scene) => {
-            assert_eq!(*scene.text, sample_body);
-        }
-        _ => panic!(),
-    }
+    let mut scene_loaded = objects.get(&scene_id).unwrap().borrow_mut();
+    assert_eq!(scene_loaded.get_type(), SCENE);
+    assert_eq!(scene_loaded.get_body().trim(), sample_body);
+    assert_eq!(*scene_loaded.get_test_field(), scene_summary);
 
-    let character_id_loaded = load_file(&character_path, &mut objects).unwrap();
     assert_eq!(character_id, character_id_loaded);
-    match objects.get(&character_id).unwrap().borrow().get_file_type() {
-        FileObjectTypeInterface::Character(character) => {
-            assert_eq!(*character.metadata.appearance, character_appearance);
-        }
-        _ => panic!(),
-    }
+    let mut character_loaded = objects.get(&character_id).unwrap().borrow_mut();
+    assert_eq!(character_id, character_id_loaded);
+    assert_eq!(*character_loaded.get_test_field(), character_appearance);
 
-    let folder_id_loaded = load_file(&folder_path, &mut objects).unwrap();
     assert_eq!(folder_id, folder_id_loaded);
-    match objects.get(&folder_id).unwrap().borrow().get_file_type() {
-        FileObjectTypeInterface::Folder(folder) => {
-            assert_eq!(*folder.metadata.notes, folder_notes);
-        }
-        _ => panic!(),
-    }
+    let mut folder_loaded = objects.get(&folder_id).unwrap().borrow_mut();
+    assert_eq!(folder_id, folder_id_loaded);
+    assert_eq!(*folder_loaded.get_test_field(), folder_notes);
 
-    let place_id_loaded = load_file(&place_path, &mut objects).unwrap();
     assert_eq!(place_id, place_id_loaded);
-    match objects.get(&place_id).unwrap().borrow().get_file_type() {
-        FileObjectTypeInterface::Place(place) => {
-            assert_eq!(*place.metadata.description, place_description);
-        }
-        _ => panic!(),
-    }
+    let mut place_loaded = objects.get(&place_id).unwrap().borrow_mut();
+    assert_eq!(place_id, place_id_loaded);
+    assert_eq!(*place_loaded.get_test_field(), place_description);
 }
 
 #[test]
@@ -523,48 +549,52 @@ fn test_reload_project() {
 
     let sample_body = "sample body";
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     let character = project
         .objects
         .get(&project.characters_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Character)
+        .create_child_at_end(CHARACTER)
         .unwrap();
-    let character_id = character.borrow().get_base().metadata.id.clone();
+    let character_id = character.get_base().metadata.id.clone();
 
     let folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
 
     let place = project
         .objects
         .get(&project.worldbuilding_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Place)
+        .create_child_at_end(PLACE)
         .unwrap();
-    let place_id = place.borrow().get_base().metadata.id.clone();
+    let place_id = place.get_base().metadata.id.clone();
 
     // modify the file objects:
-    scene.borrow_mut().load_body(sample_body.to_string());
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.load_body(sample_body.to_string());
+    scene.get_base_mut().file.modified = true;
 
     project.add_object(scene);
     project.add_object(character);
@@ -656,7 +686,12 @@ fn test_load_markdown() {
     let sample_body = "sample body";
 
     // open and immediately drop the project (just creating the files)
-    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     write_with_temp_file(
         &Path::join(base_dir.path(), "test_project/text/000-New_Scene.md"),
@@ -702,7 +737,12 @@ another multiline block
 contents1
 "#;
     // open and immediately drop the project (just creating the files)
-    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     write_with_temp_file(
         &Path::join(base_dir.path(), "test_project/text/000-New_Scene.md"),
@@ -720,24 +760,17 @@ contents1
         .borrow()
         .get_path();
 
-    let scene_id_loaded = load_file(&scene_path, &mut project.objects).unwrap();
+    let scene_id_loaded = SCHEMA.load_file(&scene_path, &mut project.objects).unwrap();
 
-    match project
-        .objects
-        .get(&scene_id_loaded)
-        .unwrap()
-        .borrow()
-        .get_file_type()
-    {
-        FileObjectTypeInterface::Scene(scene) => {
-            assert_eq!(scene.get_body().trim(), "contents1");
-            assert_eq!(
-                *scene.metadata.summary,
-                "multiline block inside\nanother multiline block\n"
-            );
-        }
-        _ => panic!(),
-    }
+    let scene = project.objects.get(&scene_id_loaded).unwrap();
+    let mut scene = scene.borrow_mut();
+
+    assert!(scene.get_type() == SCENE);
+    assert_eq!(scene.get_body().trim(), "contents1");
+    assert_eq!(
+        *scene.get_test_field(),
+        "multiline block inside\nanother multiline block\n"
+    );
 
     assert!(
         read_to_string(scene_path)
@@ -751,7 +784,8 @@ contents1
 fn test_name_from_filename() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")
+    let text_path = SCHEMA
+        .create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -763,19 +797,13 @@ fn test_name_from_filename() {
     )
     .unwrap();
 
-    let scene_id_loaded = load_file(&text_path, &mut objects).unwrap();
-    match objects
-        .get(&scene_id_loaded)
-        .unwrap()
-        .borrow_mut()
-        .get_file_type_mut()
-    {
-        MutFileObjectTypeInterface::Folder(folder) => {
-            folder.save(&objects).unwrap();
-            assert!(folder.get_path().join("000-scene2.md").exists());
-        }
-        _ => panic!(),
-    };
+    let scene_id_loaded = SCHEMA.load_file(&text_path, &mut objects).unwrap();
+    let folder = objects.get(&scene_id_loaded).unwrap();
+    let mut folder = folder.borrow_mut();
+
+    assert_eq!(folder.get_type(), FOLDER);
+    folder.save(&objects).unwrap();
+    assert!(folder.get_path().join("000-scene2.md").exists());
 }
 
 /// Load various files with indexes out of order (and some missing) and verify that they all get indexed correctly
@@ -786,7 +814,8 @@ fn test_fix_indexing_on_load() {
 
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let text_path = Folder::new_top_level(base_dir.path().to_path_buf(), "Text")
+    let text_path = SCHEMA
+        .create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap()
         .get_path();
 
@@ -837,25 +866,17 @@ contents123"#
 
     let mut objects = FileObjectStore::new();
 
-    let scene_id_loaded = load_file(&text_path, &mut objects).unwrap();
-    match objects
-        .get(&scene_id_loaded)
-        .unwrap()
-        .borrow_mut()
-        .get_file_type_mut()
-    {
-        MutFileObjectTypeInterface::Folder(folder) => {
-            folder.save(&objects).unwrap();
-            assert_eq!(
-                folder.base.children,
-                vec![file_id("0"), file_id("1"), file_id("2"), file_id("3")]
-            );
-            let child = objects.get(&file_id("1-0")).unwrap();
-            assert_eq!(child.borrow().get_base().index, Some(0));
-            assert_eq!(child.borrow().get_body(), "contents123\n");
-        }
-        _ => panic!(),
-    };
+    let scene_id_loaded = SCHEMA.load_file(&text_path, &mut objects).unwrap();
+    let folder = objects.get(&scene_id_loaded).unwrap();
+    let mut folder = folder.borrow_mut();
+
+    assert_eq!(folder.get_type(), FOLDER);
+    folder.save(&objects).unwrap();
+    assert!(folder.get_path().join("000-scene2.md").exists());
+
+    let child = objects.get(&file_id("1-0")).unwrap();
+    assert_eq!(child.borrow().get_base().index, Some(0));
+    assert_eq!(child.borrow().get_body(), "contents123\n");
 }
 
 /// Try to delete a file object, verifying it gets removed from disk
@@ -863,36 +884,34 @@ contents123"#
 fn test_delete() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -998,38 +1017,39 @@ fn test_delete() {
 fn test_delete_middle() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = project
+    let mut scene2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene2);
@@ -1062,39 +1082,40 @@ fn test_delete_middle() {
 fn test_move_simple() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene_to_move = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene_to_move.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene_to_move.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_to_move = folder1.create_child_at_end(SCENE).unwrap();
+    scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
+    scene_to_move.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_id = scene_to_move.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene_to_move.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1108,7 +1129,9 @@ fn test_move_simple() {
     assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the move
-    move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk
     assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
@@ -1145,39 +1168,40 @@ fn test_move_simple() {
 fn test_move_multiple_times() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene_to_move: Box<RefCell<dyn FileObject>> = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene_to_move.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene_to_move.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_to_move: Box<dyn FileObject> = folder1.create_child_at_end(SCENE).unwrap();
+    scene_to_move.get_base_mut().metadata.name = "scene1".to_string();
+    scene_to_move.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_id = scene_to_move.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene_to_move.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1191,7 +1215,9 @@ fn test_move_multiple_times() {
     assert!(!project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the first move
-    move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &folder2_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk
     assert!(!project_path.join("text/000-folder1/000-scene1.md").exists());
@@ -1223,7 +1249,9 @@ fn test_move_multiple_times() {
     );
 
     // Do the second move (back)
-    move_child(&scene_id, &folder2_id, &folder1_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder2_id, &folder1_id, 0, &project.objects)
+        .unwrap();
 
     // Make sure the file objects moved the children appropriately
     assert_eq!(
@@ -1260,41 +1288,42 @@ fn test_move_multiple_times() {
 fn test_move_folder_contents() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene = folder2
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder2.create_child_at_end(SCENE).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1308,7 +1337,9 @@ fn test_move_folder_contents() {
     assert!(project_path.join("text/001-folder2/000-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    move_child(&folder2_id, &text_id, &folder1_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&folder2_id, &text_id, &folder1_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     // 1. old folder isn't there
@@ -1389,33 +1420,37 @@ fn test_move_folder_contents() {
 fn test_move_within_folder_backwards() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
-    let folder = project
+    let mut folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder.borrow_mut().get_base_mut().file.modified = true;
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder);
     project.add_object(scene);
@@ -1428,7 +1463,9 @@ fn test_move_within_folder_backwards() {
     assert!(project_path.join("text/001-scene1.md").exists());
 
     // Do the move, easy case first: moving scene1 backwards
-    move_child(&scene_id, &text_id, &text_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &text_id, &text_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-scene1.md").exists());
@@ -1493,33 +1530,37 @@ fn test_move_within_folder_backwards() {
 fn test_move_within_folder_forwards() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
-    let folder = project
+    let mut folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder.borrow_mut().get_base_mut().file.modified = true;
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder);
     project.add_object(scene);
@@ -1532,7 +1573,9 @@ fn test_move_within_folder_forwards() {
     assert!(project_path.join("text/001-scene1.md").exists());
 
     // Do the move
-    move_child(&folder_id, &text_id, &text_id, 1, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&folder_id, &text_id, &text_id, 1, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-scene1.md").exists());
@@ -1617,55 +1660,50 @@ fn test_move_within_folder_forwards() {
 fn test_move_between_folder_contents() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene_a = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene_a.borrow_mut().get_base_mut().metadata.name = "a".to_string();
-    scene_a.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_a = folder1.create_child_at_end(SCENE).unwrap();
+    scene_a.get_base_mut().metadata.name = "a".to_string();
+    scene_a.get_base_mut().file.modified = true;
 
-    let scene_b = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene_b.borrow_mut().get_base_mut().metadata.name = "b".to_string();
-    scene_b.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_b = folder1.create_child_at_end(SCENE).unwrap();
+    scene_b.get_base_mut().metadata.name = "b".to_string();
+    scene_b.get_base_mut().file.modified = true;
 
-    let scene_c = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene_c.borrow_mut().get_base_mut().metadata.name = "c".to_string();
-    scene_c.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene_c = folder1.create_child_at_end(SCENE).unwrap();
+    scene_c.get_base_mut().metadata.name = "c".to_string();
+    scene_c.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene_a_id = scene_a.borrow().get_base().metadata.id.clone();
-    let scene_b_id = scene_b.borrow().get_base().metadata.id.clone();
-    let scene_c_id = scene_c.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene_a_id = scene_a.get_base().metadata.id.clone();
+    let scene_b_id = scene_b.get_base().metadata.id.clone();
+    let scene_c_id = scene_c.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -1682,7 +1720,9 @@ fn test_move_between_folder_contents() {
     assert!(project_path.join("text/000-folder1/002-c.md").exists());
 
     // Move b into folder 2
-    move_child(&scene_b_id, &folder1_id, &folder2_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_b_id, &folder1_id, &folder2_id, 0, &project.objects)
+        .unwrap();
 
     // Ensure the file got moved
     assert!(project_path.join("text/001-folder2/000-b.md").exists());
@@ -1820,7 +1860,9 @@ fn test_move_between_folder_contents() {
     );
 
     // Now, move b back into the start of folder 1
-    move_child(&scene_b_id, &folder2_id, &folder1_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_b_id, &folder2_id, &folder1_id, 0, &project.objects)
+        .unwrap();
 
     // Ensure indexing is correct in the new folder
     assert!(!project_path.join("text/001-folder2/000-b.md").exists());
@@ -1961,30 +2003,31 @@ fn test_move_between_folder_contents() {
 fn test_move_to_parent() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder1.create_child_at_end(SCENE).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene);
@@ -1997,7 +2040,9 @@ fn test_move_to_parent() {
     assert!(!project_path.join("text/001-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    move_child(&scene_id, &folder1_id, &text_id, 1, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &text_id, 1, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-folder1/metadata.toml").exists());
@@ -2064,30 +2109,31 @@ fn test_move_to_parent() {
 fn test_move_to_parent_current_position() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene = folder1.create_child_at_end(SCENE).unwrap();
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene);
@@ -2100,7 +2146,9 @@ fn test_move_to_parent_current_position() {
     assert!(!project_path.join("text/001-scene1.md").exists());
 
     // Do the move (folder2 (which contains scene) into folder1)
-    move_child(&scene_id, &folder1_id, &text_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&scene_id, &folder1_id, &text_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that the move happened on disk:
     assert!(project_path.join("text/000-scene1.md").exists());
@@ -2167,33 +2215,37 @@ fn test_move_to_parent_current_position() {
 fn test_move_to_self() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_id = project.text_id.clone();
 
-    let folder = project
+    let mut folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder.borrow_mut().get_base_mut().file.modified = true;
+    folder.get_base_mut().metadata.name = "folder1".to_string();
+    folder.get_base_mut().file.modified = true;
 
-    let scene = project
+    let mut scene = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene.borrow_mut().get_base_mut().file.modified = true;
+    scene.get_base_mut().metadata.name = "scene1".to_string();
+    scene.get_base_mut().file.modified = true;
 
-    let folder_id = folder.borrow().get_base().metadata.id.clone();
-    let scene_id = scene.borrow().get_base().metadata.id.clone();
+    let folder_id = folder.get_base().metadata.id.clone();
+    let scene_id = scene.get_base().metadata.id.clone();
 
     project.add_object(folder);
     project.add_object(scene);
@@ -2226,7 +2278,9 @@ fn test_move_to_self() {
         .unwrap();
 
     // Do the move
-    move_child(&folder_id, &text_id, &text_id, 0, &project.objects).unwrap();
+    SCHEMA
+        .move_child(&folder_id, &text_id, &text_id, 0, &project.objects)
+        .unwrap();
 
     // Verify that nothing happened on disk:
     assert!(project_path.join("text/000-folder1/").exists());
@@ -2314,38 +2368,36 @@ fn test_move_to_self() {
 fn test_move_to_child() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let top_level_folder = project
+    let mut top_level_folder = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    let top_level_folder_id = top_level_folder.borrow().get_base().metadata.id.clone();
-    top_level_folder.borrow_mut().get_base_mut().metadata.name = String::from("top");
-    top_level_folder.borrow_mut().get_base_mut().file.modified = true;
+    let top_level_folder_id = top_level_folder.get_base().metadata.id.clone();
+    top_level_folder.get_base_mut().metadata.name = String::from("top");
+    top_level_folder.get_base_mut().file.modified = true;
 
-    let mid_level_folder = top_level_folder
-        .borrow_mut()
-        .create_child_at_end(FileType::Folder)
-        .unwrap();
-    let mid_level_folder_id = mid_level_folder.borrow().get_base().metadata.id.clone();
-    mid_level_folder.borrow_mut().get_base_mut().metadata.name = String::from("mid");
-    mid_level_folder.borrow_mut().get_base_mut().file.modified = true;
+    let mut mid_level_folder = top_level_folder.create_child_at_end(FOLDER).unwrap();
+    let mid_level_folder_id = mid_level_folder.get_base().metadata.id.clone();
+    mid_level_folder.get_base_mut().metadata.name = String::from("mid");
+    mid_level_folder.get_base_mut().file.modified = true;
 
-    let child_folder = mid_level_folder
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    let child_folder_id = child_folder.borrow().get_base().metadata.id.clone();
-    child_folder.borrow_mut().get_base_mut().metadata.name = String::from("child");
-    child_folder.borrow_mut().get_base_mut().file.modified = true;
+    let mut child_folder = mid_level_folder.create_child_at_end(SCENE).unwrap();
+    let child_folder_id = child_folder.get_base().metadata.id.clone();
+    child_folder.get_base_mut().metadata.name = String::from("child");
+    child_folder.get_base_mut().file.modified = true;
 
-    assert!(child_folder.borrow().get_file().exists());
-    assert_eq!(child_folder.borrow().get_base().index, Some(0));
+    assert!(child_folder.get_file().exists());
+    assert_eq!(child_folder.get_base().index, Some(0));
 
     project.add_object(top_level_folder);
     project.add_object(mid_level_folder);
@@ -2354,7 +2406,7 @@ fn test_move_to_child() {
     project.save().unwrap();
 
     // Try to move into a folder it directly contains:
-    let immediate_move = move_child(
+    let immediate_move = SCHEMA.move_child(
         &top_level_folder_id,
         &project.text_id,
         &mid_level_folder_id,
@@ -2368,7 +2420,7 @@ fn test_move_to_child() {
     )));
 
     // Try to move into a folder contained within a child:
-    let child_move = move_child(
+    let child_move = SCHEMA.move_child(
         &top_level_folder_id,
         &project.text_id,
         &child_folder_id,
@@ -2451,31 +2503,35 @@ fn test_move_to_child() {
 fn test_move_no_clobber() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let scene1 = project
+    let mut scene1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "a".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    scene1.get_base_mut().metadata.name = "a".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = project
+    let mut scene2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "a".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    scene2.get_base_mut().metadata.name = "a".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(scene1);
     project.add_object(scene2);
@@ -2488,14 +2544,15 @@ fn test_move_no_clobber() {
     assert!(project_path.join("text/001-a.md").exists());
 
     // Move b into folder 2
-    move_child(
-        &scene1_id,
-        &project.text_id,
-        &project.text_id,
-        1,
-        &project.objects,
-    )
-    .unwrap();
+    SCHEMA
+        .move_child(
+            &scene1_id,
+            &project.text_id,
+            &project.text_id,
+            1,
+            &project.objects,
+        )
+        .unwrap();
 
     assert!(project_path.join("text/000-a.md").exists());
     assert!(project_path.join("text/001-a.md").exists());
@@ -2567,20 +2624,17 @@ fn test_move_no_clobber() {
 fn test_place_nesting() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut text = Folder::new_top_level(base_dir.path().to_path_buf(), "Text").unwrap();
-
-    let place1 = (&mut text as &mut dyn FileObject)
-        .create_child_at_end(FileType::Place)
+    let mut text = SCHEMA
+        .create_top_level_folder(base_dir.path().to_path_buf(), "Text")
         .unwrap();
 
-    let place2 = place1
-        .borrow_mut()
-        .create_child_at_end(FileType::Place)
-        .unwrap();
+    let mut place1 = text.create_child_at_end(PLACE).unwrap();
 
-    assert!(place2.borrow().get_file().exists());
-    assert_eq!(place1.borrow().get_base().index, Some(0));
-    assert_eq!(place2.borrow().get_base().index, Some(0));
+    let place2 = place1.create_child_at_end(PLACE).unwrap();
+
+    assert!(place2.get_file().exists());
+    assert_eq!(place1.get_base().index, Some(0));
+    assert_eq!(place2.get_base().index, Some(0));
 }
 
 #[test]
@@ -2593,7 +2647,12 @@ file_type = "place""#;
 file_type = "worldbuilding""#;
 
     // open and immediately drop the project (just creating the files)
-    Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     std::fs::create_dir(Path::join(
         base_dir.path(),
@@ -2628,39 +2687,25 @@ file_type = "worldbuilding""#;
     let mut project = Project::load(base_dir.path().join("test_project")).unwrap();
     project.save().unwrap();
 
-    match project
-        .objects
-        .get(&file_id("1"))
-        .unwrap()
-        .borrow()
-        .get_file_type()
-    {
-        FileObjectTypeInterface::Place(place) => {
-            assert!(
-                read_to_string(place.get_file())
-                    .unwrap()
-                    .contains(r#"notes = """#)
-            );
-        }
-        _ => panic!(),
-    }
+    let place = project.objects.get(&file_id("1")).unwrap();
+    let place = place.borrow();
 
-    match project
-        .objects
-        .get(&file_id("2"))
-        .unwrap()
-        .borrow()
-        .get_file_type()
-    {
-        FileObjectTypeInterface::Place(place) => {
-            assert!(
-                read_to_string(place.get_file())
-                    .unwrap()
-                    .contains(r#"notes = """#)
-            );
-        }
-        _ => panic!(),
-    }
+    assert_eq!(place.get_type(), PLACE);
+    assert!(
+        read_to_string(place.get_file())
+            .unwrap()
+            .contains(r#"notes = """#)
+    );
+
+    let place2 = project.objects.get(&file_id("2")).unwrap();
+    let place2 = place2.borrow();
+
+    assert_eq!(place2.get_type(), PLACE);
+    assert!(
+        read_to_string(place2.get_file())
+            .unwrap()
+            .contains(r#"notes = """#)
+    );
 }
 
 #[test]
@@ -2669,8 +2714,12 @@ fn test_tracker_creation_basic() {
 
     let scene_text = "123456";
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project.objects.len(), 3);
 
@@ -2692,8 +2741,12 @@ fn test_tracker_creation_folder() {
 
     let scene_text = "123456";
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project.objects.len(), 3);
 
@@ -2724,8 +2777,12 @@ fn test_tracker_creation_place() {
     let place_file_text = r#"id = "1"
 file_type = "place""#;
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     assert_eq!(project.objects.len(), 3);
 
@@ -2760,8 +2817,12 @@ fn test_tracker_creation_by_movement() {
 ++++++++
 123456"#;
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     write_with_temp_file(&other_dir.path().join("scene.md"), scene_text.as_bytes()).unwrap();
 
@@ -2787,8 +2848,12 @@ fn test_tracker_creation_by_movement_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
     let other_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     create_dir(Path::join(other_dir.path(), "000-folder1")).unwrap();
 
@@ -2822,36 +2887,34 @@ fn test_tracker_creation_by_movement_folder() {
 fn test_tracker_delete_file() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -2911,36 +2974,34 @@ fn test_tracker_delete_file() {
 fn test_tracker_delete_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3022,36 +3083,34 @@ fn test_tracker_rename_file() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3163,36 +3222,34 @@ fn test_tracker_rename_folder() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3338,36 +3395,34 @@ fn test_tracker_move_file() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3525,47 +3580,45 @@ fn test_tracker_move_folder() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let folder2 = project
+    let mut folder2 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder2.borrow_mut().get_base_mut().metadata.name = "folder2".to_string();
-    folder2.borrow_mut().get_base_mut().file.modified = true;
+    folder2.get_base_mut().metadata.name = "folder2".to_string();
+    folder2.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let folder2_id = folder2.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let folder2_id = folder2.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(folder2);
@@ -3707,36 +3760,34 @@ fn test_tracker_move_file_reindex() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -3896,8 +3947,12 @@ fn test_tracker_move_file_reindex() {
 fn test_tracker_modification() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let scene_text = r#"id = "1"
 ++++++++
@@ -3915,13 +3970,8 @@ fn test_tracker_modification() {
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "123456");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456");
     }
 
     let new_scene_text = r#"id = "1"
@@ -3939,13 +3989,8 @@ asdfjkl123"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "asdfjkl123");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "asdfjkl123");
     }
 }
 
@@ -3957,36 +4002,34 @@ fn test_tracker_move_file_copy_delete() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -4134,8 +4177,12 @@ fn test_tracker_move_file_copy_delete() {
 fn test_tracker_move_modification() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let scene_text = r#"id = "1"
 ++++++++
@@ -4155,14 +4202,9 @@ fn test_tracker_move_modification() {
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "123456");
-        assert_eq!(scene1.get_base().index, Some(0));
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456");
+        assert_eq!(scene1_file_object.get_base().index, Some(0));
     }
 
     let new_scene_text = r#"id = "1"
@@ -4186,13 +4228,8 @@ asdfjkl123"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "asdfjkl123");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "asdfjkl123");
 
         assert_eq!(
             std::fs::read_dir(base_dir.path().join("test_project/text/000-folder1"))
@@ -4217,47 +4254,45 @@ fn test_tracker_move_reindex_folder() {
     // Setup file objects
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
-    let folder1 = project
+    let mut folder1 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Folder)
+        .create_child_at_end(FOLDER)
         .unwrap();
-    folder1.borrow_mut().get_base_mut().metadata.name = "folder1".to_string();
-    folder1.borrow_mut().get_base_mut().file.modified = true;
+    folder1.get_base_mut().metadata.name = "folder1".to_string();
+    folder1.get_base_mut().file.modified = true;
 
-    let scene1 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene1.borrow_mut().get_base_mut().metadata.name = "scene1".to_string();
-    scene1.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene1 = folder1.create_child_at_end(SCENE).unwrap();
+    scene1.get_base_mut().metadata.name = "scene1".to_string();
+    scene1.get_base_mut().file.modified = true;
 
-    let scene2 = folder1
-        .borrow_mut()
-        .create_child_at_end(FileType::Scene)
-        .unwrap();
-    scene2.borrow_mut().get_base_mut().metadata.name = "scene2".to_string();
-    scene2.borrow_mut().get_base_mut().file.modified = true;
+    let mut scene2 = folder1.create_child_at_end(SCENE).unwrap();
+    scene2.get_base_mut().metadata.name = "scene2".to_string();
+    scene2.get_base_mut().file.modified = true;
 
-    let scene3 = project
+    let mut scene3 = project
         .objects
         .get(&project.text_id)
         .unwrap()
         .borrow_mut()
-        .create_child_at_end(FileType::Scene)
+        .create_child_at_end(SCENE)
         .unwrap();
-    scene3.borrow_mut().get_base_mut().metadata.name = "scene3".to_string();
-    scene3.borrow_mut().get_base_mut().file.modified = true;
+    scene3.get_base_mut().metadata.name = "scene3".to_string();
+    scene3.get_base_mut().file.modified = true;
 
-    let folder1_id = folder1.borrow().get_base().metadata.id.clone();
-    let scene1_id = scene1.borrow().get_base().metadata.id.clone();
-    let scene2_id = scene2.borrow().get_base().metadata.id.clone();
-    let scene3_id = scene3.borrow().get_base().metadata.id.clone();
+    let folder1_id = folder1.get_base().metadata.id.clone();
+    let scene1_id = scene1.get_base().metadata.id.clone();
+    let scene2_id = scene2.get_base().metadata.id.clone();
+    let scene3_id = scene3.get_base().metadata.id.clone();
 
     project.add_object(folder1);
     project.add_object(scene1);
@@ -4382,8 +4417,12 @@ fn test_tracker_move_reindex_folder() {
 fn test_tracker_move_and_modify_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let folder1_path_orig = base_dir.path().join("test_project/text/000-folder1");
     std::fs::create_dir(&folder1_path_orig).unwrap();
@@ -4412,13 +4451,8 @@ asdf"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "123456");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456");
     }
 
     // Before the move, update scene1 and scene3
@@ -4472,32 +4506,20 @@ scene4"#;
 
         // Check scene contents
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456\nupdated");
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
-        let scene2 = match scene2_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+        assert_eq!(scene2_file_object.get_type(), SCENE);
+        assert_eq!(scene2_file_object.get_body().trim(), "asdfjkl123");
 
         let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
-        let scene3 = match scene3_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene3.text.as_str(), "scene3");
+        assert_eq!(scene3_file_object.get_type(), SCENE);
+        assert_eq!(scene3_file_object.get_body().trim(), "scene3");
 
         let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
-        let scene4 = match scene4_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene4.text.as_str(), "scene4");
+        assert_eq!(scene4_file_object.get_type(), SCENE);
+        assert_eq!(scene4_file_object.get_body().trim(), "scene4");
 
         // And a basic check around text
         let text_path = project
@@ -4526,32 +4548,20 @@ scene4"#;
 
         // Check scene contents
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456\nupdated");
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
-        let scene2 = match scene2_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+        assert_eq!(scene2_file_object.get_type(), SCENE);
+        assert_eq!(scene2_file_object.get_body().trim(), "asdfjkl123");
 
         let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
-        let scene3 = match scene3_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene3.text.as_str(), "scene3");
+        assert_eq!(scene3_file_object.get_type(), SCENE);
+        assert_eq!(scene3_file_object.get_body().trim(), "scene3");
 
         let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
-        let scene4 = match scene4_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene4.text.as_str(), "scene4");
+        assert_eq!(scene4_file_object.get_type(), SCENE);
+        assert_eq!(scene4_file_object.get_body().trim(), "scene4");
 
         // And a basic check around text
         let text_path = project
@@ -4571,8 +4581,12 @@ scene4"#;
 fn test_tracker_copy_move_and_modify_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let folder1_path_orig = base_dir.path().join("test_project/text/000-folder1");
     std::fs::create_dir(&folder1_path_orig).unwrap();
@@ -4601,13 +4615,8 @@ asdf"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "123456");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456");
     }
 
     // Before the move, update scene1 and scene3
@@ -4673,32 +4682,20 @@ scene4"#;
 
         // Check scene contents
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456\nupdated");
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
-        let scene2 = match scene2_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+        assert_eq!(scene2_file_object.get_type(), SCENE);
+        assert_eq!(scene2_file_object.get_body().trim(), "asdfjkl123");
 
         let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
-        let scene3 = match scene3_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene3.text.as_str(), "scene3");
+        assert_eq!(scene3_file_object.get_type(), SCENE);
+        assert_eq!(scene3_file_object.get_body().trim(), "scene3");
 
         let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
-        let scene4 = match scene4_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene4.text.as_str(), "scene4");
+        assert_eq!(scene4_file_object.get_type(), SCENE);
+        assert_eq!(scene4_file_object.get_body().trim(), "scene4");
 
         // And a basic check around text
         let text_path = project
@@ -4727,32 +4724,20 @@ scene4"#;
 
         // Check scene contents
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene1.text.as_str(), "123456\nupdated");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456\nupdated");
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
-        let scene2 = match scene2_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene2.text.as_str(), "asdfjkl123");
+        assert_eq!(scene2_file_object.get_type(), SCENE);
+        assert_eq!(scene2_file_object.get_body().trim(), "asdfjkl123");
 
         let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
-        let scene3 = match scene3_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene3.text.as_str(), "scene3");
+        assert_eq!(scene3_file_object.get_type(), SCENE);
+        assert_eq!(scene3_file_object.get_body().trim(), "scene3");
 
         let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
-        let scene4 = match scene4_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene4.text.as_str(), "scene4");
+        assert_eq!(scene4_file_object.get_type(), SCENE);
+        assert_eq!(scene4_file_object.get_body().trim(), "scene4");
 
         // And a basic check around text
         let text_path = project
@@ -4771,8 +4756,12 @@ scene4"#;
 fn test_tracker_move_into_moved_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_path = base_dir.path().join("test_project/text");
 
@@ -4820,13 +4809,8 @@ scene4"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "scene1");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "scene1");
     }
 
     // Before the folder move, update and move scene2
@@ -4877,40 +4861,28 @@ scene4"#;
 
         // Check scene contents
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene1.text.as_str(), "scene1");
-        assert_eq!(scene1.get_base().index, Some(0));
-        assert!(scene1.get_path().exists());
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "scene1");
+        assert_eq!(scene1_file_object.get_base().index, Some(0));
+        assert!(scene1_file_object.get_path().exists());
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
-        let scene2 = match scene2_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene2.text.as_str(), "123456\nupdated");
-        assert_eq!(scene2.get_base().index, Some(2));
-        assert!(scene2.get_path().exists());
+        assert_eq!(scene2_file_object.get_type(), SCENE);
+        assert_eq!(scene2_file_object.get_body().trim(), "123456\nupdated");
+        assert_eq!(scene2_file_object.get_base().index, Some(2));
+        assert!(scene2_file_object.get_path().exists());
 
         let scene3_file_object = project.objects.get(&file_id("3")).unwrap().borrow();
-        let scene3 = match scene3_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene3.text.as_str(), "scene3");
-        assert_eq!(scene3.get_base().index, Some(1));
-        assert!(scene3.get_path().exists());
+        assert_eq!(scene3_file_object.get_type(), SCENE);
+        assert_eq!(scene3_file_object.get_body().trim(), "scene3");
+        assert_eq!(scene3_file_object.get_base().index, Some(1));
+        assert!(scene3_file_object.get_path().exists());
 
         let scene4_file_object = project.objects.get(&file_id("4")).unwrap().borrow();
-        let scene4 = match scene4_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene4.text.as_str(), "scene4");
-        assert_eq!(scene4.get_base().index, Some(0));
-        assert!(scene4.get_path().exists());
+        assert_eq!(scene4_file_object.get_type(), SCENE);
+        assert_eq!(scene4_file_object.get_body().trim(), "scene4");
+        assert_eq!(scene4_file_object.get_base().index, Some(0));
+        assert!(scene4_file_object.get_path().exists());
 
         // And a basic check around text
         let text_path = project
@@ -4933,8 +4905,12 @@ scene4"#;
 fn test_tracker_move_from_moved_folder() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_path = base_dir.path().join("test_project/text");
 
@@ -4958,13 +4934,8 @@ scene1"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "scene1");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "scene1");
     }
 
     // grab folder1's id for later
@@ -4993,13 +4964,10 @@ scene1"#;
 
         // Check scene contents
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => panic!("Got a non-scene object"),
-        };
-        assert_eq!(scene1.text.as_str(), "scene1");
-        assert_eq!(scene1.get_base().index, Some(0));
-        assert!(scene1.get_path().exists());
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "scene1");
+        assert_eq!(scene1_file_object.get_base().index, Some(0));
+        assert!(scene1_file_object.get_path().exists());
 
         // folder1 should just have metadata, text should have metadata + 2 objects
         assert_eq!(std::fs::read_dir(&folder1_path_new).unwrap().count(), 1);
@@ -5012,8 +4980,12 @@ scene1"#;
 fn test_tracker_orphaned_file_objects() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let text_path = base_dir.path().join("test_project/text");
 
@@ -5037,13 +5009,8 @@ scene1"#;
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "scene1");
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "scene1");
     }
 
     // grab folder1's id for later
@@ -5078,8 +5045,12 @@ scene1"#;
 fn test_tracker_metadata_population() {
     let base_dir = tempfile::TempDir::new().unwrap();
 
-    let mut project =
-        Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+    let mut project = Project::new(
+        SCHEMA,
+        base_dir.path().to_path_buf(),
+        "test project".to_string(),
+    )
+    .unwrap();
 
     let scene_text = r#"id = "1"
 ++++++++
@@ -5099,12 +5070,9 @@ fn test_tracker_metadata_population() {
 
     // Check the file contents (first)
     let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-    let scene1 = match scene1_file_object.get_file_type() {
-        FileObjectTypeInterface::Scene(scene) => scene,
-        _ => panic!("Got a non-scene object"),
-    };
-    assert_eq!(scene1.text.as_str(), "123456");
-    assert_eq!(scene1.get_base().index, Some(0));
+    assert_eq!(scene1_file_object.get_type(), SCENE);
+    assert_eq!(scene1_file_object.get_body().trim(), "123456");
+    assert_eq!(scene1_file_object.get_base().index, Some(0));
 
     let scene1_raw = read_to_string(&scene1_path).unwrap();
     let folder1_raw = read_to_string(folder1_path.join("metadata.toml")).unwrap();
@@ -5132,20 +5100,93 @@ fn test_tracker_metadata_population() {
     assert!(folder1_name_regex.is_match(&folder1_raw));
 }
 
+#[test]
+fn test_multiple_schemas_reload() {
+    let base_dir = tempfile::TempDir::new().unwrap();
+
+    fn project_name(i: usize) -> String {
+        format!("project_number_{i}_{}", SCHEMA_LIST[i])
+    }
+
+    fn file_body_content(i: usize, file_type: FileType) -> String {
+        format!(
+            "This is the file content of the {file_type} file in project : {i} ({})",
+            SCHEMA_LIST[i]
+        )
+    }
+
+    fn file_metadata_content(i: usize, file_type: FileType) -> String {
+        format!(
+            "This is the metadata of the {file_type} file in project : {i} ({})",
+            SCHEMA_LIST[i]
+        )
+    }
+
+    let mut project_infos = Vec::new();
+
+    for (i, &schema) in SCHEMA_LIST.iter().enumerate() {
+        let project = Project::new(schema, base_dir.path().to_path_buf(), project_name(i)).unwrap();
+
+        let mut project_file_ids = Vec::new();
+
+        let mut root_folder = project.objects.get(&project.text_id).unwrap().borrow_mut();
+
+        for &file_type in schema.get_all_file_types() {
+            let mut file = root_folder.create_child_at_end(file_type).unwrap();
+
+            if file_type.has_body() {
+                file.load_body(file_body_content(i, file_type));
+            }
+            *file.get_test_field() = file_metadata_content(i, file_type);
+            file.get_base_mut().file.modified = true;
+
+            file.save(&project.objects).unwrap();
+
+            project_file_ids.push(file.get_base().metadata.id.clone());
+        }
+
+        project_infos.push((i, schema, project.get_path(), project_file_ids));
+    }
+
+    for (i, schema, path, project_file_ids) in project_infos {
+        let project = Project::load(path).unwrap();
+
+        assert_eq!(project.base_metadata.name, project_name(i));
+
+        for (j, &file_type) in schema.get_all_file_types().iter().enumerate() {
+            let mut file_object = project
+                .objects
+                .get(&project_file_ids[j])
+                .unwrap()
+                .borrow_mut();
+
+            assert_eq!(file_object.get_type(), file_type);
+            if file_type.has_body() {
+                assert_eq!(
+                    file_object.get_body().trim(),
+                    file_body_content(i, file_type)
+                );
+            }
+            assert_eq!(
+                *file_object.get_test_field(),
+                file_metadata_content(i, file_type)
+            );
+        }
+    }
+}
+
 // PanicPrint from https://internals.rust-lang.org/t/print-this-variable-on-panic-annotations/6150/3
-#[cfg(test)]
+
 pub struct PanicPrint<'a, D: Display + ?Sized + 'a> {
     msg: &'a D,
 }
 
-#[cfg(test)]
 impl<'a, D: Display + ?Sized + 'a> PanicPrint<'a, D> {
     pub fn new(msg: &'a D) -> Self {
         PanicPrint { msg }
     }
 }
 
-#[cfg(test)]
 impl<'a, D: Display + ?Sized + 'a> Drop for PanicPrint<'a, D> {
     fn drop(&mut self) {
         if thread::panicking() {
@@ -5164,8 +5205,12 @@ fn test_tracker_reindex_timing() {
 
         let base_dir = tempfile::TempDir::new().unwrap();
 
-        let mut project =
-            Project::new(base_dir.path().to_path_buf(), "test project".to_string()).unwrap();
+        let mut project = Project::new(
+            SCHEMA,
+            base_dir.path().to_path_buf(),
+            "test project".to_string(),
+        )
+        .unwrap();
 
         let scene1_text = r#"id = "1"
 ++++++++
@@ -5192,23 +5237,13 @@ fn test_tracker_reindex_timing() {
 
         // Check the file contents (first)
         let scene1_file_object = project.objects.get(&file_id("1")).unwrap().borrow();
-        let scene1 = match scene1_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene1.text.as_str(), "123456");
-        assert_eq!(scene1.get_base().index, Some(0));
+        assert_eq!(scene1_file_object.get_type(), SCENE);
+        assert_eq!(scene1_file_object.get_body().trim(), "123456");
+        assert_eq!(scene1_file_object.get_base().index, Some(0));
 
         let scene2_file_object = project.objects.get(&file_id("2")).unwrap().borrow();
-        let scene2 = match scene2_file_object.get_file_type() {
-            FileObjectTypeInterface::Scene(scene) => scene,
-            _ => {
-                panic!("Got a non-scene object");
-            }
-        };
-        assert_eq!(scene2.get_base().index, Some(1));
+        assert_eq!(scene2_file_object.get_type(), SCENE);
+        assert_eq!(scene2_file_object.get_base().index, Some(1));
     }
 }
 

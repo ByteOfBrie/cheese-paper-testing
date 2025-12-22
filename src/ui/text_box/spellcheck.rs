@@ -164,5 +164,15 @@ pub fn find_misspelled_words(text: &str, ctx: &EditorContext) -> Vec<(usize, usi
 
 pub fn word_count(text: &str) -> usize {
     static WORD_COUNT_REGEX: SavedRegex = SavedRegex::new(|| Regex::new(r"\s+").unwrap());
-    WORD_COUNT_REGEX.split(text).count()
+    let words: Vec<&str> = WORD_COUNT_REGEX.split(text).collect();
+
+    if let Some(&last_word) = words.last() {
+        if last_word.is_empty() {
+            words.len() - 1
+        } else {
+            words.len()
+        }
+    } else {
+        0
+    }
 }

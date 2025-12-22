@@ -1,9 +1,12 @@
 use super::ProjectEditor;
 
-use crate::components::file_objects::move_child;
 use crate::ui::prelude::*;
 
 use egui_ltreeview::{Action, DirPosition, NodeBuilder, TreeView};
+
+/// Temporary solution. Point to the schema statically here.
+/// Eventually, a solution for loading the schema when opening the project will be needed
+const SCHEMA: &'static dyn Schema = &crate::schemas::DEFAULT_SCHEMA;
 
 /// Context menu actions for file objects, should only be constructed by file objects
 enum ContextMenuActions {
@@ -53,38 +56,17 @@ impl dyn FileObject {
             .height(node_height)
             .label(node_name)
             .context_menu(|ui| {
-                // We can safely call unwrap on parent here because children can't be root nodes
-                if ui.button("New Scene").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Scene,
-                    });
-                    ui.close();
-                }
-                if ui.button("New Character").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Character,
-                    });
-                    ui.close();
-                }
-                if ui.button("New Folder").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Folder,
-                    });
-                    ui.close();
-                }
-                if ui.button("New Place").clicked() {
-                    actions.push(ContextMenuActions::Add {
-                        parent: add_parent.as_ref().unwrap().clone(),
-                        position: position.clone(),
-                        file_type: FileType::Place,
-                    });
-                    ui.close();
+                for file_type in self.get_schema().get_all_file_types() {
+                    let label = format!("New {}", file_type.type_name());
+                    if ui.button(label).clicked() {
+                        // We can safely call unwrap on parent here because children can't be root nodes
+                        actions.push(ContextMenuActions::Add {
+                            parent: add_parent.as_ref().unwrap().clone(),
+                            position: position.clone(),
+                            file_type,
+                        });
+                        ui.close();
+                    }
                 }
 
                 ui.separator();
@@ -173,7 +155,12 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
             Action::SetSelected(selected_file_ids) => {
                 // Open nodes when they're selected
                 if let Some(file_id) = selected_file_ids.first() {
-                    editor.set_editor_tab(file_id);
+                    editor.set_editor_tab(file_id, false);
+                }
+            }
+            Action::Activate(activation_info) => {
+                if let Some(file_id) = activation_info.selected.first() {
+                    editor.keep_editor_tab(file_id);
                 }
             }
             Action::Move(drag_and_drop) => {
@@ -246,7 +233,7 @@ pub fn ui(editor: &mut ProjectEditor, ui: &mut egui::Ui) {
 
                     match editor.project.find_object_parent(moving_file_id) {
                         Some(source_file_id) => {
-                            if let Err(err) = move_child(
+                            if let Err(err) = SCHEMA.move_child(
                                 moving_file_id,
                                 &source_file_id,
                                 target_file_id,

@@ -1,7 +1,7 @@
-use crate::ui::prelude::*;
+use crate::{schemas::DEFAULT_SCHEMA, schemas::SCHEMA_LIST, ui::prelude::*};
 use spellbook::Dictionary;
 
-use crate::components::file_objects::{create_dir_if_missing, write_with_temp_file};
+use crate::components::file_objects::utils::{create_dir_if_missing, write_with_temp_file};
 use directories::ProjectDirs;
 use egui::{FontFamily, FontId, ScrollArea, TextStyle};
 use rfd::FileDialog;
@@ -156,7 +156,6 @@ impl Data {
 pub struct EditorState {
     pub settings: Settings,
     settings_toml: DocumentMut,
-    settings_modified: bool,
     pub data: Data,
     data_toml: DocumentMut,
     data_modified: bool,
@@ -164,6 +163,7 @@ pub struct EditorState {
     error_message: Option<(String, Instant)>,
     new_project_dir: Option<PathBuf>,
     new_project_name: String,
+    new_project_schema: &'static dyn Schema,
     /// Hacky (?) variable to get around borrows (set in the state rather than close directly)
     pub closing_project: bool,
     pub next_project: Option<PathBuf>,
@@ -173,7 +173,6 @@ impl std::fmt::Debug for EditorState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EditorState")
             .field("settings", &self.settings)
-            .field("settings_modified", &self.settings_modified)
             .field("data", &self.data)
             .field("data_modified", &self.data_modified)
             .field("project_dirs", &self.project_dirs)
@@ -202,7 +201,7 @@ impl Default for EditorState {
             },
         };
 
-        let settings_modified = settings.load(&settings_toml);
+        settings.load(&settings_toml);
 
         let mut data = Data::default();
 
@@ -224,7 +223,6 @@ impl Default for EditorState {
         Self {
             settings,
             settings_toml,
-            settings_modified,
             data,
             data_toml,
             data_modified: false,
@@ -232,6 +230,7 @@ impl Default for EditorState {
             error_message: None,
             new_project_dir: None,
             new_project_name: String::new(),
+            new_project_schema: &DEFAULT_SCHEMA,
             closing_project: false,
             next_project: None,
         }
@@ -249,7 +248,7 @@ impl EditorState {
             .map_err(|err| cheese_error!("Error while saving app data\n{}", err))?;
         }
 
-        if self.settings_modified {
+        if self.settings.modified() {
             self.settings.save(&mut self.settings_toml);
             write_with_temp_file(
                 create_dir_if_missing(&Settings::get_path(&self.project_dirs))?,
@@ -514,16 +513,6 @@ impl CheesePaperApp {
 
             ui.add_space(80.0 - label_size);
 
-            ui.vertical_centered(|ui| {
-                let mut reopen_last = self.state.settings.reopen_last();
-                let checkbox_response =
-                    ui.checkbox(&mut reopen_last, "Automatically reopen project");
-                if checkbox_response.clicked() {
-                    self.state.settings_modified = true;
-                    self.state.settings.set_reopen_last(reopen_last);
-                }
-            });
-
             ui.horizontal_centered(|ui| {
                 ui.columns(5, |cols| {
                     cols[0].vertical_centered_justified(|_ui| {});
@@ -567,7 +556,30 @@ impl CheesePaperApp {
                 ui.label("Project Name:");
                 ui.text_edit_singleline(&mut self.state.new_project_name);
 
+                ui.label("Project Schema:");
+                egui::ComboBox::from_id_salt("schema selection dropdown")
+                    .selected_text(self.state.new_project_schema.get_schema_name())
+                    .show_ui(ui, |ui| {
+                        for schema in SCHEMA_LIST {
+                            ui.selectable_value(
+                                &mut self.state.new_project_schema,
+                                schema,
+                                schema.get_schema_name(),
+                            );
+                        }
+                    });
+
                 ui.separator();
+
+                ui.heading("Schema Preview:");
+                egui::Grid::new("schema preview grid").show(ui, |ui| {
+                    for file_type in self.state.new_project_schema.get_all_file_types() {
+                        ui.label(file_type.type_name());
+                        ui.label(" : ");
+                        ui.label(file_type.description());
+                        ui.end_row();
+                    }
+                });
 
                 egui::Sides::new().show(
                     ui,
@@ -575,6 +587,7 @@ impl CheesePaperApp {
                     |ui| {
                         if ui.button("Ok").clicked() {
                             match Project::new(
+                                self.state.new_project_schema,
                                 owned_folder_dir.clone(),
                                 self.state.new_project_name.clone(),
                             ) {
@@ -689,7 +702,7 @@ impl CheesePaperApp {
             let open_tabs_ids = project_editor
                 .get_open_tabs()
                 .iter()
-                .map(|tab| tab.get_id().to_owned())
+                .map(|tab| tab.page.get_id().to_owned())
                 .collect();
 
             if Some(&open_tabs_ids)

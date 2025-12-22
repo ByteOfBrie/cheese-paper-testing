@@ -70,7 +70,7 @@ impl Search {
 }
 
 pub enum Searchable<'a> {
-    FileObject(&'a RefCell<dyn FileObject>),
+    FileObject(&'a RefCell<Box<dyn FileObject>>),
     ProjectMetadata(&'a ProjectMetadata),
 }
 
@@ -132,6 +132,7 @@ impl Project {
             }
             Page::ProjectMetadata => Some(Searchable::ProjectMetadata(&self.metadata)),
             Page::Export => None,
+            Page::Settings => None,
         }
     }
 }

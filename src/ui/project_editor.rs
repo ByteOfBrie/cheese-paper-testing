@@ -1,16 +1,18 @@
+pub mod action;
 mod file_tree;
 pub mod page;
 pub mod search;
 mod util;
 
-use crate::components::file_objects::FileObjectTypeInterface;
-use crate::ui::prelude::*;
+use crate::ui::{prelude::*, render_data};
 
 use crate::components::file_objects::utils::process_name_for_filename;
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
 use crate::ui::settings::WidgetTheme;
+
+use action::Action;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
@@ -49,7 +51,7 @@ pub struct ProjectEditor {
     pub project: Project,
 
     /// List of tabs that are open (egui::Dock requires state to be stored this way)
-    dock_state: DockState<Page>,
+    dock_state: DockState<OpenPage>,
 
     /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
     /// in the project metadata editor as well
@@ -63,7 +65,7 @@ pub struct ProjectEditor {
     tree_state: TreeViewState<Page>,
 
     /// Set by the tab viewer, used to sync the file tree
-    current_open_tab: Option<Page>,
+    current_open_tab: Option<OpenPage>,
 }
 
 impl Debug for ProjectEditor {
@@ -196,36 +198,57 @@ impl DictionaryState {
 
 #[derive(Debug)]
 pub struct References {
-    pub characters: BTreeMap<FileID, String>,
+    pub file_types: &'static [FileType],
+    pub r: HashMap<FileType, BTreeMap<FileID, String>>,
 }
 
 impl References {
-    pub fn new(objects: &FileObjectStore) -> Self {
+    pub fn new(project: &Project) -> Self {
         let mut references = Self {
-            characters: BTreeMap::new(),
+            file_types: project.schema.get_all_file_types(),
+            r: HashMap::new(),
         };
 
-        references.update(objects);
+        for file_type in references.file_types {
+            references.r.insert(file_type, BTreeMap::new());
+        }
+
+        references.update(&project.objects);
 
         references
     }
 
+    pub fn for_type(&self, file_type: FileType) -> &BTreeMap<FileID, String> {
+        self.r.get(&file_type).expect("FileType should exist")
+    }
+
     /// Populate the list of references based on the objects, complete with names (for use in UI)
     pub fn update(&mut self, objects: &FileObjectStore) {
-        let mut old_characters = std::mem::take(&mut self.characters);
+        // Eve note: I'm pretty sure that these shenanigans have a higher performance cost than
+        // the malloc you're trying to avoid with them. I will however leave them here, out of respect for the craft
+
+        let mut old_refs = std::mem::take(&mut self.r);
+        for file_type in self.file_types {
+            self.r.insert(file_type, BTreeMap::new());
+        }
 
         for file_object in objects.values() {
             let object_borrowed = file_object.borrow();
-            if let FileObjectTypeInterface::Character(character) = object_borrowed.get_file_type() {
-                // write code as if we care about avoiding a clone
-                if let Some(old_name) = old_characters.remove(character.id())
-                    && character.get_base().metadata.name == old_name
-                {
-                    self.characters.insert(character.id().clone(), old_name);
-                } else {
-                    self.characters
-                        .insert(character.id().clone(), object_borrowed.get_title());
-                }
+            if let Some(old_name) = old_refs
+                .get_mut(object_borrowed.get_type())
+                .unwrap()
+                .remove(object_borrowed.id())
+                && object_borrowed.get_base().metadata.name == old_name
+            {
+                self.r
+                    .get_mut(object_borrowed.get_type())
+                    .unwrap()
+                    .insert(object_borrowed.id().clone(), old_name);
+            } else {
+                self.r
+                    .get_mut(object_borrowed.get_type())
+                    .unwrap()
+                    .insert(object_borrowed.id().clone(), object_borrowed.get_title());
             }
         }
     }
@@ -240,6 +263,7 @@ pub struct EditorContext {
     pub search: Search,
     pub stores: Stores,
     pub references: References,
+    pub actions: Vec<Action>,
 
     /// Duplicates the value from state.data, which is then more recent
     pub last_export_folder: PathBuf,
@@ -252,8 +276,7 @@ pub struct EditorContext {
 pub struct Stores {
     pub text_box: crate::ui::text_box::Store,
     pub page: page::Store,
-    pub scene: page::file_object_editor::scene_editor::Store,
-    pub folder: page::file_object_editor::folder_editor::Store,
+    pub file_objects: render_data::FileObjectRDStore,
 }
 
 pub enum TabMove {
@@ -264,30 +287,18 @@ pub enum TabMove {
 pub struct TabViewer<'a> {
     pub project: &'a mut Project,
     pub editor_context: &'a mut EditorContext,
-    pub open_tab: &'a mut Option<Page>,
+    pub open_tab: &'a mut Option<OpenPage>,
 }
 
 impl egui_dock::TabViewer for TabViewer<'_> {
-    type Tab = Page;
+    type Tab = OpenPage;
 
     fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
         tab.into()
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        match tab {
-            Page::ProjectMetadata => "Project Metadata".into(),
-            Page::FileObject(file_id) => {
-                if let Some(object) = self.project.objects.get(file_id) {
-                    object.borrow().get_title().into()
-                } else {
-                    // any deleted scenes should be cleaned up before we get here, but we have this
-                    // logic instead of panicking anyway
-                    "<Deleted>".into()
-                }
-            }
-            Page::Export => "Export".into(),
-        }
+        tab.title(self.project)
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
@@ -321,6 +332,17 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
         // draw the actual UI for the tab open in the editor
         tab.ui(ui, self.project, self.editor_context);
+    }
+
+    fn on_tab_button(&mut self, tab: &mut Self::Tab, response: &egui::Response) {
+        if response.double_clicked() {
+            let page = tab.page.clone();
+            self.editor_context
+                .actions
+                .push(Action::new(move |project_editor| {
+                    project_editor.keep_editor_tab(&page)
+                }))
+        }
     }
 
     fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
@@ -368,9 +390,10 @@ impl ProjectEditor {
         });
 
         // Before rendering the tab view, clear out any deleted scenes
-        self.dock_state.retain_tabs(|tab| match tab {
+        self.dock_state.retain_tabs(|tab| match &tab.page {
             Page::ProjectMetadata => true,
             Page::Export => true,
+            Page::Settings => true,
             Page::FileObject(tab_id) => self.project.objects.contains_key(tab_id),
         });
 
@@ -393,10 +416,14 @@ impl ProjectEditor {
             self.current_open_tab = None
         }
 
-        if self.current_open_tab.as_ref() != self.tree_state.selected().first()
-            && let Some(open_tab) = &self.current_open_tab
+        if let Some(open_tab) = &self.current_open_tab
+            && self
+                .tree_state
+                .selected()
+                .first()
+                .is_none_or(|page| page != &open_tab.page)
         {
-            self.tree_state.set_one_selected(open_tab.clone());
+            self.tree_state.set_one_selected(open_tab.page.clone());
         }
     }
 
@@ -439,6 +466,8 @@ impl ProjectEditor {
     fn move_tab(&mut self, tab_move: TabMove) {
         // We could probably get around this by learning how dock_state works better, but
         // this is easy and reliable
+        // Eve note: nah this is probably the best way actually. egui_dock doesn't expose the logic
+        // for "next tab" and "previous tab" except in the iterator function
         let open_tabs: Vec<_> = self.get_open_tabs();
 
         // Make sure we have something to do
@@ -457,7 +486,11 @@ impl ProjectEditor {
                     .unwrap_or_else(|| open_tabs.len() - 1),
             };
 
-            self.set_editor_tab(open_tabs.get(new_pos).unwrap());
+            let new_tab_index = self
+                .dock_state
+                .find_tab(open_tabs.get(new_pos).unwrap())
+                .unwrap();
+            self.dock_state.set_active_tab(new_tab_index);
         }
     }
 
@@ -481,7 +514,7 @@ impl ProjectEditor {
                         });
 
                         if ui.button("Export Story Text").clicked() {
-                            self.set_editor_tab(&Page::Export);
+                            self.set_editor_tab(&Page::Export, true);
                         }
 
                         if ui.button("Export Outline").clicked() {
@@ -516,6 +549,10 @@ impl ProjectEditor {
                     ui.menu_button("Edit", |ui| {
                         if ui.button("Find (Global)").clicked() {
                             self.editor_context.search.show();
+                        }
+
+                        if ui.button("Settings").clicked() {
+                            self.set_editor_tab(&Page::Settings, true);
                         }
 
                         if ui.button("Randomize Theme").clicked() {
@@ -667,13 +704,18 @@ impl ProjectEditor {
             && let Some(search_results) = &self.editor_context.search.search_results.as_ref()
             && let Some(focused_text_box) = search_results.get(uid)
         {
-            self.set_editor_tab(&focused_text_box.page.clone());
+            self.set_editor_tab(&focused_text_box.page.clone(), false);
+        }
+
+        let actions = std::mem::take(&mut self.editor_context.actions);
+        for action in actions {
+            action.perform(self);
         }
     }
 
-    fn set_editor_tab(&mut self, tab: &Page) {
+    fn set_editor_tab(&mut self, page: &Page, keep: bool) {
         // We don't want to open these, so just exit early
-        if let Page::FileObject(id) = tab
+        if let Page::FileObject(id) = page
             && (*id == self.project.text_id
                 || *id == self.project.characters_id
                 || *id == self.project.worldbuilding_id)
@@ -681,12 +723,28 @@ impl ProjectEditor {
             return;
         }
 
-        if let Some(tab_position) = self.dock_state.find_tab(tab) {
+        if let Some(tab_position) = self
+            .dock_state
+            .find_tab_from(|open_tab| &open_tab.page == page)
+        {
             // We've already opened this, just select it
             self.dock_state.set_active_tab(tab_position);
         } else {
+            if let Some(tab_position) = self.dock_state.find_tab_from(|tab| !tab.keep) {
+                // there's a tab open in browsing mode, close it
+                self.dock_state.remove_tab(tab_position);
+            }
             // New file object, open it for editing
-            self.dock_state.push_to_first_leaf(tab.clone());
+            self.dock_state.push_to_first_leaf(page.clone().open(keep));
+        }
+    }
+
+    /// set an editor tab to edit mode, indicating it should be kept
+    fn keep_editor_tab(&mut self, page: &Page) {
+        for (_, tab) in self.dock_state.iter_all_tabs_mut() {
+            if &tab.page == page {
+                tab.keep = true;
+            }
         }
     }
 
@@ -722,10 +780,10 @@ impl ProjectEditor {
 
         let open_tabs = open_tab_ids
             .iter()
-            .map(|tab_id| Page::from_id(tab_id))
+            .map(|tab_id| Page::from_id(tab_id).open(true))
             .collect();
 
-        let references = References::new(&project.objects);
+        let references = References::new(&project);
 
         let mut project_editor = Self {
             project,
@@ -741,6 +799,7 @@ impl ProjectEditor {
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
                 stores: Stores::default(),
+                actions: Vec::new(),
                 references,
                 last_export_folder,
                 version: 0,
@@ -768,20 +827,15 @@ impl ProjectEditor {
             std::mem::take(&mut self.editor_context.dictionary_state.characters_and_places);
 
         for object in self.project.objects.values() {
-            let should_parse = matches!(
-                object.borrow().get_file_type(),
-                FileObjectTypeInterface::Character(_) | FileObjectTypeInterface::Place(_)
-            );
-
-            if should_parse {
+            for item in object.borrow().as_editor().provide_spellcheck_additions() {
                 self.editor_context
                     .dictionary_state
-                    .add_file_object_name(object.borrow().get_title());
+                    .add_file_object_name(item);
             }
         }
     }
 
-    pub fn get_open_tabs(&self) -> Vec<Page> {
+    pub fn get_open_tabs(&self) -> Vec<OpenPage> {
         // the indexes provided to use are meaningless (I think), just put all the tabs in the
         // order it gave us.
         self.dock_state

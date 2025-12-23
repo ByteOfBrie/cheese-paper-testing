@@ -52,8 +52,6 @@ impl SettingsPage {
 
     // validate the entered data and propagate it to the settings
     fn validate_and_update(&mut self, ctx: &mut EditorContext) {
-        println!("validating and updating");
-
         let mut settings_data = ctx.settings.0.borrow_mut();
 
         match self.font_size_config.parse::<f32>() {

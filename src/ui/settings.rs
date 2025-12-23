@@ -3,7 +3,9 @@ pub mod theme;
 
 use crate::ui::prelude::*;
 
-use std::path::PathBuf;
+use crate::components::file_objects::utils::{create_dir_if_missing, write_with_temp_file};
+
+use std::{fs::read_to_string, path::PathBuf};
 
 use directories::ProjectDirs;
 use toml_edit::{DocumentMut, value};
@@ -27,6 +29,8 @@ struct SettingsData {
     /// theming for visuals.
     theme: Theme,
 
+    available_themes: Vec<(String, Theme)>,
+
     modified: bool,
 }
 
@@ -38,8 +42,56 @@ impl Default for SettingsData {
             indent_line_start: false,
             dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
             theme: Theme::default(),
+            available_themes: Vec::new(),
             modified: false,
         }
+    }
+}
+
+impl SettingsData {
+    pub fn load(&mut self, table: &DocumentMut) {
+        match table.get("font_size") {
+            Some(font_size_item) => {
+                if let Some(font_size) = font_size_item.as_float() {
+                    self.font_size = font_size as f32;
+                } else if let Some(font_size) = font_size_item.as_integer() {
+                    self.font_size = font_size as f32;
+                } else {
+                    self.modified = true;
+                }
+            }
+            None => self.modified = true,
+        }
+
+        match table.get("reopen_last").and_then(|val| val.as_bool()) {
+            Some(reopen_last) => self.reopen_last = reopen_last,
+            None => self.modified = true,
+        }
+
+        match table.get("indent_line_start").and_then(|val| val.as_bool()) {
+            Some(indent_line_start) => self.indent_line_start = indent_line_start,
+            None => self.modified = true,
+        }
+
+        if let Some(dictionary_location) = table
+            .get("dictionary_location")
+            .and_then(|location| location.as_str())
+        {
+            self.dictionary_location = PathBuf::from(dictionary_location);
+        }
+
+        if let Some(theme_table) = table
+            .get("theme")
+            .and_then(|theme_item| theme_item.as_table_like())
+        {
+            self.theme = Theme::load(theme_table);
+        }
+    }
+
+    pub fn save(&self, table: &mut DocumentMut) {
+        table.insert("font_size", value(self.font_size as f64));
+        table.insert("reopen_last", value(self.reopen_last));
+        table.insert("indent_line_start", value(self.indent_line_start));
     }
 }
 
@@ -47,59 +99,43 @@ impl Default for SettingsData {
 pub struct Settings(Rc<RefCell<SettingsData>>);
 
 impl Settings {
-    pub fn load(&mut self, table: &DocumentMut) {
-        let mut modified = false;
+    pub fn load(&mut self, project_dirs: &ProjectDirs) -> Result<(), CheeseError> {
+        let settings_toml = match read_to_string(Settings::get_path(&project_dirs)) {
+            Ok(config) => config
+                .parse::<DocumentMut>()
+                .expect("invalid toml settings file"),
+            Err(err) => match err.kind() {
+                // It's perfectly normal for there not to be a file, but any other IO error is a problem
+                std::io::ErrorKind::NotFound => DocumentMut::new(),
+                _ => {
+                    return Err(cheese_error!(
+                        "Unknown error while reading editor settings: {err}"
+                    ));
+                }
+            },
+        };
 
         let mut data = self.0.borrow_mut();
 
-        match table.get("font_size") {
-            Some(font_size_item) => {
-                if let Some(font_size) = font_size_item.as_float() {
-                    data.font_size = font_size as f32;
-                } else if let Some(font_size) = font_size_item.as_integer() {
-                    data.font_size = font_size as f32;
-                } else {
-                    modified = true;
-                }
-            }
-            None => modified = true,
-        }
+        data.load(&settings_toml);
 
-        match table.get("reopen_last").and_then(|val| val.as_bool()) {
-            Some(reopen_last) => data.reopen_last = reopen_last,
-            None => modified = true,
-        }
-
-        match table.get("indent_line_start").and_then(|val| val.as_bool()) {
-            Some(indent_line_start) => data.indent_line_start = indent_line_start,
-            None => modified = true,
-        }
-
-        if let Some(dictionary_location) = table
-            .get("dictionary_location")
-            .and_then(|location| location.as_str())
-        {
-            data.dictionary_location = PathBuf::from(dictionary_location);
-        }
-
-        if let Some(theme_table) = table
-            .get("theme")
-            .and_then(|theme_item| theme_item.as_table_like())
-        {
-            data.theme = Theme::load(theme_table);
-        }
-
-        data.modified = modified
+        Ok(())
     }
 
-    pub fn save(&self, table: &mut DocumentMut) {
+    pub fn save(&self, project_dirs: &ProjectDirs) -> Result<(), CheeseError> {
+        let mut settings_toml = DocumentMut::new();
         let mut data = self.0.borrow_mut();
-        println!("saving settings: {:?}", data);
-        table.insert("font_size", value(data.font_size as f64));
-        table.insert("reopen_last", value(data.reopen_last));
-        table.insert("indent_line_start", value(data.indent_line_start));
+
+        data.save(&mut settings_toml);
+        write_with_temp_file(
+            create_dir_if_missing(&Settings::get_path(&project_dirs))?,
+            settings_toml.to_string().as_bytes(),
+        )
+        .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;
 
         data.modified = false;
+
+        Ok(())
     }
 
     pub fn get_path(project_dirs: &ProjectDirs) -> PathBuf {

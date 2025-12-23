@@ -155,7 +155,6 @@ impl Data {
 
 pub struct EditorState {
     pub settings: Settings,
-    settings_toml: DocumentMut,
     pub data: Data,
     data_toml: DocumentMut,
     data_modified: bool,
@@ -187,21 +186,24 @@ impl Default for EditorState {
 
         let mut settings = Settings::default();
 
-        let settings_toml = match read_to_string(Settings::get_path(&project_dirs)) {
-            Ok(config) => config
-                .parse::<DocumentMut>()
-                .expect("invalid toml settings file"),
-            Err(err) => match err.kind() {
-                // It's perfectly normal for there not to be a file, but any other IO error is a problem
-                std::io::ErrorKind::NotFound => DocumentMut::new(),
-                _ => {
-                    log::error!("Unknown error while reading editor settings: {err}");
-                    panic!("Unknown error while reading editor settings: {err}");
-                }
-            },
-        };
+        // let settings_toml = match read_to_string(Settings::get_path(&project_dirs)) {
+        //     Ok(config) => config
+        //         .parse::<DocumentMut>()
+        //         .expect("invalid toml settings file"),
+        //     Err(err) => match err.kind() {
+        //         // It's perfectly normal for there not to be a file, but any other IO error is a problem
+        //         std::io::ErrorKind::NotFound => DocumentMut::new(),
+        //         _ => {
+        //             log::error!("Unknown error while reading editor settings: {err}");
+        //             panic!("Unknown error while reading editor settings: {err}");
+        //         }
+        //     },
+        // };
 
-        settings.load(&settings_toml);
+        settings.load(&project_dirs).unwrap_or_else(|err| {
+            log::error!("{err}");
+            panic!("{err}");
+        });
 
         let mut data = Data::default();
 
@@ -222,7 +224,6 @@ impl Default for EditorState {
 
         Self {
             settings,
-            settings_toml,
             data,
             data_toml,
             data_modified: false,
@@ -249,12 +250,7 @@ impl EditorState {
         }
 
         if self.settings.modified() {
-            self.settings.save(&mut self.settings_toml);
-            write_with_temp_file(
-                create_dir_if_missing(&Settings::get_path(&self.project_dirs))?,
-                self.settings_toml.to_string().as_bytes(),
-            )
-            .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;
+            self.settings.save(&self.project_dirs)?;
         }
 
         Ok(())

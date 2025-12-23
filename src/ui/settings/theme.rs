@@ -207,6 +207,10 @@ impl Theme {
         }
     }
 
+    pub fn save(&self, table: &mut dyn TableLike) {
+        todo!()
+    }
+
     pub fn apply(&self, style: &mut Style) {
         static DEFAULT_STYLE: LazyLock<Style> = LazyLock::new(|| Style::default());
 

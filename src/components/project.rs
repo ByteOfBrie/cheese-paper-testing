@@ -358,7 +358,7 @@ impl Project {
             .unwrap();
 
         let mut project = Self {
-            schema: schema,
+            schema,
             metadata,
             base_metadata,
             file: file_info,

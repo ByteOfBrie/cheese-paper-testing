@@ -4,22 +4,21 @@ pub mod page;
 pub mod search;
 mod util;
 
+use crate::ui::settings::ThemeSelection;
 use crate::ui::{prelude::*, render_data};
 
 use crate::components::file_objects::utils::process_name_for_filename;
 use crate::ui::editor_base::EditorState;
 use crate::ui::project_editor::search::global_search;
 use crate::ui::project_tracker::ProjectTracker;
-use crate::ui::settings::WidgetTheme;
 
-use action::Action;
+use action::Actions;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 use std::path::PathBuf;
 
-use egui::style::WidgetVisuals;
 use egui::{Key, Modifiers};
 use egui_dock::{DockArea, DockState};
 use egui_ltreeview::TreeViewState;
@@ -40,22 +39,11 @@ pub struct TypingStatus {
     pub current_word: Range<usize>,
 }
 
-#[derive(Debug)]
-struct UpdatesNeeded {
-    title: bool,
-
-    theme: bool,
-}
-
 pub struct ProjectEditor {
     pub project: Project,
 
     /// List of tabs that are open (egui::Dock requires state to be stored this way)
     dock_state: DockState<OpenPage>,
-
-    /// Possibly a temporary hack, need to find a reasonable way to update this when it's change
-    /// in the project metadata editor as well
-    updates_needed: UpdatesNeeded,
 
     pub editor_context: EditorContext,
 
@@ -74,7 +62,6 @@ impl Debug for ProjectEditor {
         f.debug_struct("ProjectEditor")
             .field("project", &self.project)
             .field("dock_state", &self.dock_state)
-            .field("updates_needed", &self.updates_needed)
             .field("editor_context", &self.editor_context)
             .field("tracker", &self.tracker)
             .finish()
@@ -263,7 +250,7 @@ pub struct EditorContext {
     pub search: Search,
     pub stores: Stores,
     pub references: References,
-    pub actions: Vec<Action>,
+    pub actions: Actions,
 
     /// Duplicates the value from state.data, which is then more recent
     pub last_export_folder: PathBuf,
@@ -339,9 +326,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
             let page = tab.page.clone();
             self.editor_context
                 .actions
-                .push(Action::new(move |project_editor| {
-                    project_editor.keep_editor_tab(&page)
-                }))
+                .schedule(move |project_editor, _ctx| project_editor.keep_editor_tab(&page));
         }
     }
 
@@ -356,26 +341,6 @@ fn update_title(project_name: &str, ctx: &egui::Context) {
     ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
         "Cheese Paper - {project_name}",
     )));
-}
-
-fn update_widget_theme(widget_theme_option: &Option<WidgetTheme>, widget: &mut WidgetVisuals) {
-    if let Some(widget_theme) = widget_theme_option {
-        if let Some(fg_stroke_color) = widget_theme.fg_stroke_color {
-            widget.fg_stroke.color = fg_stroke_color;
-        }
-
-        if let Some(bg_stroke_color) = widget_theme.bg_stroke_color {
-            widget.bg_stroke.color = bg_stroke_color;
-        }
-
-        if let Some(bg_fill) = widget_theme.bg_fill {
-            widget.bg_fill = bg_fill;
-        }
-
-        if let Some(weak_bg_fill) = widget_theme.weak_bg_fill {
-            widget.weak_bg_fill = weak_bg_fill;
-        }
-    }
 }
 
 impl ProjectEditor {
@@ -556,8 +521,12 @@ impl ProjectEditor {
                         }
 
                         if ui.button("Randomize Theme").clicked() {
-                            self.editor_context.settings.randomize_theme();
-                            self.updates_needed.theme = true;
+                            self.editor_context
+                                .settings
+                                .select_theme(ThemeSelection::Random);
+                            self.editor_context.actions.schedule(|project_editor, ctx| {
+                                project_editor.update_theme(ctx);
+                            });
                         }
                     });
                 });
@@ -586,94 +555,13 @@ impl ProjectEditor {
         }
     }
 
-    fn update_theme(&self, ctx: &egui::Context) {
-        if let Some(settings_theme) = self.editor_context.settings.theme() {
-            ctx.style_mut(|style| {
-                style.visuals.override_text_color = settings_theme.override_text_color;
-
-                style.visuals.weak_text_color = settings_theme.weak_text_color;
-
-                style.visuals.text_edit_bg_color = settings_theme.text_edit_bg_color;
-
-                if let Some(defined_hyperlink_color) = settings_theme.hyperlink_color {
-                    style.visuals.hyperlink_color = defined_hyperlink_color;
-                }
-
-                if let Some(defined_faint_bg_color) = settings_theme.faint_bg_color {
-                    style.visuals.faint_bg_color = defined_faint_bg_color;
-                }
-
-                if let Some(defined_extreme_bg_color) = settings_theme.extreme_bg_color {
-                    style.visuals.extreme_bg_color = defined_extreme_bg_color;
-                }
-
-                if let Some(defined_warn_fg_color) = settings_theme.warn_fg_color {
-                    style.visuals.warn_fg_color = defined_warn_fg_color;
-                }
-
-                if let Some(defined_error_fg_color) = settings_theme.error_fg_color {
-                    style.visuals.error_fg_color = defined_error_fg_color;
-                }
-
-                if let Some(defined_window_fill_color) = settings_theme.window_fill_color {
-                    style.visuals.window_fill = defined_window_fill_color;
-                }
-
-                if let Some(defined_panel_fill_color) = settings_theme.panel_fill_color {
-                    style.visuals.panel_fill = defined_panel_fill_color;
-                }
-
-                if let Some(window_stroke_color) = settings_theme.window_stroke_color {
-                    style.visuals.window_stroke.color = window_stroke_color;
-                }
-
-                if let Some(selection_bg_color) = settings_theme.selection_bg_color {
-                    style.visuals.selection.bg_fill = selection_bg_color;
-                }
-
-                if let Some(selection_fg_stroke_color) = settings_theme.selection_fg_stroke_color {
-                    style.visuals.selection.stroke.color = selection_fg_stroke_color;
-                }
-
-                update_widget_theme(
-                    &settings_theme.active_widget,
-                    &mut style.visuals.widgets.active,
-                );
-
-                update_widget_theme(
-                    &settings_theme.inactive_widget,
-                    &mut style.visuals.widgets.inactive,
-                );
-
-                update_widget_theme(
-                    &settings_theme.noninteractive_widget,
-                    &mut style.visuals.widgets.noninteractive,
-                );
-
-                update_widget_theme(
-                    &settings_theme.hovered_widget,
-                    &mut style.visuals.widgets.hovered,
-                );
-
-                update_widget_theme(&settings_theme.open_widget, &mut style.visuals.widgets.open);
-            });
-        }
+    pub fn update_theme(&self, ctx: &egui::Context) {
+        ctx.style_mut(|style| {
+            self.editor_context.settings.theme().apply(style);
+        });
     }
 
     fn process_state(&mut self, ctx: &egui::Context) {
-        // update window title. silly that we have to do it here, but we can't set it when calling new()
-        // since we don't have the `egui::Context`. This will also need to happen once we can actually
-        // set project names
-        if self.updates_needed.title {
-            update_title(&self.project.base_metadata.name, ctx);
-            self.updates_needed.title = false;
-        }
-
-        if self.updates_needed.theme {
-            self.update_theme(ctx);
-            self.updates_needed.theme = false;
-        }
-
         if self.editor_context.search.exiting_search {
             self.editor_context.version += 1;
         }
@@ -707,9 +595,9 @@ impl ProjectEditor {
             self.set_editor_tab(&focused_text_box.page.clone(), false);
         }
 
-        let actions = std::mem::take(&mut self.editor_context.actions);
+        let actions = self.editor_context.actions.get();
         for action in actions {
-            action.perform(self);
+            action(self, ctx);
         }
     }
 
@@ -788,10 +676,6 @@ impl ProjectEditor {
         let mut project_editor = Self {
             project,
             dock_state: DockState::new(open_tabs),
-            updates_needed: UpdatesNeeded {
-                title: true,
-                theme: true,
-            },
             editor_context: EditorContext {
                 settings,
                 dictionary_state,
@@ -799,7 +683,7 @@ impl ProjectEditor {
                 typing_status: TypingStatus::default(),
                 search: Search::default(),
                 stores: Stores::default(),
-                actions: Vec::new(),
+                actions: Actions::default(),
                 references,
                 last_export_folder,
                 version: 0,

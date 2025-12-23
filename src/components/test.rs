@@ -3941,6 +3941,7 @@ fn test_tracker_move_file_reindex() {
 /// Test that the tracker updates files in place
 #[test]
 fn test_tracker_modification() {
+    let _ = env_logger::try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(

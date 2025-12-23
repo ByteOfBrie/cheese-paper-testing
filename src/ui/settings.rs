@@ -248,7 +248,6 @@ impl Settings {
             }
             ThemeSelection::Random => {
                 let new_theme = Theme::new_random();
-                log::debug!("Generated randomized theme: {new_theme:#?}");
                 data.theme = new_theme;
             }
             ThemeSelection::Preset(idx) => data.theme = data.available_themes[idx].1.clone(),

@@ -527,7 +527,6 @@ impl ProjectEditor {
                             self.editor_context.actions.schedule(|project_editor, ctx| {
                                 project_editor.update_theme(ctx);
                             });
-                            // self.updates_needed.theme = true;
                         }
                     });
                 });

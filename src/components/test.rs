@@ -32,7 +32,6 @@ fn file_id(s: &str) -> Rc<String> {
 }
 
 /// Helper to get the file id from a path
-
 fn get_id_from_file(filename: &Path) -> Option<FileID> {
     use toml_edit::DocumentMut;
 

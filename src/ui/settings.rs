@@ -5,6 +5,7 @@ use crate::ui::prelude::*;
 
 use crate::components::file_objects::utils::{create_dir_if_missing, write_with_temp_file};
 
+use std::fs::read_dir;
 use std::{fs::read_to_string, path::PathBuf};
 
 use directories::ProjectDirs;
@@ -100,10 +101,12 @@ pub struct Settings(Rc<RefCell<SettingsData>>);
 
 impl Settings {
     pub fn load(&mut self, project_dirs: &ProjectDirs) -> Result<(), CheeseError> {
-        let settings_toml = match read_to_string(Settings::get_path(&project_dirs)) {
+        let mut data = self.0.borrow_mut();
+
+        let settings_toml = match read_to_string(Settings::config_file_path(&project_dirs)) {
             Ok(config) => config
                 .parse::<DocumentMut>()
-                .expect("invalid toml settings file"),
+                .map_err(|err| cheese_error!("invalid toml settings file: {err}"))?,
             Err(err) => match err.kind() {
                 // It's perfectly normal for there not to be a file, but any other IO error is a problem
                 std::io::ErrorKind::NotFound => DocumentMut::new(),
@@ -115,9 +118,54 @@ impl Settings {
             },
         };
 
-        let mut data = self.0.borrow_mut();
-
         data.load(&settings_toml);
+
+        let mut available_themes = Vec::new();
+
+        if let Ok(dir) = read_dir(&Self::themes_path(project_dirs)) {
+            for entry in dir {
+                let entry_path = entry?.path();
+                if entry_path.is_file()
+                    && entry_path.extension().is_some_and(|ext| ext == "toml")
+                    && let Ok(theme_config) = read_to_string(&entry_path)
+                {
+                    let theme_config = match theme_config.parse::<DocumentMut>() {
+                        Ok(doc) => doc,
+                        Err(err) => {
+                            log::error!(
+                                "Error encountered while reading config at {} : {err}",
+                                entry_path.to_str().unwrap_or_default()
+                            );
+                            continue;
+                        }
+                    };
+
+                    let Some(name) = theme_config.get("name").and_then(|item| item.as_str()) else {
+                        log::error!(
+                            "Error while parsing theme at {}: theme must have a name",
+                            entry_path.to_str().unwrap_or_default()
+                        );
+                        continue;
+                    };
+
+                    let Some(theme_table) = theme_config
+                        .get("config")
+                        .and_then(|theme_item| theme_item.as_table_like())
+                    else {
+                        log::error!(
+                            "Error while parsing theme {name}: theme must contain a table of configs"
+                        );
+                        continue;
+                    };
+
+                    let theme = Theme::load(theme_table);
+
+                    available_themes.push((name.to_string(), theme));
+                }
+            }
+        }
+
+        data.available_themes = available_themes;
 
         Ok(())
     }
@@ -128,7 +176,7 @@ impl Settings {
 
         data.save(&mut settings_toml);
         write_with_temp_file(
-            create_dir_if_missing(&Settings::get_path(&project_dirs))?,
+            create_dir_if_missing(&Self::config_file_path(project_dirs))?,
             settings_toml.to_string().as_bytes(),
         )
         .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;
@@ -138,8 +186,12 @@ impl Settings {
         Ok(())
     }
 
-    pub fn get_path(project_dirs: &ProjectDirs) -> PathBuf {
+    fn config_file_path(project_dirs: &ProjectDirs) -> PathBuf {
         project_dirs.config_dir().join("settings.toml")
+    }
+
+    fn themes_path(project_dirs: &ProjectDirs) -> PathBuf {
+        project_dirs.config_dir().join("themes")
     }
 
     pub fn font_size(&self) -> f32 {

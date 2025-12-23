@@ -184,23 +184,9 @@ impl Default for EditorState {
         let project_dirs = ProjectDirs::from("", "", "cheese-paper")
             .expect("it should be possible to write to system dirs");
 
-        let mut settings = Settings::default();
+        let mut settings = Settings::new(&project_dirs);
 
-        // let settings_toml = match read_to_string(Settings::get_path(&project_dirs)) {
-        //     Ok(config) => config
-        //         .parse::<DocumentMut>()
-        //         .expect("invalid toml settings file"),
-        //     Err(err) => match err.kind() {
-        //         // It's perfectly normal for there not to be a file, but any other IO error is a problem
-        //         std::io::ErrorKind::NotFound => DocumentMut::new(),
-        //         _ => {
-        //             log::error!("Unknown error while reading editor settings: {err}");
-        //             panic!("Unknown error while reading editor settings: {err}");
-        //         }
-        //     },
-        // };
-
-        settings.load(&project_dirs).unwrap_or_else(|err| {
+        settings.load().unwrap_or_else(|err| {
             log::error!("{err}");
             panic!("{err}");
         });
@@ -250,7 +236,7 @@ impl EditorState {
         }
 
         if self.settings.modified() {
-            self.settings.save(&self.project_dirs)?;
+            self.settings.save()?;
         }
 
         Ok(())

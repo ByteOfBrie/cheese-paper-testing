@@ -6,7 +6,7 @@ use crate::ui::prelude::*;
 use egui::Color32;
 use egui::{Style, style::WidgetVisuals};
 use rand::{Rng, rngs::ThreadRng};
-use toml_edit::TableLike;
+use toml_edit::{InlineTable, TableLike, value};
 
 #[derive(Debug, Clone)]
 struct WidgetTheme {
@@ -101,17 +101,19 @@ pub struct Theme {
 }
 
 fn read_color32(table: &dyn TableLike, field: &str) -> Option<Color32> {
-    table
-        .get(field)
-        .and_then(|field| field.as_str())
-        .map(Color32::from_hex)
-        .and_then(|color_option| match color_option {
-            Ok(color) => Some(color),
-            Err(err) => {
-                log::warn!("Could not parse color for {field}: {err:?}");
-                None
-            }
-        })
+    match Color32::from_hex(table.get(field)?.as_str()?) {
+        Ok(color) => Some(color),
+        Err(err) => {
+            log::warn!("Could not parse color for {field}: {err:?}");
+            None
+        }
+    }
+}
+
+fn write_color32(table: &mut dyn TableLike, field: &str, color: Option<Color32>) {
+    if let Some(color) = color {
+        table.insert(field, value(color.to_hex()));
+    }
 }
 
 fn random_color32(rng: &mut ThreadRng) -> Color32 {
@@ -134,6 +136,18 @@ fn read_widget_theme(table: &dyn TableLike, field: &str) -> Option<WidgetTheme> 
             })
         }
         None => None,
+    }
+}
+
+fn write_widget_theme(table: &mut dyn TableLike, field: &str, theme: &Option<WidgetTheme>) {
+    if let Some(theme) = theme {
+        let mut inline_table = InlineTable::new();
+        write_color32(&mut inline_table, "fg_stroke_color", theme.fg_stroke_color);
+        write_color32(&mut inline_table, "bg_stroke_color", theme.bg_stroke_color);
+        write_color32(&mut inline_table, "bg_fill", theme.bg_fill);
+        write_color32(&mut inline_table, "weak_bg_fill", theme.weak_bg_fill);
+
+        table.insert(field, value(inline_table));
     }
 }
 
@@ -207,8 +221,35 @@ impl Theme {
         }
     }
 
-    pub fn save(&self, table: &mut dyn TableLike) {
-        todo!()
+    pub fn save(&self, theme_table: &mut dyn TableLike) {
+        write_color32(theme_table, "override_text_color", self.override_text_color);
+        write_color32(theme_table, "weak_text_color", self.weak_text_color);
+        write_color32(theme_table, "hyperlink_color", self.hyperlink_color);
+        write_color32(theme_table, "faint_bg_color", self.faint_bg_color);
+        write_color32(theme_table, "extreme_bg_color", self.extreme_bg_color);
+        write_color32(theme_table, "text_edit_bg_color", self.text_edit_bg_color);
+        write_color32(theme_table, "warn_fg_color", self.warn_fg_color);
+        write_color32(theme_table, "error_fg_color", self.error_fg_color);
+        write_color32(theme_table, "window_fill_color", self.window_fill_color);
+        write_color32(theme_table, "panel_fill_color", self.panel_fill_color);
+
+        write_color32(theme_table, "selection_bg_color", self.selection_bg_color);
+        write_color32(
+            theme_table,
+            "selection_fg_stroke_color",
+            self.selection_fg_stroke_color,
+        );
+        write_color32(theme_table, "window_stroke_color", self.window_stroke_color);
+
+        write_widget_theme(theme_table, "active_widget", &self.active_widget);
+        write_widget_theme(theme_table, "inactive_widget", &self.inactive_widget);
+        write_widget_theme(
+            theme_table,
+            "noninteractive_widget",
+            &self.noninteractive_widget,
+        );
+        write_widget_theme(theme_table, "hovered_widget", &self.hovered_widget);
+        write_widget_theme(theme_table, "open_widget", &self.open_widget);
     }
 
     pub fn apply(&self, style: &mut Style) {

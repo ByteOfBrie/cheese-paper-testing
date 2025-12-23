@@ -1,9 +1,11 @@
+use crate::ui::prelude::*;
+
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use egui::{Color32, RichText};
 
-use crate::ui::prelude::*;
+use super::ThemeSelection;
 
 #[derive(Debug)]
 pub struct SettingsPage {
@@ -18,6 +20,10 @@ pub struct SettingsPage {
     dictionary_location_config: String,
 
     dictionary_location_error: Option<String>,
+
+    random_theme_name: String,
+
+    random_theme_save_error: Option<CheeseError>,
 
     next_update: Option<SystemTime>,
 }
@@ -46,6 +52,8 @@ impl SettingsPage {
             reopen_last_config,
             dictionary_location_config,
             dictionary_location_error: None,
+            random_theme_name: String::new(),
+            random_theme_save_error: None,
             next_update: None,
         }
     }
@@ -84,6 +92,22 @@ impl SettingsPage {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<egui::Id> {
+        let mut ids = Vec::new();
+
+        ui.heading("Settings");
+
+        ids.extend(self.settings_ui(ui, ctx));
+
+        ui.separator();
+
+        ui.heading("Themes");
+
+        ids.extend(self.themes_ui(ui, ctx));
+
+        ids
+    }
+
+    fn settings_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<egui::Id> {
         let mut ids = Vec::new();
 
         ui.label("Font Size");
@@ -127,6 +151,98 @@ impl SettingsPage {
                 ui.ctx()
                     .request_repaint_after(next_update.duration_since(now).unwrap());
             }
+        }
+
+        ids
+    }
+
+    fn themes_ui(&mut self, ui: &mut egui::Ui, ctx: &mut EditorContext) -> Vec<egui::Id> {
+        let mut ids = Vec::new();
+        let mut update = false;
+
+        let selected = ctx.settings.selected_theme();
+
+        ui.horizontal(|ui| {
+            if matches!(selected, ThemeSelection::Default) {
+                ui.label("->");
+            } else {
+                ui.label("  ");
+            }
+            let response = ui.button("Default");
+            if response.clicked() {
+                ctx.settings.select_theme(ThemeSelection::Default);
+                update = true;
+            }
+            ids.push(response.id);
+        });
+
+        ui.horizontal(|ui| {
+            if matches!(selected, ThemeSelection::Random) {
+                ui.label("->");
+            } else {
+                ui.label("  ");
+            }
+            let response = ui.button("Random");
+            if response.clicked() {
+                ctx.settings.select_theme(ThemeSelection::Random);
+                update = true;
+            }
+            ids.push(response.id);
+        });
+
+        ui.heading("Available Presets");
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for (idx, (name, _)) in ctx.settings.available_themes().iter().enumerate() {
+                ui.horizontal(|ui| {
+                    if matches!(selected, ThemeSelection::Preset(i) if i == idx) {
+                        ui.label("->");
+                    } else {
+                        ui.label("  ");
+                    }
+                    let response = ui.button(name);
+                    if response.clicked() {
+                        ctx.settings.select_theme(ThemeSelection::Preset(idx));
+                        update = true;
+                    }
+                    ids.push(response.id);
+                });
+            }
+        });
+
+        ui.separator();
+
+        if matches!(selected, ThemeSelection::Random) {
+            ui.label("Save random theme as preset ?");
+            ui.horizontal(|ui| {
+                ui.label("name : ");
+                let response = ui.text_edit_singleline(&mut self.random_theme_name);
+                ids.push(response.id);
+                let response = ui.button("Save");
+                if response.clicked() {
+                    self.random_theme_save_error = ctx
+                        .settings
+                        .save_current_theme(&self.random_theme_name)
+                        .err();
+                    if self.random_theme_save_error.is_none() {
+                        ctx.actions.schedule(|project_editor, _| {
+                            if let Err(err) = project_editor.editor_context.settings.load() {
+                                log::error!("Error encountered while reloading settings: {err}");
+                            }
+                        });
+                    }
+                }
+                ids.push(response.id);
+            });
+            if let Some(err) = &self.random_theme_save_error {
+                ui.label(RichText::new(err.to_string()).color(Color32::RED));
+            }
+        }
+
+        if update {
+            ctx.actions.schedule(|project_editor, ctx| {
+                project_editor.update_theme(ctx);
+            });
         }
 
         ids

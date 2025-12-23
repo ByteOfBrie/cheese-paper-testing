@@ -3,7 +3,9 @@ pub mod theme;
 
 use crate::ui::prelude::*;
 
-use crate::components::file_objects::utils::{create_dir_if_missing, write_with_temp_file};
+use crate::components::file_objects::utils::{
+    create_dir_if_missing, process_name_for_filename, write_with_temp_file,
+};
 
 use std::fs::read_dir;
 use std::{fs::read_to_string, path::PathBuf};
@@ -12,6 +14,13 @@ use directories::ProjectDirs;
 use toml_edit::{DocumentMut, value};
 
 pub use theme::Theme;
+
+#[derive(Debug, Clone, Copy)]
+pub enum ThemeSelection {
+    Default,
+    Random,
+    Preset(usize),
+}
 
 #[derive(Debug)]
 struct SettingsData {
@@ -30,26 +39,31 @@ struct SettingsData {
     /// theming for visuals.
     theme: Theme,
 
-    available_themes: Vec<(String, Theme)>,
+    selected_theme: ThemeSelection,
+
+    // theme_selection: ThemeSelection,
+    available_themes: Rc<Vec<(String, Theme)>>,
+
+    project_dirs: Rc<ProjectDirs>,
 
     modified: bool,
 }
 
-impl Default for SettingsData {
-    fn default() -> Self {
+impl SettingsData {
+    pub fn new(project_dirs: &ProjectDirs) -> Self {
         Self {
             font_size: 18.0,
             reopen_last: true,
             indent_line_start: false,
             dictionary_location: PathBuf::from("/usr/share/hunspell/en_US"),
             theme: Theme::default(),
-            available_themes: Vec::new(),
+            selected_theme: ThemeSelection::Default,
+            available_themes: Rc::new(Vec::new()),
+            project_dirs: Rc::new(project_dirs.clone()),
             modified: false,
         }
     }
-}
 
-impl SettingsData {
     pub fn load(&mut self, table: &DocumentMut) {
         match table.get("font_size") {
             Some(font_size_item) => {
@@ -94,16 +108,28 @@ impl SettingsData {
         table.insert("reopen_last", value(self.reopen_last));
         table.insert("indent_line_start", value(self.indent_line_start));
     }
+
+    fn config_file_path(&self) -> PathBuf {
+        self.project_dirs.config_dir().join("settings.toml")
+    }
+
+    fn themes_path(&self) -> PathBuf {
+        self.project_dirs.config_dir().join("themes")
+    }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Settings(Rc<RefCell<SettingsData>>);
 
 impl Settings {
-    pub fn load(&mut self, project_dirs: &ProjectDirs) -> Result<(), CheeseError> {
+    pub fn new(project_dirs: &ProjectDirs) -> Self {
+        Self(Rc::new(RefCell::new(SettingsData::new(project_dirs))))
+    }
+
+    pub fn load(&mut self) -> Result<(), CheeseError> {
         let mut data = self.0.borrow_mut();
 
-        let settings_toml = match read_to_string(Settings::config_file_path(&project_dirs)) {
+        let settings_toml = match read_to_string(data.config_file_path()) {
             Ok(config) => config
                 .parse::<DocumentMut>()
                 .map_err(|err| cheese_error!("invalid toml settings file: {err}"))?,
@@ -122,7 +148,7 @@ impl Settings {
 
         let mut available_themes = Vec::new();
 
-        if let Ok(dir) = read_dir(&Self::themes_path(project_dirs)) {
+        if let Ok(dir) = read_dir(data.themes_path()) {
             for entry in dir {
                 let entry_path = entry?.path();
                 if entry_path.is_file()
@@ -148,35 +174,35 @@ impl Settings {
                         continue;
                     };
 
-                    let Some(theme_table) = theme_config
-                        .get("config")
-                        .and_then(|theme_item| theme_item.as_table_like())
-                    else {
-                        log::error!(
-                            "Error while parsing theme {name}: theme must contain a table of configs"
-                        );
-                        continue;
-                    };
+                    // let Some(theme_table) = theme_config
+                    //     .get("config")
+                    //     .and_then(|theme_item| theme_item.as_table_like())
+                    // else {
+                    //     log::error!(
+                    //         "Error while parsing theme {name}: theme must contain a table of configs"
+                    //     );
+                    //     continue;
+                    // };
 
-                    let theme = Theme::load(theme_table);
+                    let theme = Theme::load(theme_config.as_table());
 
                     available_themes.push((name.to_string(), theme));
                 }
             }
         }
 
-        data.available_themes = available_themes;
+        data.available_themes = Rc::new(available_themes);
 
         Ok(())
     }
 
-    pub fn save(&self, project_dirs: &ProjectDirs) -> Result<(), CheeseError> {
+    pub fn save(&self) -> Result<(), CheeseError> {
         let mut settings_toml = DocumentMut::new();
         let mut data = self.0.borrow_mut();
 
         data.save(&mut settings_toml);
         write_with_temp_file(
-            create_dir_if_missing(&Self::config_file_path(project_dirs))?,
+            create_dir_if_missing(&data.config_file_path())?,
             settings_toml.to_string().as_bytes(),
         )
         .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;
@@ -184,14 +210,6 @@ impl Settings {
         data.modified = false;
 
         Ok(())
-    }
-
-    fn config_file_path(project_dirs: &ProjectDirs) -> PathBuf {
-        project_dirs.config_dir().join("settings.toml")
-    }
-
-    fn themes_path(project_dirs: &ProjectDirs) -> PathBuf {
-        project_dirs.config_dir().join("themes")
     }
 
     pub fn font_size(&self) -> f32 {
@@ -222,9 +240,51 @@ impl Settings {
         self.0.borrow().modified
     }
 
-    pub fn randomize_theme(&mut self) {
-        let new_theme = Theme::new_random();
-        log::debug!("Generated randomized theme: {new_theme:#?}");
-        self.0.borrow_mut().theme = new_theme;
+    pub fn select_theme(&self, selection: ThemeSelection) {
+        let mut data = self.0.borrow_mut();
+        match selection {
+            ThemeSelection::Default => {
+                data.theme = Theme::default();
+            }
+            ThemeSelection::Random => {
+                let new_theme = Theme::new_random();
+                log::debug!("Generated randomized theme: {new_theme:#?}");
+                data.theme = new_theme;
+            }
+            ThemeSelection::Preset(idx) => data.theme = data.available_themes[idx].1.clone(),
+        }
+        data.selected_theme = selection;
+    }
+
+    fn available_themes(&self) -> Rc<Vec<(String, Theme)>> {
+        let data = self.0.borrow();
+        data.available_themes.clone()
+    }
+
+    fn selected_theme(&self) -> ThemeSelection {
+        self.0.borrow().selected_theme
+    }
+
+    fn save_current_theme(&self, name: &str) -> Result<(), CheeseError> {
+        let data = self.0.borrow();
+
+        let file_name = process_name_for_filename(name);
+
+        let mut config = DocumentMut::new();
+
+        config.insert("name", value(name));
+
+        data.theme.save(config.as_table_mut());
+
+        let mut dest_path = data.themes_path().join(file_name);
+        dest_path.add_extension("toml");
+
+        write_with_temp_file(
+            create_dir_if_missing(&dest_path)?,
+            config.to_string().as_bytes(),
+        )
+        .map_err(|err| cheese_error!("Error while saving app settings\n{}", err))?;
+
+        Ok(())
     }
 }

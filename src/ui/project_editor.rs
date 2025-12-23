@@ -4,6 +4,7 @@ pub mod page;
 pub mod search;
 mod util;
 
+use crate::ui::settings::ThemeSelection;
 use crate::ui::{prelude::*, render_data};
 
 use crate::components::file_objects::utils::process_name_for_filename;
@@ -520,7 +521,9 @@ impl ProjectEditor {
                         }
 
                         if ui.button("Randomize Theme").clicked() {
-                            self.editor_context.settings.randomize_theme();
+                            self.editor_context
+                                .settings
+                                .select_theme(ThemeSelection::Random);
                             self.editor_context.actions.schedule(|project_editor, ctx| {
                                 project_editor.update_theme(ctx);
                             });
@@ -553,7 +556,7 @@ impl ProjectEditor {
         }
     }
 
-    fn update_theme(&self, ctx: &egui::Context) {
+    pub fn update_theme(&self, ctx: &egui::Context) {
         ctx.style_mut(|style| {
             self.editor_context.settings.theme().apply(style);
         });

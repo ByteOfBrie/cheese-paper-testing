@@ -95,6 +95,7 @@ impl dyn FileObject {
         let file_to_read = self.get_file();
 
         if !self.should_load(&file_to_read)? {
+            log::debug!("Not loading file, already have latest");
             return Ok(());
         }
 
@@ -115,6 +116,7 @@ impl dyn FileObject {
         self.load_metadata()?;
 
         if let Some(file_body) = file_body {
+            log::debug!("loaded file body: {file_body}");
             self.load_body(file_body);
         }
 

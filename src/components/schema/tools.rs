@@ -340,6 +340,9 @@ impl dyn Schema {
 
             file_object.reload_file()?;
             log::debug!("Reloaded file with body: {:?}", file_object.get_body());
+            if let Ok(file_contents) = std::fs::read_to_string(file_object.get_path()) {
+                log::debug!("File contents: {file_contents}");
+            }
 
             Ok(existing_file_id)
         } else {

@@ -339,6 +339,7 @@ impl dyn Schema {
             file_object.get_base_mut().index = index;
 
             file_object.reload_file()?;
+            log::debug!("Reloaded file with body: {:?}", file_object.get_body());
 
             Ok(existing_file_id)
         } else {
@@ -370,6 +371,8 @@ impl dyn Schema {
             let mut file_object = self.load_file_object(file_type, base, file_body)?;
 
             file_object.rescan_indexing(objects);
+
+            log::debug!("Loaded new file with body: {:?}", file_object.get_body());
 
             objects.insert(file_id.clone(), RefCell::new(file_object));
 

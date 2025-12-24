@@ -440,6 +440,8 @@ impl dyn FileObject {
             .modified()
             .expect("Modtime not available");
 
+        log::debug!("Writing to file {self} with modtime {new_modtime:?}");
+
         // Update modtime based on what we just wrote
         self.get_base_mut().file.modtime = Some(new_modtime);
         self.get_base_mut().file.modified = false;

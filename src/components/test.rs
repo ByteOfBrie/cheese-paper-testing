@@ -3977,6 +3977,8 @@ fn test_tracker_modification() {
 ++++++++
 asdfjkl123"#;
 
+    thread::sleep(time::Duration::from_millis(50));
+
     std::fs::write(&scene1_path, new_scene_text).unwrap();
 
     let new_modtime = std::fs::metadata(&scene1_path)

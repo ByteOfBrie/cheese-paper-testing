@@ -3921,9 +3921,6 @@ fn test_tracker_move_file_reindex() {
 /// Test that the tracker updates files in place
 #[test]
 fn test_tracker_modification() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(
@@ -3958,7 +3955,6 @@ fn test_tracker_modification() {
 asdfjkl123"#;
 
     thread::sleep(time::Duration::from_millis(50));
-
     std::fs::write(&scene1_path, new_scene_text).unwrap();
 
     let new_modtime = std::fs::metadata(&scene1_path)

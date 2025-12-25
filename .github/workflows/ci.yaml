@@ -43,15 +43,15 @@ jobs:
     - name: Run tests
       env:
         RUST_BACKTRACE: '1'
-      run: cargo test --release test_tracker_creation_folder
+      run: cargo test --release test_tracker_move_from_moved_folder
     - name: Run tests2
       env:
         RUST_BACKTRACE: '1'
-      run: cargo test --release test_tracker_creation_folder
+      run: cargo test --release test_tracker_move_from_moved_folder
     - name: Run tests3
       env:
         RUST_BACKTRACE: '1'
-      run: cargo test --release test_tracker_creation_folder
+      run: cargo test --release test_tracker_move_from_moved_folder
     - name: Run tests all
       env:
         RUST_BACKTRACE: '1'

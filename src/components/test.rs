@@ -2717,9 +2717,6 @@ fn test_tracker_creation_basic() {
 /// Create a new folder and something in it, ensure that it all gets read in
 #[test]
 fn test_tracker_creation_folder() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let scene_text = "123456";
@@ -4903,6 +4900,9 @@ scene4"#;
 /// although this doesn't use two instances of the project to do it
 #[test]
 fn test_tracker_move_from_moved_folder() {
+    let _ = env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(

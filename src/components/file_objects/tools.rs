@@ -95,7 +95,6 @@ impl dyn FileObject {
         let file_to_read = self.get_file();
 
         if !self.should_load(&file_to_read)? {
-            log::debug!("Not loading file, already have latest");
             return Ok(());
         }
 
@@ -116,7 +115,6 @@ impl dyn FileObject {
         self.load_metadata()?;
 
         if let Some(file_body) = file_body {
-            log::debug!("loaded file body: {file_body}");
             self.load_body(file_body);
         }
 
@@ -440,8 +438,6 @@ impl dyn FileObject {
             .expect("attempted to load file that does not exist")
             .modified()
             .expect("Modtime not available");
-
-        log::debug!("Writing to file {self} with modtime {new_modtime:?}");
 
         // Update modtime based on what we just wrote
         self.get_base_mut().file.modtime = Some(new_modtime);

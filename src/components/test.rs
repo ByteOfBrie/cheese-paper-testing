@@ -3809,13 +3809,6 @@ asdfjkl123"#;
     thread::sleep(MTIME_SLEEP_DURATION);
     std::fs::write(&scene1_path, new_scene_text).unwrap();
 
-    let new_modtime = std::fs::metadata(&scene1_path)
-        .expect("attempted to load file that does not exist")
-        .modified()
-        .expect("Modtime not available");
-
-    log::debug!("Wrote scene1 in testing code, modtime: {new_modtime:?}");
-
     process_updates(&mut project);
 
     {

@@ -112,8 +112,6 @@ fn load_top_level_folder(
     name: &str,
     objects: &mut FileObjectStore,
 ) -> Result<FileID, CheeseError> {
-    log::debug!("loading top level folder: {name}");
-
     let folder_path = &Path::join(project_path, name.to_lowercase());
     if folder_path.exists() {
         let created_object = schema

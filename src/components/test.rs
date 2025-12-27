@@ -4231,9 +4231,6 @@ fn test_tracker_move_reindex_folder() {
 /// scene4 - newly created after move
 #[test]
 fn test_tracker_move_and_modify_folder() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(
@@ -4563,9 +4560,6 @@ scene4"#;
 /// Test the tracker by moving a file object into a folder that has also moved
 #[test]
 fn test_tracker_move_into_moved_folder() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(
@@ -4712,9 +4706,6 @@ scene4"#;
 /// although this doesn't use two instances of the project to do it
 #[test]
 fn test_tracker_move_from_moved_folder() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(
@@ -4790,9 +4781,6 @@ scene1"#;
 /// Check that we don't keep file objects that no longer exist around
 #[test]
 fn test_tracker_orphaned_file_objects() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let mut project = Project::new(
@@ -5064,9 +5052,6 @@ fn test_tracker_reindex_timing() {
 
 #[test]
 fn test_tracker_new_file_index() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let scene_text = r#"id = "1"
@@ -5188,9 +5173,6 @@ fn test_tracker_creation_then_move_folder() {
 /// and is read in properly
 #[test]
 fn test_tracker_index_in_modified_folder() {
-    let _ = env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
-        .try_init();
     let base_dir = tempfile::TempDir::new().unwrap();
 
     let scene_text = r#"id = "1"

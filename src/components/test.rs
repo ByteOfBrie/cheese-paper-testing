@@ -39,8 +39,8 @@ fn file_id(s: &str) -> Rc<String> {
 /// Call process_updates twice with more time than the WATCHER_MSEC_DURATION
 /// to make sure it actually gets woken up and runs
 fn process_updates(project: &mut Project) {
-    for _ in 0..8 {
-        thread::sleep(time::Duration::from_millis(80));
+    for _ in 0..5 {
+        thread::sleep(time::Duration::from_millis(60));
         project.receive_updates();
     }
     project.process_updates();

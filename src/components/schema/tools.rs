@@ -373,7 +373,7 @@ impl dyn Schema {
 
             let mut file_object = self.load_file_object(file_type, base, file_body)?;
 
-            file_object.rescan_indexing(objects);
+            file_object.rescan_indexing(objects, false);
 
             log::debug!("Loaded new file with body: {:?}", file_object.get_body());
 

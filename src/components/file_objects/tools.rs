@@ -269,8 +269,8 @@ impl dyn FileObject {
     }
 
     /// Reorder the children based on their index (self reported in basename), followed by a call to
-    /// fix_indexing
-    pub fn rescan_indexing(&mut self, objects: &FileObjectStore) {
+    /// fix_indexing. If `recursive` is true, do this for all descendents as well
+    pub fn rescan_indexing(&mut self, objects: &FileObjectStore, recursive: bool) {
         if !self.is_folder() {
             // nothing to do
             return;
@@ -293,6 +293,12 @@ impl dyn FileObject {
         });
 
         self.fix_indexing(objects);
+
+        if recursive {
+            for child in self.children(objects) {
+                child.borrow_mut().rescan_indexing(objects, true);
+            }
+        }
     }
 
     fn move_on_disk(

@@ -79,11 +79,6 @@ impl dyn FileObject {
             }
         };
 
-        if let Some(old_modtime) = self.get_base().file.modtime {
-            log::debug!("Old modtime: {old_modtime:?}");
-            log::debug!("current modtime: {current_modtime:?}");
-        }
-
         if let Some(old_modtime) = self.get_base().file.modtime
             && old_modtime == current_modtime
         {

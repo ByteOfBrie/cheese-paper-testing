@@ -253,7 +253,7 @@ impl Theme {
     }
 
     pub fn apply(&self, style: &mut Style) {
-        static DEFAULT_STYLE: LazyLock<Style> = LazyLock::new(|| Style::default());
+        static DEFAULT_STYLE: LazyLock<Style> = LazyLock::new(Style::default);
 
         style.visuals.override_text_color = self.override_text_color;
 
